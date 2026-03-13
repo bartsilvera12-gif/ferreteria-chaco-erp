@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import Sidebar from "../components/layout/Sidebar";
+import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
+import AppShell from "../components/AppShell";
+import { ThemeProvider } from "../components/ThemeProvider";
 import AuthGuard from "../components/AuthGuard";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const plusJakarta = Plus_Jakarta_Sans({
+  variable: "--font-plus-jakarta",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 const geistMono = Geist_Mono({
@@ -25,16 +27,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <AuthGuard>
-          <div className="flex min-h-screen">
-            <Sidebar />
-            <main className="flex-1 p-8 bg-gray-100">{children}</main>
-          </div>
-        </AuthGuard>
+    <html lang="es" suppressHydrationWarning>
+      <body className={`${plusJakarta.variable} ${geistMono.variable} antialiased`}>
+        <ThemeProvider>
+          <AuthGuard>
+            <AppShell>{children}</AppShell>
+          </AuthGuard>
+        </ThemeProvider>
       </body>
     </html>
   );

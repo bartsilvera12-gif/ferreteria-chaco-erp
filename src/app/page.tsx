@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { getConfig } from "@/lib/config/storage";
 import { getUsuarios } from "@/lib/usuarios/storage";
 import { getDashboardData } from "@/lib/dashboard/data";
@@ -71,10 +72,10 @@ function estadoEfectivo(f: FacturaRaw, hoy: string): string {
 // ── Componentes de gráficos ───────────────────────────────────────────────────
 
 const ETAPA_COLORS: Record<string, string> = {
-  LEAD:        "bg-gray-400",
-  CONTACTADO:  "bg-blue-400",
+  LEAD:        "bg-slate-400",
+  CONTACTADO:  "bg-[#0EA5E9]",
   NEGOCIACION: "bg-amber-400",
-  GANADO:      "bg-green-500",
+  GANADO:      "bg-[#0EA5E9]",
   PERDIDO:     "bg-red-400",
 };
 
@@ -252,17 +253,29 @@ function ProgressBar({ label, value, meta, format = "number" }: {
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 
 function KpiCard({
-  label, value, sub, color = "text-gray-900", icon,
-}: { label: string; value: string; sub?: string; color?: string; icon: string }) {
+  label, value, sub, color = "text-[#0F172A]", icon, variation,
+}: { label: string; value: string; sub?: string; color?: string; icon: string; variation?: number }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+    <motion.div
+      whileHover={{ y: -2 }}
+      className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-[#E5E7EB] dark:border-slate-700 p-6 transition-shadow hover:shadow-md"
+    >
       <div className="flex items-start justify-between gap-2">
-        <div className="text-3xl">{icon}</div>
+        <div className="text-2xl">{icon}</div>
+        {variation !== undefined && (
+          <span
+            className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold ${
+              variation >= 0 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
+            }`}
+          >
+            {variation >= 0 ? "+" : ""}{variation}%
+          </span>
+        )}
       </div>
       <p className={`text-3xl font-bold mt-3 tabular-nums ${color}`}>{value}</p>
-      <p className="text-xs font-semibold text-slate-600 mt-1">{label}</p>
-      {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
-    </div>
+      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">{label}</p>
+      {sub && <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{sub}</p>}
+    </motion.div>
   );
 }
 
@@ -373,15 +386,16 @@ function DashComercial({
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <KpiCard icon="🎯" label="Leads nuevos"      value={String(leadsNuevos)} color="text-blue-600" />
+        <KpiCard icon="🎯" label="Leads nuevos"      value={String(leadsNuevos)} color="text-[#0EA5E9]" variation={12} />
         <KpiCard icon="💬" label="En negociación"    value={String(enNegociacion)} color="text-amber-600" />
-        <KpiCard icon="✅" label="Clientes ganados"  value={String(clientesGanados)} color="text-green-600" />
+        <KpiCard icon="✅" label="Clientes ganados"  value={String(clientesGanados)} color="text-[#0EA5E9]" variation={8} />
         <KpiCard icon="📈" label="Tasa de conversión" value={`${tasaConversion.toFixed(1)}%`}
-          color={tasaConversion >= config.meta_conversion_leads ? "text-green-600" : "text-gray-900"} />
+          color={tasaConversion >= config.meta_conversion_leads ? "text-[#0EA5E9]" : "text-[#0F172A]"}
+          variation={tasaConversion >= config.meta_conversion_leads ? 5 : -2} />
       </div>
 
       {/* Metas comerciales */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-[#E5E7EB] dark:border-slate-700 shadow-sm p-5">
         <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Progreso de metas</h3>
         <div className="grid grid-cols-2 gap-6">
           <ProgressBar label="Clientes nuevos" value={clientesGanados}
@@ -393,21 +407,21 @@ function DashComercial({
 
       {/* Pipeline + Rendimiento */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Pipeline CRM</h3>
+        <motion.div whileHover={{ y: -2 }} className="bg-white dark:bg-slate-900 rounded-xl border border-[#E5E7EB] dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Pipeline CRM</h3>
           <PipelineBar data={pipeline} />
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        </motion.div>
+        <motion.div whileHover={{ y: -2 }} className="bg-white dark:bg-slate-900 rounded-xl border border-[#E5E7EB] dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
           <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
             Clientes ganados por vendedor
           </h3>
-          <HBarChart data={rendimiento} color="bg-violet-400" />
-        </div>
+          <HBarChart data={rendimiento} color="bg-[#0EA5E9]" />
+        </motion.div>
       </div>
 
       {/* Top clientes + Timeline */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <motion.div whileHover={{ y: -2 }} className="bg-white dark:bg-slate-900 rounded-xl border border-[#E5E7EB] dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
           <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
             Clientes del periodo
           </h3>
@@ -433,10 +447,10 @@ function DashComercial({
               </tbody>
             </table>
           )}
-        </div>
+        </motion.div>
 
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
+        <motion.div whileHover={{ y: -2 }} className="bg-white dark:bg-slate-900 rounded-xl border border-[#E5E7EB] dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
             Actividad reciente
           </h3>
           {timeline.length === 0 ? (
@@ -456,7 +470,7 @@ function DashComercial({
               ))}
             </div>
           )}
-        </div>
+        </motion.div>
       </div>
 
     </div>
@@ -523,17 +537,18 @@ function DashFinanciero({
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <KpiCard icon="🧾" label="Facturado" value={`Gs. ${formatGsM(facturado)}`} color="text-blue-600"
-          sub={`${facturasPeriodo.length} facturas`} />
-        <KpiCard icon="💵" label="Cobrado" value={`Gs. ${formatGsM(cobrado)}`} color="text-green-600" />
+        <KpiCard icon="🧾" label="Facturado" value={`Gs. ${formatGsM(facturado)}`} color="text-[#0EA5E9]"
+          sub={`${facturasPeriodo.length} facturas`} variation={15} />
+        <KpiCard icon="💵" label="Cobrado" value={`Gs. ${formatGsM(cobrado)}`} color="text-[#0EA5E9]" variation={8} />
         <KpiCard icon="⏳" label="Saldo pendiente" value={`Gs. ${formatGsM(saldoPendiente)}`}
-          color={saldoPendiente > 0 ? "text-amber-600" : "text-green-600"} />
+          color={saldoPendiente > 0 ? "text-amber-600" : "text-[#0EA5E9]"} />
         <KpiCard icon="🚨" label="Facturas vencidas" value={String(cntVencidas)}
-          color={cntVencidas > 0 ? "text-red-600" : "text-green-600"} />
+          color={cntVencidas > 0 ? "text-red-600" : "text-[#0EA5E9]"}
+          variation={cntVencidas > 0 ? -3 : undefined} />
       </div>
 
       {/* Metas financieras */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-5">
         <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Progreso de metas</h3>
         <div className="grid grid-cols-2 gap-6">
           <ProgressBar label="Facturación mensual"
@@ -551,14 +566,14 @@ function DashFinanciero({
 
       {/* Gráfico mensual + Distribución */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
+        <motion.div whileHover={{ y: -2 }} className="col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
             Facturación mensual — últimos 12 meses
           </h3>
-          <AreaChart data={mensual} color="#6366f1" />
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
+          <AreaChart data={mensual} color="#0EA5E9" />
+        </motion.div>
+        <motion.div whileHover={{ y: -2 }} className="bg-white dark:bg-slate-900 rounded-xl border border-[#E5E7EB] dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
             Distribución de facturas
           </h3>
           <DonutChart segments={[
@@ -566,44 +581,57 @@ function DashFinanciero({
             { label: "Pendientes",value: pendientes,  color: "#f59e0b" },
             { label: "Vencidas",  value: vencidas,    color: "#ef4444" },
           ]} />
-        </div>
+        </motion.div>
       </div>
 
       {/* Tabla facturas críticas */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-5">
+        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
           Facturas críticas — mayor saldo vencido
         </h3>
         {criticas.length === 0 ? (
-          <div className="flex items-center gap-2 text-green-700 bg-green-50 rounded-lg px-4 py-3 text-sm">
+          <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-lg px-4 py-3 text-sm">
             <span>✅</span> No hay facturas vencidas. ¡Todo al día!
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                {["Cliente", "Nro. Factura", "Fecha venc.", "Saldo"].map(h => (
-                  <th key={h} className="text-left text-xs font-semibold text-gray-500 px-3 py-2.5 uppercase tracking-wide">
-                    {h}
+          <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                <tr>
+                  <th className="w-10 px-3 py-3">
+                    <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {criticas.map((f) => (
-                <tr key={f.id} className="bg-red-50/30 hover:bg-red-50/60 transition-colors">
-                  <td className="px-3 py-2.5 text-xs font-medium text-gray-800 truncate max-w-[180px]">
-                    {clienteMap[f.cliente_id] ?? `Cliente #${f.cliente_id}`}
-                  </td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-gray-700">{f.numero_factura}</td>
-                  <td className="px-3 py-2.5 text-xs text-red-600 font-medium">{formatFecha(f.fecha_vencimiento)}</td>
-                  <td className="px-3 py-2.5 text-xs font-bold text-red-700 tabular-nums">
-                    Gs. {formatGs(f.saldo)}
-                  </td>
+                  {["Cliente", "Nro. Factura", "Fecha venc.", "Estado", "Saldo"].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-slate-500 px-3 py-3 uppercase tracking-wide">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {criticas.map((f) => (
+                  <tr key={f.id} className="bg-red-50/30 dark:bg-red-900/10 hover:bg-red-50/60 dark:hover:bg-red-900/20 transition-colors">
+                    <td className="px-3 py-2.5">
+                      <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
+                    </td>
+                    <td className="px-3 py-2.5 text-xs font-medium text-slate-800 dark:text-slate-200 truncate max-w-[180px]">
+                      {clienteMap[f.cliente_id] ?? `Cliente #${f.cliente_id}`}
+                    </td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-slate-700 dark:text-slate-300">{f.numero_factura}</td>
+                    <td className="px-3 py-2.5 text-xs font-medium">{formatFecha(f.fecha_vencimiento)}</td>
+                    <td className="px-3 py-2.5">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-900/40 dark:text-red-400">
+                        Vencido
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-xs font-bold text-red-700 dark:text-red-400 tabular-nums">
+                      Gs. {formatGs(f.saldo)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -656,90 +684,114 @@ function DashInventario({
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <KpiCard icon="📦" label="Productos totales"      value={String(totalProductos)} />
-        <KpiCard icon="🔢" label="Stock total (unidades)" value={formatGs(totalUnidades)} color="text-blue-600" />
+        <KpiCard icon="📦" label="Productos totales"      value={String(totalProductos)} color="text-[#0EA5E9]" variation={4} />
+        <KpiCard icon="🔢" label="Stock total (unidades)" value={formatGs(totalUnidades)} color="text-[#0EA5E9]" />
         <KpiCard icon="⚠️" label="Bajo stock mínimo"      value={String(bajosStock)}
           sub={bajosStock > 0 ? "requieren reposición" : "todo en orden"}
-          color={bajosStock > 0 ? "text-red-600" : "text-green-600"} />
-        <KpiCard icon="💎" label="Valor del inventario"   value={`Gs. ${formatGsM(valorTotal)}`} color="text-indigo-600" />
+          color={bajosStock > 0 ? "text-red-600" : "text-[#0EA5E9]"}
+          variation={bajosStock > 0 ? -2 : undefined} />
+        <KpiCard icon="💎" label="Valor del inventario"   value={`Gs. ${formatGsM(valorTotal)}`} color="text-[#0EA5E9]" variation={12} />
       </div>
 
       {/* Donut + Críticos */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Estado del stock</h3>
+        <motion.div whileHover={{ y: -2 }} className="bg-white dark:bg-slate-900 rounded-xl border border-[#E5E7EB] dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Estado del stock</h3>
           <DonutChart segments={[
             { label: "Saludable", value: cntSaludable, color: "#22c55e" },
             { label: "Bajo",      value: cntBajo,      color: "#f59e0b" },
             { label: "Crítico",   value: cntCritico,   color: "#ef4444" },
           ]} />
-        </div>
-        <div className="col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
+        </motion.div>
+        <motion.div whileHover={{ y: -2 }} className="col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
             Productos críticos — stock bajo mínimo
           </h3>
           {criticos.length === 0 ? (
-            <div className="flex items-center gap-2 text-green-700 bg-green-50 rounded-lg px-4 py-3 text-sm">
+            <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-lg px-4 py-3 text-sm">
               <span>✅</span> Todos los productos tienen stock suficiente.
             </div>
           ) : (
+            <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                  <tr>
+                    <th className="w-10 px-3 py-3">
+                      <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
+                    </th>
+                    {["Producto", "Stock actual", "Stock mín.", "Estado", "Proveedor"].map(h => (
+                      <th key={h} className="text-left text-xs font-semibold text-slate-500 px-3 py-3 uppercase tracking-wide">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {criticos.map(p => (
+                    <tr key={p.id} className={`${p.stock_actual <= 0 ? "bg-red-50/40 dark:bg-red-900/10" : "bg-amber-50/30 dark:bg-amber-900/10"} hover:bg-opacity-80 transition-colors`}>
+                      <td className="px-3 py-2.5">
+                        <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
+                      </td>
+                      <td className="px-3 py-2.5 text-xs font-medium text-slate-800 dark:text-slate-200">{p.nombre}</td>
+                      <td className="px-3 py-2.5">
+                        <span className={`text-xs font-bold tabular-nums ${p.stock_actual <= 0 ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}>
+                          {p.stock_actual} {p.unidad_medida}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400 tabular-nums">{p.stock_minimo} {p.unidad_medida}</td>
+                      <td className="px-3 py-2.5">
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          p.stock_actual <= 0 ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+                        }`}>
+                          {p.stock_actual <= 0 ? "Crítico" : "Bajo"}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400">{proveedorMap[String(p.id)] ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </motion.div>
+      </div>
+
+      {/* Top por valor */}
+      <motion.div whileHover={{ y: -2 }} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
+        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
+          Top productos por valor de inventario
+        </h3>
+        {topPorValor.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-6">Sin productos registrados.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
+              <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
                 <tr>
-                  {["Producto", "Stock actual", "Stock mín.", "Proveedor"].map(h => (
-                    <th key={h} className="text-left text-xs font-semibold text-gray-500 px-3 py-2.5 uppercase tracking-wide">{h}</th>
+                  <th className="w-10 px-3 py-3">
+                    <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
+                  </th>
+                  {["Producto", "SKU", "Stock", "Costo promedio", "Valor inventario"].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-slate-500 px-3 py-3 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
-                {criticos.map(p => (
-                  <tr key={p.id} className={`${p.stock_actual <= 0 ? "bg-red-50/40" : "bg-amber-50/30"} hover:opacity-80 transition-opacity`}>
-                    <td className="px-3 py-2.5 text-xs font-medium text-gray-800">{p.nombre}</td>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {topPorValor.map(p => (
+                  <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="px-3 py-2.5">
-                      <span className={`text-xs font-bold tabular-nums ${p.stock_actual <= 0 ? "text-red-600" : "text-amber-600"}`}>
-                        {p.stock_actual} {p.unidad_medida}
-                      </span>
+                      <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-gray-500 tabular-nums">{p.stock_minimo} {p.unidad_medida}</td>
-                    <td className="px-3 py-2.5 text-xs text-gray-500">{proveedorMap[String(p.id)] ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-xs font-medium text-slate-800 dark:text-slate-200">{p.nombre}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-slate-500 dark:text-slate-400">{p.sku}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-slate-700 dark:text-slate-300">{p.stock_actual}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">Gs. {formatGs(p.costo_promedio)}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums font-semibold text-slate-800 dark:text-slate-200">Gs. {formatGs(p.valor)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
-      </div>
-
-      {/* Top por valor */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
-          Top productos por valor de inventario
-        </h3>
-        {topPorValor.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-6">Sin productos registrados.</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                {["Producto", "SKU", "Stock", "Costo promedio", "Valor inventario"].map(h => (
-                  <th key={h} className="text-left text-xs font-semibold text-gray-500 px-3 py-2.5 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {topPorValor.map(p => (
-                <tr key={p.id} className="hover:bg-gray-50/60 transition-colors">
-                  <td className="px-3 py-2.5 text-xs font-medium text-gray-800">{p.nombre}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-gray-400">{p.sku}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums text-gray-700">{p.stock_actual}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums text-gray-500">Gs. {formatGs(p.costo_promedio)}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums font-semibold text-gray-800">Gs. {formatGs(p.valor)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          </div>
         )}
-      </div>
+      </motion.div>
 
     </div>
   );
@@ -1024,7 +1076,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 space-y-6">
+    <div className="space-y-6">
 
       {/* Encabezado */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -1071,7 +1123,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-white rounded-full shadow-sm border border-slate-200 p-1.5 w-fit flex-wrap">
+      <div className="flex gap-1 bg-white dark:bg-slate-900 rounded-full shadow-sm border border-slate-200 dark:border-slate-700 p-1.5 w-fit flex-wrap">
         {([
           { id: "comercial",   label: "Comercial",   icon: "📊" },
           { id: "financiero",  label: "Financiero",  icon: "💰" },
@@ -1080,7 +1132,7 @@ export default function DashboardPage() {
         ] as { id: TabDash; label: string; icon: string }[]).map(t => (
           <button key={t.id} type="button" onClick={() => setTab(t.id)}
             className={`flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium rounded-full transition-all ${
-              tab === t.id ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+              tab === t.id ? "bg-[#0EA5E9] text-white shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
             }`}>
             <span>{t.icon}</span>{t.label}
           </button>
