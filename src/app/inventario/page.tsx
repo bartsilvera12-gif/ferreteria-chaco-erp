@@ -6,7 +6,7 @@ import { getProductos } from "@/lib/inventario/storage";
 import type { Producto, MetodoValuacion } from "@/lib/inventario/types";
 
 const inputFilterClass =
-  "border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-gray-400 transition-colors bg-white";
+  "border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none";
 
 const metodoBadge: Record<MetodoValuacion, string> = {
   CPP: "bg-blue-100 text-blue-700",

@@ -258,7 +258,7 @@ function KpiCard({
   return (
     <motion.div
       whileHover={{ y: -2 }}
-      className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-[#E5E7EB] dark:border-slate-700 p-6 transition-shadow hover:shadow-md"
+      className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="text-2xl">{icon}</div>
@@ -273,8 +273,8 @@ function KpiCard({
         )}
       </div>
       <p className={`text-3xl font-bold mt-3 tabular-nums ${color}`}>{value}</p>
-      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">{label}</p>
-      {sub && <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{sub}</p>}
+      <p className="text-xs font-medium text-[#475569] mt-1">{label}</p>
+      {sub && <p className="text-xs text-[#475569] mt-1">{sub}</p>}
     </motion.div>
   );
 }
@@ -395,7 +395,7 @@ function DashComercial({
       </div>
 
       {/* Metas comerciales */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-[#E5E7EB] dark:border-slate-700 shadow-sm p-5">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6">
         <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Progreso de metas</h3>
         <div className="grid grid-cols-2 gap-6">
           <ProgressBar label="Clientes nuevos" value={clientesGanados}
@@ -407,12 +407,12 @@ function DashComercial({
 
       {/* Pipeline + Rendimiento */}
       <div className="grid grid-cols-2 gap-4">
-        <motion.div whileHover={{ y: -2 }} className="bg-white dark:bg-slate-900 rounded-xl border border-[#E5E7EB] dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
-          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Pipeline CRM</h3>
+        <motion.div whileHover={{ y: -2 }} className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6">
+          <h3 className="text-xs font-bold text-[#475569] uppercase tracking-wider mb-4">Pipeline CRM</h3>
           <PipelineBar data={pipeline} />
         </motion.div>
-        <motion.div whileHover={{ y: -2 }} className="bg-white dark:bg-slate-900 rounded-xl border border-[#E5E7EB] dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
+        <motion.div whileHover={{ y: -2 }} className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6">
+          <h3 className="text-xs font-bold text-[#475569] uppercase tracking-wider mb-4">
             Clientes ganados por vendedor
           </h3>
           <HBarChart data={rendimiento} color="bg-[#0EA5E9]" />
@@ -421,8 +421,8 @@ function DashComercial({
 
       {/* Top clientes + Timeline */}
       <div className="grid grid-cols-2 gap-4">
-        <motion.div whileHover={{ y: -2 }} className="bg-white dark:bg-slate-900 rounded-xl border border-[#E5E7EB] dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
+        <motion.div whileHover={{ y: -2 }} className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6">
+          <h3 className="text-xs font-bold text-[#475569] uppercase tracking-wider mb-4">
             Clientes del periodo
           </h3>
           {topClientes.length === 0 ? (
@@ -430,17 +430,17 @@ function DashComercial({
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left text-xs font-semibold text-gray-400 pb-2">Cliente</th>
-                  <th className="text-left text-xs font-semibold text-gray-400 pb-2">Origen</th>
+                <tr className="bg-slate-50">
+                  <th className="text-left text-xs font-semibold text-slate-600 px-3 py-3">Cliente</th>
+                  <th className="text-left text-xs font-semibold text-slate-600 px-3 py-3">Origen</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody>
                 {topClientes.map((c, i) => (
-                  <tr key={i}>
-                    <td className="py-2 text-xs font-medium text-gray-800 truncate max-w-[140px]">{c.nombre}</td>
-                    <td className="py-2">
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{c.origen}</span>
+                  <tr key={i} className="border-b border-slate-200 hover:bg-slate-50 transition-colors">
+                    <td className="px-3 py-2.5 text-sm font-medium text-[#0F172A] truncate max-w-[140px]">{c.nombre}</td>
+                    <td className="px-3 py-2.5">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-[#475569]">{c.origen}</span>
                     </td>
                   </tr>
                 ))}
@@ -449,7 +449,7 @@ function DashComercial({
           )}
         </motion.div>
 
-        <motion.div whileHover={{ y: -2 }} className="bg-white dark:bg-slate-900 rounded-xl border border-[#E5E7EB] dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
+        <motion.div whileHover={{ y: -2 }} className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6">
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
             Actividad reciente
           </h3>
@@ -548,7 +548,7 @@ function DashFinanciero({
       </div>
 
       {/* Metas financieras */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-5">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6">
         <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Progreso de metas</h3>
         <div className="grid grid-cols-2 gap-6">
           <ProgressBar label="Facturación mensual"
@@ -566,13 +566,13 @@ function DashFinanciero({
 
       {/* Gráfico mensual + Distribución */}
       <div className="grid grid-cols-3 gap-4">
-        <motion.div whileHover={{ y: -2 }} className="col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
+        <motion.div whileHover={{ y: -2 }} className="col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6 transition-shadow hover:shadow-md">
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
             Facturación mensual — últimos 12 meses
           </h3>
           <AreaChart data={mensual} color="#0EA5E9" />
         </motion.div>
-        <motion.div whileHover={{ y: -2 }} className="bg-white dark:bg-slate-900 rounded-xl border border-[#E5E7EB] dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
+        <motion.div whileHover={{ y: -2 }} className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6">
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
             Distribución de facturas
           </h3>
@@ -585,7 +585,7 @@ function DashFinanciero({
       </div>
 
       {/* Tabla facturas críticas */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-5">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6">
         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
           Facturas críticas — mayor saldo vencido
         </h3>
@@ -594,9 +594,9 @@ function DashFinanciero({
             <span>✅</span> No hay facturas vencidas. ¡Todo al día!
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+              <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="w-10 px-3 py-3">
                     <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
@@ -608,7 +608,7 @@ function DashFinanciero({
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody className="divide-y divide-slate-200">
                 {criticas.map((f) => (
                   <tr key={f.id} className="bg-red-50/30 dark:bg-red-900/10 hover:bg-red-50/60 dark:hover:bg-red-900/20 transition-colors">
                     <td className="px-3 py-2.5">
@@ -695,7 +695,7 @@ function DashInventario({
 
       {/* Donut + Críticos */}
       <div className="grid grid-cols-3 gap-4">
-        <motion.div whileHover={{ y: -2 }} className="bg-white dark:bg-slate-900 rounded-xl border border-[#E5E7EB] dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
+        <motion.div whileHover={{ y: -2 }} className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6">
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Estado del stock</h3>
           <DonutChart segments={[
             { label: "Saludable", value: cntSaludable, color: "#22c55e" },
@@ -703,7 +703,7 @@ function DashInventario({
             { label: "Crítico",   value: cntCritico,   color: "#ef4444" },
           ]} />
         </motion.div>
-        <motion.div whileHover={{ y: -2 }} className="col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
+        <motion.div whileHover={{ y: -2 }} className="col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6 transition-shadow hover:shadow-md">
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
             Productos críticos — stock bajo mínimo
           </h3>
@@ -712,9 +712,9 @@ function DashInventario({
               <span>✅</span> Todos los productos tienen stock suficiente.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
                     <th className="w-10 px-3 py-3">
                       <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
@@ -724,7 +724,7 @@ function DashInventario({
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y divide-slate-200">
                   {criticos.map(p => (
                     <tr key={p.id} className={`${p.stock_actual <= 0 ? "bg-red-50/40 dark:bg-red-900/10" : "bg-amber-50/30 dark:bg-amber-900/10"} hover:bg-opacity-80 transition-colors`}>
                       <td className="px-3 py-2.5">
@@ -755,16 +755,16 @@ function DashInventario({
       </div>
 
       {/* Top por valor */}
-      <motion.div whileHover={{ y: -2 }} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-5 transition-shadow hover:shadow-md">
+      <motion.div whileHover={{ y: -2 }} className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6 transition-shadow hover:shadow-md">
         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
           Top productos por valor de inventario
         </h3>
         {topPorValor.length === 0 ? (
           <p className="text-sm text-slate-400 text-center py-6">Sin productos registrados.</p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+              <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="w-10 px-3 py-3">
                     <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
@@ -774,7 +774,7 @@ function DashInventario({
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody className="divide-y divide-slate-200">
                 {topPorValor.map(p => (
                   <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="px-3 py-2.5">
@@ -1066,7 +1066,7 @@ export default function DashboardPage() {
           Cambiar a:
           {usuarios.filter(u => u.nivel !== "usuario").map(u => (
             <button key={u.id} onClick={() => handleUsuarioChange(u.id)}
-              className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 transition-colors">
+              className="px-3 py-1.5 rounded-lg bg-[#0EA5E9] hover:bg-[#0284C7] text-white text-xs font-medium transition-colors">
               {u.nombre}
             </button>
           ))}
@@ -1123,7 +1123,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-white dark:bg-slate-900 rounded-full shadow-sm border border-slate-200 dark:border-slate-700 p-1.5 w-fit flex-wrap">
+      <div className="flex gap-1 bg-white dark:bg-slate-900 rounded-full shadow-sm border border-slate-200 p-1.5 w-fit flex-wrap">
         {([
           { id: "comercial",   label: "Comercial",   icon: "📊" },
           { id: "financiero",  label: "Financiero",  icon: "💰" },

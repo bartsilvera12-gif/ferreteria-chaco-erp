@@ -33,17 +33,17 @@ export default function Header() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-4 border-b border-[#E5E7EB] bg-white px-6 dark:border-slate-700 dark:bg-slate-900">
+    <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-4 border-b border-slate-200 bg-white px-6">
       {/* Buscador global */}
       <div className="flex flex-1 max-w-md">
         <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <input
             type="search"
             placeholder="Buscar..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-[#E5E7EB] bg-[#F8FAFC] py-2 pl-10 pr-4 text-sm text-[#0F172A] outline-none transition-colors placeholder:text-slate-400 focus:border-[#0EA5E9] focus:ring-1 focus:ring-[#0EA5E9]/30 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-10 pr-4 text-sm text-[#0F172A] outline-none transition-colors placeholder:text-[#475569] focus:ring-2 focus:ring-[#0EA5E9] focus:border-transparent"
           />
         </div>
       </div>
@@ -53,7 +53,7 @@ export default function Header() {
         <select
           value={period}
           onChange={(e) => setPeriod(e.target.value)}
-          className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-medium text-[#0F172A] outline-none transition-colors focus:border-[#0EA5E9] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-[#0F172A] outline-none transition-colors focus:ring-2 focus:ring-[#0EA5E9]"
         >
           {PERIOD_OPTIONS.map((opt) => (
             <option key={opt.id} value={opt.id}>{opt.label}</option>
@@ -64,7 +64,7 @@ export default function Header() {
         <button
           type="button"
           onClick={toggleTheme}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-[#E0F2FE] dark:text-slate-400 dark:hover:bg-slate-700"
+          className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-[#475569] transition-colors hover:bg-slate-50"
         >
           {theme === "light" ? (
             <>
@@ -82,7 +82,7 @@ export default function Header() {
         {/* Notificaciones */}
         <button
           type="button"
-          className="relative rounded-lg p-2 text-slate-500 transition-colors hover:bg-[#E0F2FE] hover:text-[#0EA5E9] dark:hover:bg-slate-700"
+          className="relative rounded-lg p-2 text-[#475569] transition-colors hover:bg-slate-50 hover:text-[#0EA5E9]"
           aria-label="Notificaciones"
         >
           <Bell className="h-5 w-5" />
@@ -96,26 +96,26 @@ export default function Header() {
           <button
             type="button"
             onClick={() => setUserMenuOpen(!userMenuOpen)}
-            className="flex items-center gap-2 rounded-lg border border-[#E5E7EB] bg-[#F8FAFC] px-3 py-2 transition-colors hover:bg-[#E0F2FE] dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 transition-colors hover:bg-slate-100"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0EA5E9] text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0EA5E9] text-white shrink-0">
               <User className="h-4 w-4" />
             </div>
             <div className="hidden text-left sm:block">
-              <p className="text-sm font-medium text-[#0F172A] dark:text-slate-200">Usuario</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Admin</p>
+              <p className="text-sm font-medium text-[#0F172A]">Usuario</p>
+              <p className="text-xs text-[#475569]">Admin</p>
             </div>
             <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform ${userMenuOpen ? "rotate-180" : ""}`} />
           </button>
 
           <div
-            className={`absolute right-0 top-full mt-1 w-48 rounded-lg border border-[#E5E7EB] bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800 ${
+            className={`absolute right-0 top-full mt-1 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg ${
               userMenuOpen ? "block" : "hidden"
             }`}
           >
-            <div className="border-b border-[#E5E7EB] px-4 py-2 dark:border-slate-700">
-              <p className="text-sm font-medium text-[#0F172A] dark:text-slate-200">Usuario</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">usuario@neura.com</p>
+            <div className="border-b border-slate-200 px-4 py-2">
+              <p className="text-sm font-medium text-[#0F172A]">Usuario</p>
+              <p className="text-xs text-[#475569]">usuario@neura.com</p>
             </div>
             <button
               type="button"
@@ -123,7 +123,7 @@ export default function Header() {
                 await signOut();
                 router.push("/login");
               }}
-              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-600 transition-colors hover:bg-[#E0F2FE] hover:text-[#0EA5E9] dark:text-slate-400 dark:hover:bg-slate-700"
+              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#475569] transition-colors hover:bg-slate-50 hover:text-[#0EA5E9]"
             >
               <LogOut className="h-4 w-4" />
               Cerrar sesión

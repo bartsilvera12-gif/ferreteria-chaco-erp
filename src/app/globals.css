@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
-/* Sistema visual referencia Platelink */
+/* Neura ERP - Paleta SaaS (Stripe/Linear/Vercel) */
 :root {
   --background: #F8FAFC;
   --foreground: #0F172A;
-  --foreground-muted: #64748B;
+  --foreground-muted: #475569;
   --card: #FFFFFF;
-  --sidebar: #18181b; /* zinc-900: gris neutro, sin tinte azul */
+  --sidebar: #F1F5F9;
   --primary: #0EA5E9;
   --primary-hover: #0284C7;
   --primary-light: #E0F2FE;
-  --border: #E5E7EB;
+  --border: #E2E8F0;
   /* Badges de estado */
   --badge-success-bg: #DCFCE7;
   --badge-success-text: #166534;

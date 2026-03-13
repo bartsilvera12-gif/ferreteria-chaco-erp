@@ -74,7 +74,7 @@ export default function ComprasPage() {
           <h2 className="text-xl font-semibold">Órdenes de compra</h2>
           <Link
             href="/compras/nueva"
-            className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-700 transition-colors"
+            className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
           >
             + Nueva compra
           </Link>

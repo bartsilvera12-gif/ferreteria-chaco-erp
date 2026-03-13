@@ -90,7 +90,7 @@ function NavItem({
           }`}
           onClick={onToggleExpand}
         >
-          <Icon className="h-5 w-5 shrink-0" />
+          <Icon className={`h-5 w-5 shrink-0 ${isActive || childActive ? "text-white" : "text-slate-500"}`} />
           {!collapsed && (
             <>
               <span className="flex-1 truncate">{item.label}</span>
@@ -142,7 +142,7 @@ function NavItem({
           : "text-slate-700 hover:bg-[#E2E8F0]"
       }`}
     >
-      <Icon className="h-5 w-5 shrink-0" />
+      <Icon className={`h-5 w-5 shrink-0 ${isActive ? "text-white" : "text-slate-500"}`} />
       {!collapsed && (
         <>
           <span className="flex-1 truncate">{item.label}</span>
