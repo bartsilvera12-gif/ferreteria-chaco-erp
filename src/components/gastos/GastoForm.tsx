@@ -35,7 +35,8 @@ export default function GastoForm({ gasto, onSuccess }: Props) {
     if (type === "checkbox") {
       setForm((prev) => ({ ...prev, recurrente: (e.target as HTMLInputElement).checked }));
     } else if (name !== "monto") {
-      setForm((prev) => ({ ...prev, [name]: value }));
+      const normalized = ["categoria", "descripcion", "frecuencia"].includes(name) ? value.toUpperCase() : value;
+      setForm((prev) => ({ ...prev, [name]: normalized }));
     }
   }
 

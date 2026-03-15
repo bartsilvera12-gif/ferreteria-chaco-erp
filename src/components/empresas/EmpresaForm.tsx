@@ -45,7 +45,10 @@ export default function EmpresaForm() {
           : prev.modulo_ids.filter((m) => m !== id),
       }));
     } else {
-      setForm((prev) => ({ ...prev, [name]: value }));
+      let normalized = value;
+      if (name === "email" || type === "email") normalized = value.toLowerCase();
+      else if (["nombre_empresa", "nombre", "plan"].includes(name)) normalized = value.toUpperCase();
+      setForm((prev) => ({ ...prev, [name]: normalized }));
     }
   }
 

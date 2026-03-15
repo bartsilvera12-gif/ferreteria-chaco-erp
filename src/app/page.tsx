@@ -30,11 +30,18 @@ function formatGs(n: number): string {
   return n.toLocaleString("es-PY");
 }
 
+/** Formato abreviado: 2.500.000 → 2.5M, 25.000.000 → 25M */
 function formatGsM(n: number): string {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
-  if (n >= 1_000_000)     return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000)         return `${(n / 1_000).toFixed(0)}K`;
-  return String(n);
+  if (n >= 1_000_000_000) {
+    const b = n / 1_000_000_000;
+    return b % 1 === 0 ? `${b}B` : `${b.toFixed(1)}B`;
+  }
+  if (n >= 1_000_000) {
+    const m = n / 1_000_000;
+    return m % 1 === 0 ? `${m}M` : `${m.toFixed(1)}M`;
+  }
+  if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
+  return n.toLocaleString("es-PY");
 }
 
 function formatFecha(s: string): string {
@@ -642,12 +649,12 @@ function DashFinanciero({
   const { desde, hasta } = useMemo(() => getRango(periodo), [periodo]);
   const hoy = hoyStr();
 
-  // Ingresos, Gastos, Resultado del mes actual
+  // Ingresos (pagos cobrados), Gastos, Resultado del mes actual
   const mesActual = useMemo(() => {
     const n = new Date();
     const y = n.getFullYear(), m = n.getMonth();
-    const ventasMes = ventas.filter((v) => {
-      const d = new Date(v.fecha);
+    const pagosMes = pagos.filter((p) => {
+      const d = new Date(p.fecha_pago);
       return d.getFullYear() === y && d.getMonth() === m;
     });
     const comprasMes = compras.filter((c) => {
@@ -658,10 +665,10 @@ function DashFinanciero({
       const d = new Date(g.fecha);
       return d.getFullYear() === y && d.getMonth() === m;
     });
-    const ingresos = ventasMes.reduce((s, v) => s + v.total, 0);
+    const ingresos = pagosMes.reduce((s, p) => s + p.monto, 0);
     const gastosTotal = gastosMes.reduce((s, g) => s + g.monto, 0) + comprasMes.reduce((s, c) => s + c.total, 0);
     return { ingresos, gastos: gastosTotal, resultado: ingresos - gastosTotal };
-  }, [ventas, compras, gastos]);
+  }, [pagos, compras, gastos]);
 
   // KPIs
   const facturasPeriodo = facturas.filter(f => enRango(f.fecha, desde, hasta));
@@ -711,12 +718,12 @@ function DashFinanciero({
 
       {/* Ingresos, Gastos, Resultado del mes */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KpiCard icon="📈" label="Ingresos del mes" value={`${formatGsM(mesActual.ingresos)} ₲`} color="text-green-600" />
-        <KpiCard icon="📉" label="Gastos del mes" value={`${formatGsM(mesActual.gastos)} ₲`} color="text-red-600" />
+        <KpiCard icon="📈" label="Ingresos del mes" value={`Gs. ${formatGsM(mesActual.ingresos)}`} color="text-green-600" />
+        <KpiCard icon="📉" label="Gastos del mes" value={`Gs. ${formatGsM(mesActual.gastos)}`} color="text-red-600" />
         <KpiCard
           icon="💰"
           label="Resultado del mes"
-          value={`${formatGsM(mesActual.resultado)} ₲`}
+          value={`Gs. ${formatGsM(mesActual.resultado)}`}
           color={mesActual.resultado >= 0 ? "text-[#0EA5E9]" : "text-red-600"}
         />
       </div>

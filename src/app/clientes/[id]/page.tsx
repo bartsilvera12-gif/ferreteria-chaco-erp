@@ -207,15 +207,17 @@ export default function ClienteDetailPage() {
     }
   }, [form.condicion_pago, id]);
 
-  const upper = ["empresa", "nombre_contacto", "ciudad", "pais", "categoria_cliente", "industria", "vendedor_asignado", "condicion_pago"];
+  const upper = ["empresa", "nombre_contacto", "ciudad", "pais", "categoria_cliente", "industria", "vendedor_asignado", "condicion_pago", "direccion"];
+  const lower = ["email", "email_secundario"];
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
     setFormError(null);
     const { name, value } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: upper.includes(name) ? value.toUpperCase() : value,
-    }));
+    const type = (e.target as HTMLInputElement).type;
+    let normalized = value;
+    if (lower.includes(name) || type === "email") normalized = value.toLowerCase();
+    else if (upper.includes(name)) normalized = value.toUpperCase();
+    setForm((prev) => ({ ...prev, [name]: normalized }));
   }
 
   async function handleGuardar(e: React.FormEvent) {

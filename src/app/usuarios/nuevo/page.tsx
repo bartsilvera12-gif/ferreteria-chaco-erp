@@ -67,10 +67,10 @@ export default function NuevoUsuarioPage() {
     if (type === "checkbox") {
       setForm((prev) => ({ ...prev, [name]: (e.target as HTMLInputElement).checked }));
     } else {
-      setForm((prev) => ({
-        ...prev,
-        [name]: upper.includes(name) ? value.toUpperCase() : value,
-      }));
+      let normalized = value;
+      if (name === "email" || type === "email") normalized = value.toLowerCase();
+      else if (upper.includes(name)) normalized = value.toUpperCase();
+      setForm((prev) => ({ ...prev, [name]: normalized }));
     }
   }
 

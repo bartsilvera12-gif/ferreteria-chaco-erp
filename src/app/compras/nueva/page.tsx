@@ -229,7 +229,12 @@ export default function NuevaCompraPage() {
 
   function handleProveedorInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.name === "ruc") setErrorRuc(null);
-    setFormProveedor((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    const type = e.target.type;
+    let normalized = value;
+    if (name === "email" || type === "email") normalized = value.toLowerCase();
+    else if (["nombre", "contacto"].includes(name)) normalized = value.toUpperCase();
+    setFormProveedor((prev) => ({ ...prev, [name]: normalized }));
   }
 
   function handleAgregarProveedor() {

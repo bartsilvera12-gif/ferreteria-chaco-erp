@@ -118,11 +118,12 @@ export default function EditProspectoPage() {
   ) {
     setErrorForm(null);
     const { name, value } = e.target;
+    const type = (e.target as HTMLInputElement).type;
     const upper = ["empresa", "contacto", "responsable"];
-    setForm((prev) => ({
-      ...prev,
-      [name]: upper.includes(name) ? value.toUpperCase() : value,
-    }));
+    let normalized = value;
+    if (name === "email" || type === "email") normalized = value.toLowerCase();
+    else if (upper.includes(name)) normalized = value.toUpperCase();
+    setForm((prev) => ({ ...prev, [name]: normalized }));
   }
 
   function togglePlan(planId: string) {

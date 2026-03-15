@@ -316,7 +316,7 @@ export default function EditarEmpresaPage() {
                 <input
                   type="text"
                   value={adminForm.nombre}
-                  onChange={(e) => setAdminForm((p) => ({ ...p, nombre: e.target.value }))}
+                  onChange={(e) => setAdminForm((p) => ({ ...p, nombre: e.target.value.toUpperCase() }))}
                   className={`${fInput} uppercase`}
                   placeholder="Nombre completo"
                 />
@@ -326,7 +326,7 @@ export default function EditarEmpresaPage() {
                 <input
                   type="email"
                   value={adminForm.email}
-                  onChange={(e) => setAdminForm((p) => ({ ...p, email: e.target.value }))}
+                  onChange={(e) => setAdminForm((p) => ({ ...p, email: e.target.value.toLowerCase() }))}
                   className={fInput}
                   placeholder="admin@empresa.com"
                 />
