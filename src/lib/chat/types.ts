@@ -124,7 +124,7 @@ export type MetaInboundMessage = {
   timestamp?: string;
   type?: string;
   text?: { body?: string };
-  image?: { caption?: string; id?: string };
+  image?: { caption?: string; id?: string; mime_type?: string };
   document?: { caption?: string; filename?: string };
   audio?: { id?: string };
   video?: { caption?: string };

@@ -62,9 +62,31 @@ export type ProcessTextReplyParams = {
   rawPayload: Record<string, unknown>;
 };
 
+export type ProcessImageReplyParams = {
+  conversationId: string;
+  empresaId: string;
+  mediaId: string;
+  mimeType?: string | null;
+  caption?: string | null;
+  rawPayload: Record<string, unknown>;
+};
+
 export type FlowEngineContext = {
   supabase: SupabaseAdmin;
 };
+
+const CHAT_MEDIA_BUCKET = "chat-media";
+let chatMediaBucketChecked = false;
+
+function extensionFromMime(mimeType: string | null | undefined): string {
+  if (!mimeType) return "jpg";
+  const v = mimeType.toLowerCase();
+  if (v.includes("png")) return "png";
+  if (v.includes("webp")) return "webp";
+  if (v.includes("gif")) return "gif";
+  if (v.includes("jpeg") || v.includes("jpg")) return "jpg";
+  return "jpg";
+}
 
 export function createFlowEngine(ctx: FlowEngineContext) {
   const supabase = ctx.supabase;
@@ -180,6 +202,58 @@ export function createFlowEngine(ctx: FlowEngineContext) {
         updated_at: ts,
       })
       .eq("id", input.conversation.id);
+  }
+
+  async function ensureChatMediaBucket() {
+    if (chatMediaBucketChecked) return;
+    const { data: buckets, error: listErr } = await supabase.storage.listBuckets();
+    if (listErr) throw new Error(listErr.message);
+    const exists = (buckets ?? []).some((b) => b.name === CHAT_MEDIA_BUCKET);
+    if (!exists) {
+      const { error: createErr } = await supabase.storage.createBucket(CHAT_MEDIA_BUCKET, {
+        public: true,
+        fileSizeLimit: "10MB",
+      });
+      if (createErr && !createErr.message.toLowerCase().includes("already exists")) {
+        throw new Error(createErr.message);
+      }
+    }
+    chatMediaBucketChecked = true;
+  }
+
+  async function downloadMetaMedia(params: {
+    mediaId: string;
+    accessToken: string;
+    mimeTypeHint?: string | null;
+  }): Promise<{ bytes: Uint8Array; mimeType: string }> {
+    const version = process.env.WHATSAPP_GRAPH_VERSION ?? "v19.0";
+    const metaRes = await fetch(
+      `https://graph.facebook.com/${version}/${params.mediaId}`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${params.accessToken}` },
+      }
+    );
+    const metaJson = (await metaRes.json().catch(() => ({}))) as {
+      url?: string;
+      mime_type?: string;
+      error?: { message?: string };
+    };
+    if (!metaRes.ok || !metaJson.url) {
+      throw new Error(
+        metaJson.error?.message || `No se pudo obtener URL temporal para media_id=${params.mediaId}`
+      );
+    }
+
+    const binRes = await fetch(metaJson.url, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${params.accessToken}` },
+    });
+    if (!binRes.ok) {
+      throw new Error(`No se pudo descargar binario media_id=${params.mediaId}`);
+    }
+    const arr = new Uint8Array(await binRes.arrayBuffer());
+    return { bytes: arr, mimeType: metaJson.mime_type || params.mimeTypeHint || "image/jpeg" };
   }
 
   async function getNode(
@@ -488,7 +562,40 @@ export function createFlowEngine(ctx: FlowEngineContext) {
       state.flow_code,
       state.flow_current_node
     );
-    if (!currentNode || currentNode.node_type !== "text") {
+    if (!currentNode) {
+      return { ok: true, status: "ignored_node_not_found" };
+    }
+    if (currentNode.node_type === "image_input") {
+      const sendCtx = await getConversationSendContext(state.id);
+      const reminder = "Por favor envía una imagen del comprobante";
+      const send = await sendWhatsAppText({
+        toDigits: sendCtx.toDigits,
+        phoneNumberId: sendCtx.phoneNumberId,
+        accessToken: sendCtx.token,
+        text: reminder,
+      });
+      if (send.ok) {
+        await persistOutgoingMessage({
+          conversation: state,
+          content: reminder,
+          messageType: "text",
+          waMessageId: send.waMessageId,
+          raw: send.raw,
+          senderType: "system",
+          automationSource: "flow_engine",
+        });
+      }
+      await insertFlowEvent({
+        empresaId: state.empresa_id,
+        conversationId: state.id,
+        flowCode: state.flow_code,
+        nodeCode: currentNode.node_code,
+        eventType: "image_expected_text_received",
+        payload: { text_value: textValue, raw: params.rawPayload },
+      });
+      return { ok: true, status: "image_expected_text_received" };
+    }
+    if (currentNode.node_type !== "text") {
       return { ok: true, status: "ignored_not_text_node" };
     }
 
@@ -569,10 +676,118 @@ export function createFlowEngine(ctx: FlowEngineContext) {
     return { ok: true, status: "advanced", nextNodeCode: currentNode.next_node_code };
   }
 
+  async function processImageReply(
+    params: ProcessImageReplyParams
+  ): Promise<{ ok: boolean; status: string; nextNodeCode?: string; error?: string }> {
+    const state = await getConversationFlowState(params.conversationId);
+    if (!state || state.empresa_id !== params.empresaId) {
+      return { ok: false, status: "conversation_not_found", error: "Conversación no encontrada" };
+    }
+    if (state.flow_status !== "bot" || state.human_taken_over) {
+      return { ok: true, status: "ignored_not_bot_mode" };
+    }
+    if (!state.flow_code || !state.flow_current_node) {
+      return { ok: true, status: "missing_flow_state" };
+    }
+
+    const currentNode = await getNode(
+      state.empresa_id,
+      state.flow_code,
+      state.flow_current_node
+    );
+    if (!currentNode || currentNode.node_type !== "image_input") {
+      return { ok: true, status: "ignored_not_image_node" };
+    }
+
+    const sendCtx = await getConversationSendContext(state.id);
+    const media = await downloadMetaMedia({
+      mediaId: params.mediaId,
+      accessToken: sendCtx.token,
+      mimeTypeHint: params.mimeType ?? null,
+    });
+    await ensureChatMediaBucket();
+
+    const ext = extensionFromMime(media.mimeType);
+    const path = `${state.empresa_id}/${state.id}/${Date.now()}.${ext}`;
+    const upload = await supabase.storage.from(CHAT_MEDIA_BUCKET).upload(path, media.bytes, {
+      contentType: media.mimeType,
+      upsert: true,
+    });
+    if (upload.error) {
+      return { ok: false, status: "upload_failed", error: upload.error.message };
+    }
+    const publicUrl = supabase.storage.from(CHAT_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
+
+    if (currentNode.save_as_field) {
+      const { error: upErr } = await supabase
+        .from("chat_flow_data")
+        .upsert(
+          {
+            empresa_id: state.empresa_id,
+            conversation_id: state.id,
+            flow_code: state.flow_code,
+            field_name: currentNode.save_as_field,
+            field_value: publicUrl,
+          },
+          { onConflict: "conversation_id,field_name" }
+        );
+      if (upErr) return { ok: false, status: "save_image_failed", error: upErr.message };
+    }
+
+    await insertFlowEvent({
+      empresaId: state.empresa_id,
+      conversationId: state.id,
+      flowCode: state.flow_code,
+      nodeCode: currentNode.node_code,
+      eventType: "image_received",
+      payload: {
+        media_id: params.mediaId,
+        mime_type: media.mimeType,
+        caption: params.caption ?? null,
+        storage_url: publicUrl,
+        save_as_field: currentNode.save_as_field ?? null,
+      },
+    });
+
+    if (!currentNode.next_node_code) {
+      return { ok: true, status: "captured_no_next_node" };
+    }
+
+    const adv = await advanceConversationToNode({
+      conversationId: state.id,
+      empresaId: state.empresa_id,
+      flowCode: state.flow_code,
+      nextNodeCode: currentNode.next_node_code,
+    });
+    if (!adv.ok) {
+      return { ok: false, status: "advance_failed", error: adv.error };
+    }
+
+    await insertFlowEvent({
+      empresaId: state.empresa_id,
+      conversationId: state.id,
+      flowCode: state.flow_code,
+      nodeCode: currentNode.next_node_code,
+      eventType: "node_advanced",
+      payload: {
+        from_node: currentNode.node_code,
+        next_node_code: currentNode.next_node_code,
+        reason: "image_received",
+      },
+    });
+
+    const sent = await sendCurrentFlowNode({ conversationId: state.id });
+    if (!sent.ok) {
+      return { ok: false, status: "send_next_node_failed", error: sent.error };
+    }
+    return { ok: true, status: "advanced", nextNodeCode: currentNode.next_node_code };
+  }
+
   return {
     getConversationFlowState,
     processInteractiveReply,
     processTextReply,
+    processImageReply,
     advanceConversationToNode,
     sendCurrentFlowNode,
   };
@@ -604,6 +819,13 @@ export async function processTextReply(
   params: ProcessTextReplyParams
 ) {
   return createFlowEngine({ supabase }).processTextReply(params);
+}
+
+export async function processImageReply(
+  supabase: SupabaseAdmin,
+  params: ProcessImageReplyParams
+) {
+  return createFlowEngine({ supabase }).processImageReply(params);
 }
 
 export async function sendCurrentFlowNode(

@@ -355,6 +355,29 @@ export async function processInboundWebhookValue(
         if (!textResult.ok) {
           errors.push(`Flow text: ${textResult.error ?? textResult.status}`);
         }
+      } else if (message_type === "image") {
+        const mediaId = msg.image?.id?.trim() || "";
+        if (!mediaId) {
+          errors.push("Flow image: message.image.id ausente");
+        } else {
+          const imageResult = await flowEngine.processImageReply({
+            conversationId,
+            empresaId,
+            mediaId,
+            mimeType: msg.image?.mime_type ?? null,
+            caption: msg.image?.caption ?? null,
+            rawPayload: msg as unknown as Record<string, unknown>,
+          });
+          console.info("[webhook] image flow result", {
+            conversationId,
+            mediaId,
+            status: imageResult.status,
+            nextNodeCode: imageResult.nextNodeCode ?? null,
+          });
+          if (!imageResult.ok) {
+            errors.push(`Flow image: ${imageResult.error ?? imageResult.status}`);
+          }
+        }
       }
 
       processed += 1;
