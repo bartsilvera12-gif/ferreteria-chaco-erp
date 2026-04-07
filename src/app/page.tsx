@@ -649,49 +649,29 @@ function DashComercial({
 // ── Dashboard Financiero ──────────────────────────────────────────────────────
 
 function DashFinanciero({
-  facturas, pagos, clientes, ventas, compras, gastos, periodo, config,
-  clientesBajaMes = 0, montoPerdidoBajas = 0,
+  facturas, pagos, clientes, ventas, periodo, config,
 }: {
   facturas:  FacturaRaw[];
   pagos:     PagoRaw[];
   clientes:  ClienteRaw[];
   ventas:    VentaRaw[];
-  compras:   CompraRaw[];
-  gastos:    GastoRaw[];
   periodo:   Periodo;
   config:    ConfigGlobal;
-  clientesBajaMes?: number;
-  montoPerdidoBajas?: number;
 }) {
   const { desde, hasta } = useMemo(() => getRango(periodo), [periodo]);
   const hoy = hoyStr();
 
-  // Ingresos (pagos cobrados), Gastos, Resultado del mes actual
-  const mesActual = useMemo(() => {
-    const n = new Date();
-    const pagosMes = pagos.filter((p) => enMesCalendarioActual(p.fecha_pago, n));
-    const comprasMes = compras.filter((c) => enMesCalendarioActual(c.fecha, n));
-    const gastosMes = gastos.filter((g) => enMesCalendarioActual(g.fecha, n));
-    const sumNum = (arr: { monto?: unknown; total?: unknown }[], key: "monto" | "total") =>
-      arr.reduce((acc, x) => {
-        const v = Number(key === "monto" ? x.monto : x.total);
-        return acc + (Number.isFinite(v) ? v : 0);
-      }, 0);
-    const ingresos = sumNum(pagosMes, "monto");
-    const gastosTotal = sumNum(gastosMes, "monto") + sumNum(comprasMes, "total");
-    return { ingresos, gastos: gastosTotal, resultado: ingresos - gastosTotal };
-  }, [pagos, compras, gastos]);
-
-  // KPIs (excluir facturas anuladas de facturado y saldo)
+  // Bloque principal: métricas del período (misma ventana que el filtro superior: enRango + fechas calendario)
   const facturasValidas = facturas.filter(f => f.estado !== "Anulado");
   const facturasPeriodo = facturasValidas.filter(f => enRango(f.fecha, desde, hasta));
   const sumMonto = <T extends { monto?: unknown }>(arr: T[]) =>
     arr.reduce((acc, x) => { const v = Number(x.monto); return acc + (Number.isFinite(v) ? v : 0); }, 0);
-  const sumSaldo = (arr: { saldo?: unknown }[]) =>
-    arr.reduce((acc, x) => { const v = Number(x.saldo); return acc + (Number.isFinite(v) ? v : 0); }, 0);
-  const facturado       = sumMonto(facturasPeriodo);
+  const aCobrarPeriodo = sumMonto(facturasPeriodo);
   const pagosPeriodo    = pagos.filter(p => enRango(p.fecha_pago, desde, hasta));
-  const cobrado         = sumMonto(pagosPeriodo);
+  const cobradoPeriodo  = sumMonto(pagosPeriodo);
+  const pendientePeriodo = aCobrarPeriodo - cobradoPeriodo;
+  const pctCobranza =
+    aCobrarPeriodo > 0 ? (cobradoPeriodo / aCobrarPeriodo) * 100 : null;
   const facturaNumById  = useMemo(
     () => Object.fromEntries(facturas.map(f => [String(f.id), f.numero_factura])),
     [facturas]
@@ -709,8 +689,6 @@ function DashFinanciero({
         })),
     [pagosPeriodo, facturaNumById]
   );
-  const saldoPendiente  = sumSaldo(facturasValidas.filter(f => (Number(f.saldo) || 0) > 0));
-  const cntVencidas     = facturasValidas.filter(f => estadoEfectivo(f, hoy) === "Vencido").length;
 
   // Facturación mensual (últimos 12 meses, excluir anuladas)
   const mensual = useMemo(() => {
@@ -753,33 +731,54 @@ function DashFinanciero({
   return (
     <div className="space-y-5">
 
-      {/* Ingresos, Gastos, Resultado del mes */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KpiCard icon="📈" label="Ingresos del mes" value={`Gs. ${formatGsM(mesActual.ingresos)}`} color="text-green-600" />
-        <KpiCard icon="📉" label="Gastos del mes" value={`Gs. ${formatGsM(mesActual.gastos)}`} color="text-red-600" />
-        <KpiCard
-          icon="💰"
-          label="Resultado del mes"
-          value={`Gs. ${formatGsM(mesActual.resultado)}`}
-          color={mesActual.resultado >= 0 ? "text-[#0EA5E9]" : "text-red-600"}
-        />
-      </div>
-
-      {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
-        <KpiCard icon="🧾" label="Facturado" value={`Gs. ${formatGsM(facturado)}`} color="text-[#0EA5E9]"
-          sub={`${facturasPeriodo.length} facturas`} variation={15} />
-        <KpiCard icon="💵" label="Cobrado" value={`Gs. ${formatGsM(cobrado)}`} color="text-[#0EA5E9]" variation={8}
-          sub={`Suma de ${pagosPeriodo.length} pago(s) por fecha de pago en el período`} />
-        <KpiCard icon="⏳" label="Saldo pendiente" value={`Gs. ${formatGsM(saldoPendiente)}`}
-          color={saldoPendiente > 0 ? "text-amber-600" : "text-[#0EA5E9]"} />
-        <KpiCard icon="🚨" label="Facturas vencidas" value={String(cntVencidas)}
-          color={cntVencidas > 0 ? "text-red-600" : "text-[#0EA5E9]"}
-          variation={cntVencidas > 0 ? -3 : undefined} />
-        <KpiCard icon="📉" label="Bajas del mes" value={String(clientesBajaMes)}
-          sub="Clientes dados de baja" color={clientesBajaMes > 0 ? "text-amber-600" : "text-[#0EA5E9]"} />
-        <KpiCard icon="💰" label="Monto perdido (bajas)" value={`Gs. ${formatGsM(montoPerdidoBajas)}`}
-          sub="Por suscripciones canceladas" color={montoPerdidoBajas > 0 ? "text-amber-600" : "text-[#0EA5E9]"} />
+      {/* Bloque principal: cobranza del período (sin saldo histórico ni mezcla con gastos) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <motion.div
+          whileHover={{ y: -2 }}
+          className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">A cobrar del período</p>
+          <p className="mt-3 text-3xl font-bold tabular-nums text-slate-900">Gs. {formatGsM(aCobrarPeriodo)}</p>
+          <p className="mt-2 text-xs text-slate-500">
+            Suma del monto de facturas emitidas en el período · {facturasPeriodo.length} factura{facturasPeriodo.length === 1 ? "" : "s"}
+          </p>
+        </motion.div>
+        <motion.div
+          whileHover={{ y: -2 }}
+          className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Cobrado del período</p>
+          <p className="mt-3 text-3xl font-bold tabular-nums text-[#0EA5E9]">Gs. {formatGsM(cobradoPeriodo)}</p>
+          <p className="mt-2 text-xs text-slate-500">
+            Suma de pagos por fecha de pago en el período · {pagosPeriodo.length} pago{pagosPeriodo.length === 1 ? "" : "s"}
+          </p>
+        </motion.div>
+        <motion.div
+          whileHover={{ y: -2 }}
+          className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pendiente del período</p>
+          <p
+            className={`mt-3 text-3xl font-bold tabular-nums ${
+              pendientePeriodo > 0 ? "text-amber-600" : pendientePeriodo < 0 ? "text-emerald-700" : "text-slate-900"
+            }`}
+          >
+            {pendientePeriodo < 0 ? "− " : ""}Gs. {formatGsM(Math.abs(pendientePeriodo))}
+          </p>
+          <p className="mt-2 text-xs text-slate-500">A cobrar del período menos cobrado del período</p>
+        </motion.div>
+        <motion.div
+          whileHover={{ y: -2 }}
+          className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">% de cobranza</p>
+          <p className="mt-3 text-3xl font-bold tabular-nums text-slate-900">
+            {pctCobranza == null ? "—" : `${pctCobranza.toFixed(1)}%`}
+          </p>
+          <p className="mt-2 text-xs text-slate-500">
+            Cobrado ÷ A cobrar · {aCobrarPeriodo <= 0 ? "sin emisión en el período" : "del período seleccionado"}
+          </p>
+        </motion.div>
       </div>
 
       {/* Trazabilidad: pagos que suman "Cobrado" en el período */}
@@ -788,7 +787,7 @@ function DashFinanciero({
           Desglose cobrado (período: {periodo})
         </h3>
         <p className="text-xs text-slate-500 mb-3">
-          Registros incluidos: pagos cuya <strong>fecha de pago</strong> cae en el rango del filtro superior. La suma de montos coincide con la tarjeta &quot;Cobrado&quot; (Gs. {formatGs(cobrado)}).
+          Registros incluidos: pagos cuya <strong>fecha de pago</strong> cae en el rango del filtro superior. La suma de montos coincide con &quot;Cobrado del período&quot; (Gs. {formatGs(cobradoPeriodo)}).
         </p>
         {cobradoDetalle.length === 0 ? (
           <p className="text-sm text-slate-600">No hay pagos en este período.</p>
@@ -1287,9 +1286,6 @@ export default function DashboardPage() {
   const [ventas,         setVentas]         = useState<VentaRaw[]>([]);
   const [compras,        setCompras]        = useState<CompraRaw[]>([]);
   const [gastos,         setGastos]         = useState<GastoRaw[]>([]);
-  const [clientesBajaMes, setClientesBajaMes] = useState(0);
-  const [montoPerdidoBajas, setMontoPerdidoBajas] = useState(0);
-
   // Sincronizar tab con URL al cargar (popstate / refresh)
   useEffect(() => {
     const syncFromUrl = () => {
@@ -1325,8 +1321,6 @@ export default function DashboardPage() {
         setVentas(data.ventas);
         setCompras(data.compras);
         setGastos(data.gastos);
-        setClientesBajaMes(data.clientes_baja_mes ?? 0);
-        setMontoPerdidoBajas(data.monto_perdido_bajas_mes ?? 0);
       })
       .catch(() => {
         setProspectos([]);
@@ -1338,8 +1332,6 @@ export default function DashboardPage() {
         setVentas([]);
         setCompras([]);
         setGastos([]);
-        setClientesBajaMes(0);
-        setMontoPerdidoBajas(0);
       });
   }, []);
 
@@ -1459,12 +1451,8 @@ export default function DashboardPage() {
           pagos={pagos}
           clientes={clientes}
           ventas={ventas}
-          compras={compras}
-          gastos={gastos}
           periodo={periodo}
           config={config}
-          clientesBajaMes={clientesBajaMes}
-          montoPerdidoBajas={montoPerdidoBajas}
         />
       )}
 
