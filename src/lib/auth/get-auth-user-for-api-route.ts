@@ -2,7 +2,6 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
-import { supabaseDbSchemaOption } from "@/lib/supabase/schema";
 
 export function extractBearerTokenFromRequest(request: Request): string | null {
   const h = request.headers.get("authorization");
@@ -12,8 +11,8 @@ export function extractBearerTokenFromRequest(request: Request): string | null {
 }
 
 /**
- * Usuario de Auth para Route Handlers: primero JWT en header (sesión en localStorage del browser),
- * si no hay, cookies (SSR / middleware).
+ * Usuario de Auth para Route Handlers: JWT en header o cookies.
+ * Solo NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY (sin db.schema en getUser).
  */
 export async function getAuthUserForApiRoute(request: Request): Promise<User | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
@@ -22,18 +21,13 @@ export async function getAuthUserForApiRoute(request: Request): Promise<User | n
 
   const bearer = extractBearerTokenFromRequest(request);
   if (bearer) {
-    const c = createClient(url, anonKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-      global: { headers: { Authorization: `Bearer ${bearer}` } },
-      ...supabaseDbSchemaOption,
-    });
+    const c = createClient(url, anonKey);
     const { data, error } = await c.auth.getUser(bearer);
     if (!error && data.user?.id) return data.user;
   }
 
   const cookieStore = await cookies();
   const supabaseAuth = createServerClient(url, anonKey, {
-    ...supabaseDbSchemaOption,
     cookies: {
       getAll() {
         return cookieStore.getAll().map((c) => ({ name: c.name, value: c.value }));

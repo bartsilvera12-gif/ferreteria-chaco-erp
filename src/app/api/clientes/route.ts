@@ -56,19 +56,6 @@ async function buildPlanActivoMap(
 
 export async function GET(request: NextRequest) {
   try {
-    if (process.env.NEURA_DIAG_AUTH === "1") {
-      const ah = request.headers.get("authorization");
-      console.warn(
-        "[neura:diag:api/clientes GET]",
-        JSON.stringify({
-          step: "before_auth",
-          hasRequest: true,
-          authHeaderLen: ah?.length ?? 0,
-          authStartsWithBearer: ah?.toLowerCase().startsWith("bearer ") ?? false,
-          callsGetTenantWithRequest: true,
-        })
-      );
-    }
     const ctx = await getTenantSupabaseFromAuthWithRol(request);
     if (!ctx) {
       return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });

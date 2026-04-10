@@ -1,13 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { supabaseDbSchemaOption } from "@/lib/supabase/schema";
 
 /**
  * Refresca la sesión Supabase en cookies antes de Route Handlers / RSC.
- * Sin esto, getUser() en el servidor puede fallar y /api/empresas/data-schema devuelve 401.
+ * Solo NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY (sin db.schema en getUser).
  */
-const MW_DIAG = process.env.NEURA_DIAG_AUTH === "1";
-
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -17,16 +14,7 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
-  if (MW_DIAG && request.nextUrl.pathname.startsWith("/api/empresas/data-schema")) {
-    const names = request.cookies.getAll().map((c) => c.name);
-    console.warn(
-      "[neura:diag:middleware]",
-      JSON.stringify({ path: request.nextUrl.pathname, cookieCount: names.length, cookieNames: names })
-    );
-  }
-
   const supabase = createServerClient(url, anonKey, {
-    ...supabaseDbSchemaOption,
     cookies: {
       getAll() {
         return request.cookies.getAll();

@@ -21,23 +21,6 @@ function esRolAdmin(rol?: string): boolean {
  */
 export async function getAuthWithRol(request?: Request | null): Promise<UsuarioConEmpresaYRol | null> {
   const r = await resolveApiAuthContext(request);
-  if (process.env.NEURA_DIAG_AUTH === "1") {
-    if (!r.ok) {
-      console.warn(
-        "[neura:diag:getAuthWithRol]",
-        JSON.stringify({ resolveOk: false, code: r.code, detail: r.detail ?? null })
-      );
-    } else if (!r.ctx.empresa_id) {
-      console.warn(
-        "[neura:diag:getAuthWithRol]",
-        JSON.stringify({
-          resolveOk: true,
-          empresa_id: r.ctx.empresa_id,
-          note: "rejected_null_empresa_id",
-        })
-      );
-    }
-  }
   if (!r.ok || !r.ctx.empresa_id) return null;
 
   return {
