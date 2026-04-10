@@ -9,6 +9,19 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export const SUPABASE_APP_SCHEMA = "zentra_erp" as const;
 
 /**
+ * Schema PostgREST para tablas de negocio de una empresa (`clientes`, `productos`, `chat_*` en tenant, etc.).
+ *
+ * - Valor en `empresas.data_schema` (tras trim) → ese schema (`erp_*` u otro explícito).
+ * - `null`, `undefined` o string vacío → legado: datos en plantilla compartida `zentra_erp`.
+ *
+ * No requiere migraciones manuales por empresa: el fallback es automático.
+ */
+export function resolveEmpresaDataSchema(dataSchema: string | null | undefined): string {
+  const t = typeof dataSchema === "string" ? dataSchema.trim() : "";
+  return t.length > 0 ? t : SUPABASE_APP_SCHEMA;
+}
+
+/**
  * Cliente Supabase con cualquier esquema PostgREST (`zentra_erp`, `erp_*`, etc.).
  * Con @supabase/supabase-js ≥2.99 los genéricos de `SupabaseClient` son varios y condicionales;
  * acotar alguno a `string` o `"public"` rompe la asignación entre instancias (p. ej. Vercel TS).

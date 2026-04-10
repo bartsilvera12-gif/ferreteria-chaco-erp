@@ -1,6 +1,6 @@
 import type { SupabaseAdmin } from "@/lib/chat/types";
 import { createServiceRoleClientWithDbSchema } from "@/lib/supabase/empresa-data-schema";
-import { SUPABASE_APP_SCHEMA } from "@/lib/supabase/schema";
+import { SUPABASE_APP_SCHEMA, resolveEmpresaDataSchema } from "@/lib/supabase/schema";
 
 export type WebhookProvisionEnv = {
   /** UUID empresa donde crear el canal si coincide el número de Meta */
@@ -31,8 +31,7 @@ export async function provisionChannelFromWebhookEnv(
     .eq("id", empresaId)
     .maybeSingle();
 
-  const dsRaw = (emp as { data_schema?: string | null } | null)?.data_schema?.trim();
-  const dataSchema = dsRaw && dsRaw.length > 0 ? dsRaw : SUPABASE_APP_SCHEMA;
+  const dataSchema = resolveEmpresaDataSchema((emp as { data_schema?: string | null } | null)?.data_schema);
 
   const target: SupabaseAdmin =
     dataSchema === SUPABASE_APP_SCHEMA

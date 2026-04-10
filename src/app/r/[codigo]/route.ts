@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { createServiceRoleClientWithDbSchema } from "@/lib/supabase/empresa-data-schema";
-import type { AppSupabaseClient } from "@/lib/supabase/schema";
+import { SUPABASE_APP_SCHEMA, resolveEmpresaDataSchema, type AppSupabaseClient } from "@/lib/supabase/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -117,8 +117,12 @@ export async function GET(
   let dataSupabase: AppSupabaseClient = catalog;
   let row: RevRow | null = null;
 
-  if (!rpcErr && hit?.empresa_id && hit?.data_schema && hit?.revendedor_id) {
-    dataSupabase = createServiceRoleClientWithDbSchema(hit.data_schema) as AppSupabaseClient;
+  if (!rpcErr && hit?.empresa_id && hit?.revendedor_id) {
+    const schema = resolveEmpresaDataSchema(hit.data_schema);
+    dataSupabase =
+      schema === SUPABASE_APP_SCHEMA
+        ? catalog
+        : (createServiceRoleClientWithDbSchema(schema) as AppSupabaseClient);
     row = {
       id: hit.revendedor_id,
       empresa_id: hit.empresa_id,

@@ -4,7 +4,7 @@ import {
   createSupabaseServerClient,
   createSupabaseServerClientWithDbSchema,
 } from "@/lib/supabase/server";
-import { SUPABASE_APP_SCHEMA } from "@/lib/supabase/schema";
+import { resolveEmpresaDataSchema } from "@/lib/supabase/schema";
 import { asuncionDayBoundsUtc, asuncionMonthBoundsUtc } from "@/lib/sorteos/kpis-time-bounds";
 
 /**
@@ -63,8 +63,7 @@ export async function getSorteosVentasKpis(): Promise<SorteosVentasKpis> {
     .select("data_schema")
     .eq("id", empresaId)
     .maybeSingle();
-  const ds = (emp as { data_schema?: string | null } | null)?.data_schema?.trim();
-  const schema = ds && ds.length > 0 ? ds : SUPABASE_APP_SCHEMA;
+  const schema = resolveEmpresaDataSchema((emp as { data_schema?: string | null } | null)?.data_schema);
   const supabase = await createSupabaseServerClientWithDbSchema(schema);
 
   const day = asuncionDayBoundsUtc();

@@ -1,5 +1,5 @@
 import { createSupabaseServerClient, createSupabaseServerClientWithDbSchema } from "@/lib/supabase/server";
-import { SUPABASE_APP_SCHEMA, type AppSupabaseClient } from "@/lib/supabase/schema";
+import { SUPABASE_APP_SCHEMA, resolveEmpresaDataSchema, type AppSupabaseClient } from "@/lib/supabase/schema";
 
 export type EmpresaUsuarioSession = {
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
@@ -72,8 +72,9 @@ export async function requireEmpresaChatSession(): Promise<EmpresaChatSession> {
     .eq("id", empresa_id)
     .maybeSingle();
 
-  const ds = (empRow as { data_schema?: string | null } | null)?.data_schema?.trim();
-  const dataSchema = ds && ds.length > 0 ? ds : SUPABASE_APP_SCHEMA;
+  const dataSchema = resolveEmpresaDataSchema(
+    (empRow as { data_schema?: string | null } | null)?.data_schema
+  );
 
   const supabase: AppSupabaseClient =
     dataSchema === SUPABASE_APP_SCHEMA

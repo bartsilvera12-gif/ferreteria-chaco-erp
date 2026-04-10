@@ -1,5 +1,5 @@
 import { createSupabaseServerClient, createSupabaseServerClientWithDbSchema } from "@/lib/supabase/server";
-import { SUPABASE_APP_SCHEMA } from "@/lib/supabase/schema";
+import { SUPABASE_APP_SCHEMA, resolveEmpresaDataSchema } from "@/lib/supabase/schema";
 
 /** PostgREST schema de datos ERP (`empresas.data_schema` o plantilla legada). */
 export async function resolveDataSchemaForCurrentUserServer(): Promise<string> {
@@ -28,9 +28,7 @@ export async function resolveDataSchemaForCurrentUserServer(): Promise<string> {
     .eq("id", empresaId)
     .maybeSingle();
 
-  const ds = (emp as { data_schema?: string | null } | null)?.data_schema?.trim();
-  if (ds && ds.length > 0) return ds;
-  return SUPABASE_APP_SCHEMA;
+  return resolveEmpresaDataSchema((emp as { data_schema?: string | null } | null)?.data_schema);
 }
 
 /** Cliente servidor con sesión del usuario y tablas de negocio en el schema de la empresa. */

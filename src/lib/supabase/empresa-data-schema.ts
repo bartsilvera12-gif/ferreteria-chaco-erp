@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import {
   SUPABASE_APP_SCHEMA,
+  resolveEmpresaDataSchema,
   type AppSupabaseClient,
   supabaseServiceRoleClientOptions,
 } from "@/lib/supabase/schema";
@@ -24,9 +25,7 @@ export async function fetchDataSchemaForEmpresaId(empresaId: string): Promise<st
     return SUPABASE_APP_SCHEMA;
   }
 
-  const s = (data as { data_schema?: string | null } | null)?.data_schema?.trim();
-  if (!s) return SUPABASE_APP_SCHEMA;
-  return s;
+  return resolveEmpresaDataSchema((data as { data_schema?: string | null } | null)?.data_schema);
 }
 
 /** Service role apuntando al esquema de datos operativos de la empresa (chat/omnicanal). */

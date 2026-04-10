@@ -29,6 +29,7 @@ import type {
 import { normalizeWaPhone } from "@/lib/chat/wa-phone";
 import { applySorteoReferralToActiveSession } from "@/lib/sorteos/referral-attribution";
 import { createServiceRoleClientWithDbSchema } from "@/lib/supabase/empresa-data-schema";
+import { SUPABASE_APP_SCHEMA, resolveEmpresaDataSchema } from "@/lib/supabase/schema";
 
 export { normalizeWaPhone } from "@/lib/chat/wa-phone";
 
@@ -219,8 +220,12 @@ export async function processInboundWebhookValue(
     .maybeSingle();
 
   if (routeRow) {
-    const r = routeRow as { empresa_id: string; channel_id: string; data_schema: string };
-    dataSupabase = createServiceRoleClientWithDbSchema(r.data_schema) as SupabaseAdmin;
+    const r = routeRow as { empresa_id: string; channel_id: string; data_schema?: string | null };
+    const schema = resolveEmpresaDataSchema(r.data_schema);
+    dataSupabase =
+      schema === SUPABASE_APP_SCHEMA
+        ? catalogSupabase
+        : (createServiceRoleClientWithDbSchema(schema) as SupabaseAdmin);
     const { data: chT, error: errT } = await dataSupabase
       .from("chat_channels")
       .select("id, empresa_id, meta_phone_number_id, activo")
@@ -272,8 +277,12 @@ export async function processInboundWebhookValue(
         .maybeSingle();
 
       if (routeAfter) {
-        const r = routeAfter as { empresa_id: string; channel_id: string; data_schema: string };
-        dataSupabase = createServiceRoleClientWithDbSchema(r.data_schema) as SupabaseAdmin;
+        const r = routeAfter as { empresa_id: string; channel_id: string; data_schema?: string | null };
+        const schema = resolveEmpresaDataSchema(r.data_schema);
+        dataSupabase =
+          schema === SUPABASE_APP_SCHEMA
+            ? catalogSupabase
+            : (createServiceRoleClientWithDbSchema(schema) as SupabaseAdmin);
         const { data: chTenant } = await dataSupabase
           .from("chat_channels")
           .select("id, empresa_id, meta_phone_number_id, activo")

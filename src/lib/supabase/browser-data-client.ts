@@ -1,5 +1,9 @@
 import { createBrowserClient } from "@supabase/ssr";
-import { supabaseDbSchemaOption, type AppSupabaseClient } from "@/lib/supabase/schema";
+import {
+  resolveEmpresaDataSchema,
+  supabaseDbSchemaOption,
+  type AppSupabaseClient,
+} from "@/lib/supabase/schema";
 import { supabase } from "@/lib/supabase";
 
 const SCHEMA_KEY = "neura_erp_data_schema_v1";
@@ -53,7 +57,7 @@ export async function getBrowserSupabaseForEmpresaData(): Promise<AppSupabaseCli
     throw new Error("No se pudo resolver el schema de datos de la empresa");
   }
   const body = (await res.json()) as { schema?: string };
-  const schema = typeof body.schema === "string" && body.schema.trim() ? body.schema.trim() : "zentra_erp";
+  const schema = resolveEmpresaDataSchema(body.schema);
 
   sessionStorage.setItem(SCHEMA_KEY, schema);
   sessionStorage.setItem(SCHEMA_TS_KEY, String(now));

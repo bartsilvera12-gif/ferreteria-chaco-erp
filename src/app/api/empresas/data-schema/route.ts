@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveApiAuthContext } from "@/lib/middleware/api-auth-context";
-import { SUPABASE_APP_SCHEMA } from "@/lib/supabase/schema";
+import { SUPABASE_APP_SCHEMA, resolveEmpresaDataSchema } from "@/lib/supabase/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -48,8 +48,7 @@ export async function GET(request: Request) {
   }
 
   const raw = (erows?.[0] as { data_schema?: string | null } | undefined)?.data_schema;
-  const schema =
-    typeof raw === "string" && raw.trim() ? raw.trim() : SUPABASE_APP_SCHEMA;
+  const schema = resolveEmpresaDataSchema(raw);
 
   if (DIAG) {
     console.warn("[neura:diag:data-schema]", JSON.stringify({ schema, empresaHint: r.ctx.empresa_id.slice(0, 8) + "…" }));
