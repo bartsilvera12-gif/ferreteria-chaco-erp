@@ -4,6 +4,45 @@ import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import { getTenantSupabaseFromAuthWithRol } from "@/lib/supabase/tenant-api";
 
+/**
+ * GET /api/clientes/:id — un cliente de la empresa (mismo schema que el resto de APIs tenant).
+ */
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const ctx = await getTenantSupabaseFromAuthWithRol();
+    if (!ctx) {
+      return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
+    }
+    const { auth, supabase } = ctx;
+    const { id: clienteId } = await params;
+    if (!clienteId) {
+      return NextResponse.json(errorResponse("id es obligatorio"), { status: 400 });
+    }
+
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("*")
+      .eq("id", clienteId)
+      .eq("empresa_id", auth.empresa_id)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (error) {
+      return NextResponse.json(errorResponse(error.message), { status: 400 });
+    }
+    if (!data) {
+      return NextResponse.json(errorResponse("Cliente no encontrado"), { status: 404 });
+    }
+
+    return NextResponse.json(successResponse(data));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error";
+    return NextResponse.json(errorResponse(msg), { status: 500 });
+  }
+}
 
 /**
  * DELETE /api/clientes/:id

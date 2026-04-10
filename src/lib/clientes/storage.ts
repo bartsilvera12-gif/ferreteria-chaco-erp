@@ -106,84 +106,76 @@ function rowToCliente(row: SupabaseRow): Cliente {
 
 // ─── API pública ──────────────────────────────────────────────────────────────
 
-/** Lista clientes. RLS filtra por empresa. Excluye eliminados (soft delete). */
+/** Lista clientes vía API (tenant + service role); evita depender del schema/RLS del cliente browser. */
 export async function getClientes(opts?: { incluirEliminados?: boolean; incluirPlanActivo?: boolean }): Promise<Cliente[]> {
-  const supabase = await getBrowserSupabaseForEmpresaData();
-  let q = supabase
-    .from("clientes")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (!opts?.incluirEliminados) {
-    q = q.is("deleted_at", null);
-  }
-  const { data, error } = await q;
-
-  if (error) {
-    console.error("[clientes] getClientes:", error.message);
+  if (typeof window === "undefined") {
     return [];
   }
-
-  const clientes = (data as SupabaseRow[]).map(rowToCliente);
-
-  if (opts?.incluirPlanActivo) {
-    const planMap = await getPlanActivoPorClienteMap(supabase, clientes.map((c) => c.id));
-    clientes.forEach((c) => {
-      (c as Cliente).plan_activo = planMap.get(c.id) ?? undefined;
+  try {
+    const params = new URLSearchParams();
+    if (opts?.incluirPlanActivo) params.set("plan_activo", "1");
+    if (opts?.incluirEliminados) params.set("incluir_eliminados", "1");
+    const qs = params.toString();
+    const res = await fetch(`/api/clientes${qs ? `?${qs}` : ""}`, {
+      credentials: "include",
+      cache: "no-store",
     });
-  }
-
-  return clientes;
-}
-
-/** Obtiene mapa cliente_id -> nombre del plan activo (suscripción activa más reciente). Una sola query en batch. */
-async function getPlanActivoPorClienteMap(
-  supabase: Awaited<ReturnType<typeof getBrowserSupabaseForEmpresaData>>,
-  clienteIds: string[]
-): Promise<Map<string, string>> {
-  if (clienteIds.length === 0) return new Map();
-
-  const { data, error } = await supabase
-    .from("suscripciones")
-    .select("cliente_id, planes(nombre)")
-    .eq("estado", "activa")
-    .in("cliente_id", clienteIds)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("[clientes] getPlanActivoPorClienteMap:", error.message);
-    return new Map();
-  }
-
-  const map = new Map<string, string>();
-  for (const row of data ?? []) {
-    const cid = (row as { cliente_id: string }).cliente_id;
-    if (!map.has(cid)) {
-      const planes = (row as { planes: { nombre: string } | { nombre: string }[] | null }).planes;
-      const plan = Array.isArray(planes) ? planes[0] : planes;
-      const nombre = plan?.nombre?.trim();
-      map.set(cid, nombre || "Suscripción");
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error("[clientes] getClientes API:", res.status, text);
+      return [];
     }
+    const json = (await res.json()) as { success: boolean; data?: unknown };
+    if (!json.success || !Array.isArray(json.data)) return [];
+
+    return (json.data as (SupabaseRow & { plan_activo?: string })[]).map((row) => {
+      const c = rowToCliente(row);
+      if (row.plan_activo) c.plan_activo = row.plan_activo;
+      return c;
+    });
+  } catch (e) {
+    console.error("[clientes] getClientes:", e);
+    return [];
   }
-  return map;
 }
 
-/** Obtiene un cliente por ID. RLS filtra por empresa. Por defecto excluye eliminados. */
+/** Obtiene un cliente por ID vía API tenant. Por defecto excluye eliminados. */
 export async function getCliente(id: string, opts?: { incluirEliminados?: boolean }): Promise<Cliente | null> {
-  const supabase = await getBrowserSupabaseForEmpresaData();
-  let q = supabase
-    .from("clientes")
-    .select("*")
-    .eq("id", id);
-  if (!opts?.incluirEliminados) {
-    q = q.is("deleted_at", null);
-  }
-  const { data, error } = await q.single();
-
-  if (error) {
-    console.error("[clientes] getCliente:", error.message);
+  if (typeof window === "undefined") {
     return null;
   }
-  return rowToCliente(data as SupabaseRow);
+  if (opts?.incluirEliminados) {
+    const supabase = await getBrowserSupabaseForEmpresaData();
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("*")
+      .eq("id", id)
+      .single();
+    if (error) {
+      console.error("[clientes] getCliente (eliminados):", error.message);
+      return null;
+    }
+    return rowToCliente(data as SupabaseRow);
+  }
+
+  try {
+    const res = await fetch(`/api/clientes/${encodeURIComponent(id)}`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error("[clientes] getCliente API:", res.status, text);
+      return null;
+    }
+    const json = (await res.json()) as { success: boolean; data?: unknown };
+    if (!json.success || !json.data || typeof json.data !== "object") return null;
+    return rowToCliente(json.data as SupabaseRow);
+  } catch (e) {
+    console.error("[clientes] getCliente:", e);
+    return null;
+  }
 }
 
 export async function getClienteByProspectoId(

@@ -26,12 +26,16 @@ export async function getBrowserSupabaseForEmpresaData(): Promise<AppSupabaseCli
   }
 
   const now = Date.now();
-  const cached = sessionStorage.getItem(SCHEMA_KEY);
+  const cachedRaw = sessionStorage.getItem(SCHEMA_KEY);
   const ts = Number(sessionStorage.getItem(SCHEMA_TS_KEY) || "0");
-  if (cached && now - ts < TTL_MS) {
+  if (cachedRaw != null && cachedRaw !== "" && now - ts < TTL_MS) {
+    const schema = resolveEmpresaDataSchema(cachedRaw);
+    if (schema !== cachedRaw) {
+      sessionStorage.setItem(SCHEMA_KEY, schema);
+    }
     return createBrowserClient(supabaseUrl, supabaseAnonKey, {
       ...supabaseDbSchemaOption,
-      db: { schema: cached },
+      db: { schema },
     }) as AppSupabaseClient;
   }
 

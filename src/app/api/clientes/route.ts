@@ -3,29 +3,91 @@ import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import { emitEvent, EVENT_TYPES } from "@/lib/integrations/events";
 import type { TipoServicioCliente } from "@/lib/clientes/types";
+import type { AppSupabaseClient } from "@/lib/supabase/schema";
 import { getTenantSupabaseFromAuthWithRol } from "@/lib/supabase/tenant-api";
 
 const TIPOS_SERVICIO_VALIDOS: TipoServicioCliente[] = ["marketing", "saas", "branding", "web", "otro"];
 
-export async function GET() {
+/** Une `plan_activo` (nombre) a cada fila de cliente según suscripción activa más reciente. */
+function attachPlanesActivos(
+  rows: Record<string, unknown>[],
+  map: Map<string, string>
+): void {
+  for (const r of rows) {
+    const id = typeof r.id === "string" ? r.id : null;
+    if (!id) continue;
+    const nombre = map.get(id);
+    if (nombre) r.plan_activo = nombre;
+  }
+}
+
+async function buildPlanActivoMap(
+  supabase: AppSupabaseClient,
+  empresaId: string,
+  clienteIds: string[]
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (clienteIds.length === 0) return map;
+
+  const { data, error } = await supabase
+    .from("suscripciones")
+    .select("cliente_id, planes(nombre)")
+    .eq("empresa_id", empresaId)
+    .eq("estado", "activa")
+    .in("cliente_id", clienteIds)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[api/clientes] buildPlanActivoMap:", error.message);
+    return map;
+  }
+
+  for (const row of data ?? []) {
+    const cid = (row as { cliente_id: string }).cliente_id;
+    if (!map.has(cid)) {
+      const planes = (row as { planes: { nombre: string } | { nombre: string }[] | null }).planes;
+      const plan = Array.isArray(planes) ? planes[0] : planes;
+      const nombre = plan?.nombre?.trim();
+      map.set(cid, nombre || "Suscripción");
+    }
+  }
+  return map;
+}
+
+export async function GET(request: NextRequest) {
   try {
     const ctx = await getTenantSupabaseFromAuthWithRol();
     if (!ctx) {
       return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     }
     const { auth, supabase } = ctx;
-    const { data, error } = await supabase
+    const sp = request.nextUrl.searchParams;
+    const incluirEliminados = sp.get("incluir_eliminados") === "1";
+    const planActivo = sp.get("plan_activo") === "1";
+
+    let q = supabase
       .from("clientes")
       .select("*")
       .eq("empresa_id", auth.empresa_id)
-      .is("deleted_at", null)
       .order("created_at", { ascending: false });
+    if (!incluirEliminados) {
+      q = q.is("deleted_at", null);
+    }
+
+    const { data, error } = await q;
 
     if (error) {
       return NextResponse.json(errorResponse(error.message), { status: 400 });
     }
 
-    return NextResponse.json(successResponse(data ?? []));
+    const rows = (data ?? []) as Record<string, unknown>[];
+    if (planActivo && rows.length > 0) {
+      const ids = rows.map((r) => r.id).filter((id): id is string => typeof id === "string");
+      const planMap = await buildPlanActivoMap(supabase, auth.empresa_id, ids);
+      attachPlanesActivos(rows, planMap);
+    }
+
+    return NextResponse.json(successResponse(rows));
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error";
     return NextResponse.json(errorResponse(msg), { status: 500 });
