@@ -83,19 +83,19 @@ function nextNcSifenPasoReal(
   if (st === "aprobado") return null;
   const base = NC_SIFEN_BASE(nc.id);
   if (st === "enviado" || st === "en_proceso") {
-    return { url: `${base}/consulta-lote`, label: "Consultar estado del lote (SET)" };
+    return { url: `${base}/consulta-lote`, label: "Consultar estado del envío" };
   }
   if (opts.bloqueoTimbradoOrigen) return null;
   if (st === "rechazado") {
     return { url: `${base}/procesar`, label: "Corregir y reenviar" };
   }
   if (st === "firmado") {
-    return { url: `${base}/enviar`, label: "Enviar lote a SET" };
+    return { url: `${base}/enviar`, label: "Enviar al SET" };
   }
   if (["sin_envio", "generado", "error_envio", "borrador"].includes(st)) {
     return {
       url: `${base}/procesar`,
-      label: "Procesar envío SIFEN (XML, firma y recibe-lote)",
+      label: "Procesar envío",
     };
   }
   return null;
@@ -148,6 +148,7 @@ export function FacturaCorreccionFiscalNC({
   deAprobado,
   onAfterNcMutation,
   embedded = false,
+  debugUi = false,
 }: {
   facturaId: string;
   clienteId: string;
@@ -161,6 +162,8 @@ export function FacturaCorreccionFiscalNC({
   onAfterNcMutation?: () => void | Promise<void>;
   /** Sin caja doble: para panel unificado junto a SIFEN. */
   embedded?: boolean;
+  /** Rutas XML, SET test, payload técnico, etc. */
+  debugUi?: boolean;
 }) {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<NotaCreditoListItemDTO[]>([]);
@@ -185,27 +188,31 @@ export function FacturaCorreccionFiscalNC({
     setLoading(true);
     setFlash(null);
     try {
-      const [resNc, resCfg] = await Promise.all([
-        fetchWithSupabaseSession(`/api/facturas/${facturaId}/notas-credito`, { cache: "no-store" }),
-        fetchWithSupabaseSession(`/api/config/allow-test-mode`, { cache: "no-store" }),
-      ]);
-      if (resCfg.ok) {
-        const jc = (await resCfg.json()) as {
-          success?: boolean;
-          data?: { allowSifenTestOverride?: boolean; empresa_sifen_ambiente?: string };
-        };
-        if (jc.success && jc.data) {
-          const amb =
-            jc.data.empresa_sifen_ambiente === "produccion" ? "produccion" : "test";
-          setSifenCfg({
-            empresaAmbiente: amb,
-            allowTestOverride: !!jc.data.allowSifenTestOverride,
-          });
+      const resNc = await fetchWithSupabaseSession(`/api/facturas/${facturaId}/notas-credito`, {
+        cache: "no-store",
+      });
+      if (debugUi) {
+        const resCfg = await fetchWithSupabaseSession(`/api/config/allow-test-mode`, { cache: "no-store" });
+        if (resCfg.ok) {
+          const jc = (await resCfg.json()) as {
+            success?: boolean;
+            data?: { allowSifenTestOverride?: boolean; empresa_sifen_ambiente?: string };
+          };
+          if (jc.success && jc.data) {
+            const amb =
+              jc.data.empresa_sifen_ambiente === "produccion" ? "produccion" : "test";
+            setSifenCfg({
+              empresaAmbiente: amb,
+              allowTestOverride: !!jc.data.allowSifenTestOverride,
+            });
+          } else {
+            setSifenCfg({ empresaAmbiente: "test", allowTestOverride: false });
+          }
         } else {
           setSifenCfg({ empresaAmbiente: "test", allowTestOverride: false });
         }
       } else {
-        setSifenCfg({ empresaAmbiente: "test", allowTestOverride: false });
+        setSifenCfg(null);
       }
       const res = resNc;
       const j = (await res.json()) as NcApiGet;
@@ -228,16 +235,11 @@ export function FacturaCorreccionFiscalNC({
     } finally {
       setLoading(false);
     }
-  }, [facturaId]);
+  }, [facturaId, debugUi]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
-
-  const mostrarBloque = deAprobado || items.length > 0;
-  if (!mostrarBloque) {
-    return null;
-  }
 
   async function handleCrear() {
     setFlash(null);
@@ -328,8 +330,18 @@ export function FacturaCorreccionFiscalNC({
   const pasoReenviarBanner =
     ncRechazoMasReciente && nextNcSifenPasoReal(ncRechazoMasReciente, sifenPasoOpts);
 
+  /** Solo si hay NC en juego o el gate permite crear una (evita ruido por solo pre-vuelo/timbrado). */
+  const correccionOperativa = items.length > 0 || puedeCrear;
+
+  if (loading) {
+    return null;
+  }
+  if (!correccionOperativa) {
+    return null;
+  }
+
   const shell = embedded
-    ? "space-y-4 w-full min-w-0"
+    ? "space-y-4 w-full min-w-0 lg:max-w-[26rem]"
     : "rounded-xl border border-slate-200 bg-white shadow-sm p-5 sm:p-6 space-y-4 w-full min-w-0";
 
   return (
@@ -337,45 +349,25 @@ export function FacturaCorreccionFiscalNC({
       <div className="space-y-2">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Corrección fiscal</h3>
-            <p className="text-[11px] text-slate-500 mt-1">
-              Ambiente: <span className="font-semibold text-slate-700">{ambienteLabel}</span>
-            </p>
+            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Nota de crédito</h3>
+            {debugUi ? (
+              <p className="text-[11px] text-slate-500 mt-1">
+                Ambiente: <span className="font-semibold text-slate-700">{ambienteLabel}</span>
+              </p>
+            ) : null}
           </div>
-          <Link
-            href="/notas-credito"
-            className="text-[11px] font-semibold text-[#0EA5E9] hover:underline shrink-0"
-          >
-            Ver NC →
-          </Link>
+          {debugUi ? (
+            <Link
+              href="/notas-credito"
+              className="text-[11px] font-semibold text-[#0EA5E9] hover:underline shrink-0"
+            >
+              Módulo NC
+            </Link>
+          ) : null}
         </div>
-        {!embedded ? (
-          <p className="text-xs text-slate-600 leading-relaxed max-w-3xl">
-            Con DE aprobado: cancelación en plazo desde el panel SIFEN; fuera de plazo, nota de crédito por el saldo
-            pendiente.
-          </p>
-        ) : (
-          <p className="text-[11px] text-slate-500">
-            NC por saldo pendiente si ya no aplica cancelación del DE.
-          </p>
-        )}
       </div>
 
-      {!embedded ? (
-        <section
-          className="rounded-lg border border-slate-200 bg-slate-50/50 px-4 py-3 space-y-1"
-          aria-label="Factura vinculada"
-        >
-          <h4 className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Factura</h4>
-          <p className="text-xs text-slate-700 leading-snug">
-            <Link href={`/facturas/${facturaId}`} className="font-semibold text-[#0EA5E9] hover:underline">
-              Abrir factura
-            </Link>
-          </p>
-        </section>
-      ) : null}
-
-      {mostrarHerramientasTestOverride && (
+      {mostrarHerramientasTestOverride && debugUi && (
         <details className="rounded-lg border border-dashed border-slate-300 bg-slate-50/80 px-3 py-2 text-[11px] text-slate-700">
           <summary className="cursor-pointer font-semibold text-slate-600 select-none">
             Herramientas desarrollo (SET TEST con override)
@@ -388,13 +380,7 @@ export function FacturaCorreccionFiscalNC({
         </details>
       )}
 
-      {puedeCancelarDe && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-          Cancelación del DE disponible en el plazo (botones en la sección SIFEN).
-        </div>
-      )}
-
-      {!puedeCancelarDe && deAprobado && estado !== "Anulado" && bloqueoTimbradoOrigen && !loading && (
+      {!puedeCancelarDe && deAprobado && estado !== "Anulado" && bloqueoTimbradoOrigen && (
         <div
           className="rounded-lg border-2 border-amber-700 bg-amber-50 px-3 py-3 text-sm text-amber-950 shadow-sm"
           role="alert"
@@ -412,31 +398,22 @@ export function FacturaCorreccionFiscalNC({
         </div>
       )}
 
-      {!puedeCancelarDe && deAprobado && estado !== "Anulado" && (
+      {!puedeCancelarDe && deAprobado && estado !== "Anulado" && puedeCrear ? (
         <div className="space-y-2">
-          {loading ? (
-            <p className="text-xs text-slate-400">Cargando notas de crédito…</p>
-          ) : puedeCrear ? (
-            <button
-              type="button"
-              onClick={() => {
-                setMotivo("");
-                setObs("");
-                setFlash(null);
-                setModalOpen(true);
-              }}
-              className="px-4 py-2.5 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700 shadow-sm"
-            >
-              Emitir nota de crédito (saldo pendiente)
-            </button>
-          ) : (
-            <div className="rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2 text-xs text-amber-950">
-              <span className="font-semibold">No disponible:</span>{" "}
-              {bloqueo ?? "No se puede crear una nota de crédito en este momento."}
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              setMotivo("");
+              setObs("");
+              setFlash(null);
+              setModalOpen(true);
+            }}
+            className="px-4 py-2.5 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700 shadow-sm"
+          >
+            Emitir nota de crédito
+          </button>
         </div>
-      )}
+      ) : null}
 
       {ncRechazoMasReciente && deAprobado && !puedeCancelarDe && (
         <div
@@ -483,7 +460,7 @@ export function FacturaCorreccionFiscalNC({
             {items.map((nc) => {
               const pasoReal = nextNcSifenPasoReal(nc, sifenPasoOpts);
               const pasoTestOv =
-                mostrarHerramientasTestOverride && nextNcSifenPasoTestOverride(nc, sifenPasoOpts);
+                debugUi && mostrarHerramientasTestOverride && nextNcSifenPasoTestOverride(nc, sifenPasoOpts);
               const errPlano = mensajeErrorPlano(nc.last_error);
               const jsonSet =
                 nc.sifen_respuestas_set != null ? JSON.stringify(nc.sifen_respuestas_set, null, 2) : null;
@@ -556,69 +533,81 @@ export function FacturaCorreccionFiscalNC({
                       </p>
                     ) : null}
                   </div>
-                  <div className="px-3 sm:px-4 py-2 space-y-1.5 text-[11px] text-slate-600 border-b border-slate-50">
-                    <p>
-                      <span className="font-semibold text-slate-500">CDC NC:</span>{" "}
-                      <span className="font-mono break-all text-slate-800">{nc.cdc ?? "—"}</span>
-                    </p>
-                    {nc.cdc_factura_origen ? (
-                      <p>
-                        <span className="font-semibold text-slate-500">CDC factura origen:</span>{" "}
-                        <span className="font-mono break-all text-slate-800">{nc.cdc_factura_origen}</span>
-                      </p>
-                    ) : null}
-                    <p>
-                      <span className="font-semibold text-slate-500">Usuario:</span>{" "}
-                      {nc.created_by_nombre_snapshot ?? nc.created_by_email_snapshot ?? "—"}
-                    </p>
-                  </div>
-                  <div className="px-3 sm:px-4 py-2.5 space-y-2 text-[11px] border-b border-slate-100 bg-slate-50/40">
-                    <p className="font-semibold text-slate-600 uppercase tracking-wide text-[10px]">
-                      Rutas storage SIFEN (NC)
-                    </p>
-                    <div className="space-y-1">
-                      <p className="text-slate-500">
-                        <span className="font-semibold text-slate-600">XML generado</span>{" "}
-                        <span className="text-slate-400">(xml_path)</span>
-                      </p>
-                      <p
-                        className="font-mono text-[10px] text-slate-800 break-all select-all rounded border border-slate-200 bg-white px-2 py-1.5"
-                        title={nc.xml_path ?? undefined}
-                      >
-                        {nc.xml_path ?? "—"}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-slate-500">
-                        <span className="font-semibold text-slate-600">XML firmado</span>{" "}
-                        <span className="text-slate-400">(xml_firmado_path)</span>
-                      </p>
-                      <p
-                        className="font-mono text-[10px] text-slate-800 break-all select-all rounded border border-slate-200 bg-white px-2 py-1.5"
-                        title={nc.xml_firmado_path ?? undefined}
-                      >
-                        {nc.xml_firmado_path ?? "—"}
-                      </p>
-                    </div>
-                  </div>
-                  <details className="px-3 sm:px-4 py-2 bg-white text-[11px] group">
-                    <summary className="cursor-pointer font-semibold text-slate-600 select-none list-none flex items-center gap-2 [&::-webkit-details-marker]:hidden">
-                      <span className="text-slate-400 group-open:rotate-90 transition-transform inline-block">▸</span>
-                      SIFEN (detalle técnico y respuestas SET)
-                    </summary>
-                    <p className="mt-2 text-slate-500 leading-snug">
-                      Flujo estándar: <span className="font-mono text-slate-700">POST …/sifen/procesar</span> (generar
-                      XML, firmar, recibe-lote), luego <span className="font-mono">enviar</span> /{" "}
-                      <span className="font-mono">consulta-lote</span> según estado.
-                    </p>
-                    {jsonSet ? (
-                      <pre className="mt-2 max-h-56 overflow-auto rounded-md bg-slate-900 text-slate-100 p-3 text-[10px] leading-relaxed whitespace-pre-wrap break-words border border-slate-700">
-                        {jsonSet}
-                      </pre>
-                    ) : (
-                      <p className="mt-2 text-slate-400 italic">No hay JSON de respuesta SET guardado para esta NC.</p>
-                    )}
-                  </details>
+                  {!debugUi ? (
+                    nc.cdc ? (
+                      <div className="px-3 sm:px-4 py-2 border-b border-slate-50">
+                        <p className="text-[10px] text-slate-500">
+                          CDC <span className="font-mono text-slate-700 break-all">{nc.cdc}</span>
+                        </p>
+                      </div>
+                    ) : null
+                  ) : (
+                    <>
+                      <div className="px-3 sm:px-4 py-2 space-y-1.5 text-[11px] text-slate-600 border-b border-slate-50">
+                        <p>
+                          <span className="font-semibold text-slate-500">CDC NC:</span>{" "}
+                          <span className="font-mono break-all text-slate-800">{nc.cdc ?? "—"}</span>
+                        </p>
+                        {nc.cdc_factura_origen ? (
+                          <p>
+                            <span className="font-semibold text-slate-500">CDC factura origen:</span>{" "}
+                            <span className="font-mono break-all text-slate-800">{nc.cdc_factura_origen}</span>
+                          </p>
+                        ) : null}
+                        <p>
+                          <span className="font-semibold text-slate-500">Usuario:</span>{" "}
+                          {nc.created_by_nombre_snapshot ?? nc.created_by_email_snapshot ?? "—"}
+                        </p>
+                      </div>
+                      <div className="px-3 sm:px-4 py-2.5 space-y-2 text-[11px] border-b border-slate-100 bg-slate-50/40">
+                        <p className="font-semibold text-slate-600 uppercase tracking-wide text-[10px]">
+                          Rutas storage SIFEN (NC)
+                        </p>
+                        <div className="space-y-1">
+                          <p className="text-slate-500">
+                            <span className="font-semibold text-slate-600">XML generado</span>{" "}
+                            <span className="text-slate-400">(xml_path)</span>
+                          </p>
+                          <p
+                            className="font-mono text-[10px] text-slate-800 break-all select-all rounded border border-slate-200 bg-white px-2 py-1.5"
+                            title={nc.xml_path ?? undefined}
+                          >
+                            {nc.xml_path ?? "—"}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-slate-500">
+                            <span className="font-semibold text-slate-600">XML firmado</span>{" "}
+                            <span className="text-slate-400">(xml_firmado_path)</span>
+                          </p>
+                          <p
+                            className="font-mono text-[10px] text-slate-800 break-all select-all rounded border border-slate-200 bg-white px-2 py-1.5"
+                            title={nc.xml_firmado_path ?? undefined}
+                          >
+                            {nc.xml_firmado_path ?? "—"}
+                          </p>
+                        </div>
+                      </div>
+                      <details className="px-3 sm:px-4 py-2 bg-white text-[11px] group">
+                        <summary className="cursor-pointer font-semibold text-slate-600 select-none list-none flex items-center gap-2 [&::-webkit-details-marker]:hidden">
+                          <span className="text-slate-400 group-open:rotate-90 transition-transform inline-block">▸</span>
+                          SIFEN (detalle técnico y respuestas SET)
+                        </summary>
+                        <p className="mt-2 text-slate-500 leading-snug">
+                          Flujo estándar: <span className="font-mono text-slate-700">POST …/sifen/procesar</span>{" "}
+                          (generar XML, firmar, recibe-lote), luego <span className="font-mono">enviar</span> /{" "}
+                          <span className="font-mono">consulta-lote</span> según estado.
+                        </p>
+                        {jsonSet ? (
+                          <pre className="mt-2 max-h-56 overflow-auto rounded-md bg-slate-900 text-slate-100 p-3 text-[10px] leading-relaxed whitespace-pre-wrap break-words border border-slate-700">
+                            {jsonSet}
+                          </pre>
+                        ) : (
+                          <p className="mt-2 text-slate-400 italic">No hay JSON de respuesta SET guardado para esta NC.</p>
+                        )}
+                      </details>
+                    </>
+                  )}
                 </li>
               );
             })}

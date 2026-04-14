@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import type {
@@ -21,25 +21,52 @@ type Resumen = {
   cancelacion: SifenCancelacionPreviewDTO | null;
 };
 
-/** Una línea operativa (sin tutorial largo). */
-function subtituloSifenEjecutivo(resumen: Resumen): string {
-  if (!resumen.sifen_config_activa) return "Activá SIFEN en configuración para emitir el DE.";
+/** Una línea operativa; en producción evita jerga de pipeline/XML. */
+function subtituloSifenEjecutivo(resumen: Resumen, debugUi: boolean): string {
+  if (!resumen.sifen_config_activa) return "Activá SIFEN en configuración para emitir el documento electrónico.";
   const fe = resumen.factura_electronica;
   if (!fe) return "Aún no hay documento electrónico.";
+  if (debugUi) {
+    switch (String(fe.estado_sifen)) {
+      case "borrador":
+        return "Siguiente: XML, firma y envío al SET.";
+      case "generado":
+        return "Siguiente: firma y envío al SET.";
+      case "firmado":
+        return "Listo para enviar el lote al SET.";
+      case "enviado":
+      case "en_proceso":
+        return "SET procesando. Consultá el lote para ver el resultado.";
+      case "aprobado":
+        return "DE aprobado.";
+      case "rechazado":
+        return "SET rechazó el DE. Revisá el detalle abajo.";
+      case "error_envio":
+        return fe.error?.trim()
+          ? fe.error.trim().length > 140
+            ? `${fe.error.trim().slice(0, 140)}…`
+            : fe.error.trim()
+          : "Falló el envío. Podés reintentar.";
+      case "cancelado":
+        return "Cancelado en el ERP.";
+      default:
+        return "Revisá el estado del documento.";
+    }
+  }
   switch (String(fe.estado_sifen)) {
     case "borrador":
-      return "Siguiente: XML, firma y envío al SET.";
+      return "Pendiente: generar el documento electrónico.";
     case "generado":
-      return "Siguiente: firma y envío al SET.";
+      return "Pendiente: firmar y enviar.";
     case "firmado":
-      return "Listo para enviar el lote al SET.";
+      return "Pendiente de envío al SET.";
     case "enviado":
     case "en_proceso":
-      return "SET procesando. Consultá el lote para ver el resultado.";
+      return "En proceso en el SET. Consultá el resultado del envío.";
     case "aprobado":
-      return "DE aprobado.";
+      return "Documento aprobado.";
     case "rechazado":
-      return "SET rechazó el DE. Revisá el detalle abajo.";
+      return "El documento fue rechazado. Revisá el detalle abajo.";
     case "error_envio":
       return fe.error?.trim()
         ? fe.error.trim().length > 140
@@ -47,20 +74,20 @@ function subtituloSifenEjecutivo(resumen: Resumen): string {
           : fe.error.trim()
         : "Falló el envío. Podés reintentar.";
     case "cancelado":
-      return "Cancelado en el ERP.";
+      return "Documento anulado en el sistema.";
     default:
       return "Revisá el estado del documento.";
   }
 }
 
-function ResumenSifenCompacto({ resumen }: { resumen: Resumen }) {
+function ResumenSifenCompacto({ resumen, debugUi }: { resumen: Resumen; debugUi: boolean }) {
   const fe = resumen.factura_electronica;
   const st = fe?.estado_sifen ?? null;
   return (
     <div className="flex flex-wrap items-center gap-3 min-w-0">
       <SifenEstadoBadge estadoSifen={st} mostrarPistaEnvioSet={false} className="shrink-0" />
       <div className="min-w-0 flex-1">
-        <p className="text-sm text-slate-600 leading-snug">{subtituloSifenEjecutivo(resumen)}</p>
+        <p className="text-sm text-slate-600 leading-snug">{subtituloSifenEjecutivo(resumen, debugUi)}</p>
         {!resumen.sifen_config_activa ? (
           <a
             href="/configuracion/facturacion-electronica"
@@ -145,6 +172,10 @@ export function FacturaElectronicaPanel({
   onComercialUpdated?: () => void | Promise<void>;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const debugUi =
+    (typeof process !== "undefined" && process.env.NODE_ENV === "development") ||
+    searchParams?.get("debug") === "1";
   const [action, setAction] = useState<
     | "borrador"
     | "xml"
@@ -295,7 +326,7 @@ export function FacturaElectronicaPanel({
           kind: "err",
           text:
             feResp?.error?.trim() ??
-            "SET no aceptó el lote. Revisá el mensaje técnico abajo o reintentá el envío.",
+            "El SET no aceptó el envío. Revisá el detalle abajo o reintentá.",
         });
         await refresh();
         return;
@@ -398,7 +429,10 @@ export function FacturaElectronicaPanel({
       if (st === "rechazado") {
         setFlash({
           kind: "err",
-          text: "SET rechazó este DE. Revisá el detalle abajo o usá pasos avanzados.",
+          text:
+            debugUi
+              ? "SET rechazó este DE. Revisá el detalle abajo o usá pasos avanzados."
+              : "El SET rechazó este documento. Revisá el mensaje de error abajo.",
         });
         return;
       }
@@ -439,7 +473,9 @@ export function FacturaElectronicaPanel({
 
       setFlash({
         kind: "err",
-        text: "No se pudo completar el envío automático. Revisá «Pasos avanzados» o el estado del DE.",
+        text: debugUi
+          ? "No se pudo completar el envío automático. Revisá «Pasos avanzados» o el estado del DE."
+          : "No se pudo completar el envío automático. Revisá el estado del documento.",
       });
       await refresh();
     } catch (e) {
@@ -499,7 +535,7 @@ export function FacturaElectronicaPanel({
 
           {loadingResumen && <p className="text-sm text-slate-400">Cargando…</p>}
 
-          {!loadingResumen && resumen && <ResumenSifenCompacto resumen={resumen} />}
+          {!loadingResumen && resumen && <ResumenSifenCompacto resumen={resumen} debugUi={debugUi} />}
 
           {!loadingResumen && resumen && (
             <>
@@ -552,50 +588,52 @@ export function FacturaElectronicaPanel({
                 ) : null}
               </div>
 
-              <details className="group rounded-lg border border-slate-100 bg-slate-50/40">
-                <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-600 select-none list-none flex items-center gap-2 [&::-webkit-details-marker]:hidden">
-                  <span className="text-slate-400 transition-transform group-open:rotate-90 inline-block">▸</span>
-                  Pasos avanzados (borrador, XML, firma por separado)
-                </summary>
-                <div className="px-3 pb-3 pt-0 flex flex-wrap gap-2 border-t border-slate-100/80">
-                  <button
-                    type="button"
-                    disabled={!puedeBorrador || busy}
-                    onClick={() => run("borrador")}
-                    className="px-2.5 py-1.5 text-[11px] font-semibold rounded-md border border-slate-200 bg-white text-slate-800 disabled:opacity-40 hover:bg-slate-50"
-                  >
-                    {action === "borrador" ? "…" : "Borrador"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!puedeGenerarXml || busy}
-                    onClick={() => run("xml")}
-                    className="px-2.5 py-1.5 text-[11px] font-semibold rounded-md border border-slate-200 bg-white text-slate-800 disabled:opacity-40 hover:bg-slate-50"
-                  >
-                    {action === "xml" ? "…" : fe?.xml_path?.trim() ? "XML" : "XML"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!puedeFirmar || busy}
-                    onClick={() => run("firmar")}
-                    className="px-2.5 py-1.5 text-[11px] font-semibold rounded-md border border-slate-200 bg-white text-slate-800 disabled:opacity-40 hover:bg-slate-50"
-                  >
-                    {action === "firmar" ? "…" : "Firmar"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      busy ||
-                      (stStr !== "firmado" &&
-                        !(stStr === "error_envio" && Boolean(fe?.xml_firmado_path?.trim())))
-                    }
-                    onClick={() => void runEnviar()}
-                    className="px-2.5 py-1.5 text-[11px] font-semibold rounded-md border border-slate-200 bg-white text-slate-800 disabled:opacity-40 hover:bg-slate-50"
-                  >
-                    {action === "enviar" ? "…" : "Solo enviar"}
-                  </button>
-                </div>
-              </details>
+              {debugUi ? (
+                <details className="group rounded-lg border border-dashed border-amber-200 bg-amber-50/30">
+                  <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-amber-900 select-none list-none flex items-center gap-2 [&::-webkit-details-marker]:hidden">
+                    <span className="text-amber-600 transition-transform group-open:rotate-90 inline-block">▸</span>
+                    Debug: pasos SIFEN sueltos
+                  </summary>
+                  <div className="px-3 pb-3 pt-0 flex flex-wrap gap-2 border-t border-amber-100/80">
+                    <button
+                      type="button"
+                      disabled={!puedeBorrador || busy}
+                      onClick={() => run("borrador")}
+                      className="px-2.5 py-1.5 text-[11px] font-semibold rounded-md border border-slate-200 bg-white text-slate-800 disabled:opacity-40 hover:bg-slate-50"
+                    >
+                      {action === "borrador" ? "…" : "Borrador"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!puedeGenerarXml || busy}
+                      onClick={() => run("xml")}
+                      className="px-2.5 py-1.5 text-[11px] font-semibold rounded-md border border-slate-200 bg-white text-slate-800 disabled:opacity-40 hover:bg-slate-50"
+                    >
+                      {action === "xml" ? "…" : "XML"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!puedeFirmar || busy}
+                      onClick={() => run("firmar")}
+                      className="px-2.5 py-1.5 text-[11px] font-semibold rounded-md border border-slate-200 bg-white text-slate-800 disabled:opacity-40 hover:bg-slate-50"
+                    >
+                      {action === "firmar" ? "…" : "Firmar"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
+                        busy ||
+                        (stStr !== "firmado" &&
+                          !(stStr === "error_envio" && Boolean(fe?.xml_firmado_path?.trim())))
+                      }
+                      onClick={() => void runEnviar()}
+                      className="px-2.5 py-1.5 text-[11px] font-semibold rounded-md border border-slate-200 bg-white text-slate-800 disabled:opacity-40 hover:bg-slate-50"
+                    >
+                      {action === "enviar" ? "…" : "Solo enviar"}
+                    </button>
+                  </div>
+                </details>
+              ) : null}
 
               <div className="space-y-3 text-sm">
             {fe && resumen.cancelacion && estado === "aprobado" && (
@@ -659,97 +697,117 @@ export function FacturaElectronicaPanel({
                       Cancelar y reemitir
                     </button>
                   </>
-                ) : (
-                  <p className="text-xs text-slate-500">
-                    Cancelación DE no disponible: usá nota de crédito (panel derecho).
-                  </p>
-                )}
+                ) : null}
               </div>
             )}
             {fe && (
               <>
-                <p className="text-slate-600">
-                  <span className="text-slate-400">ID documento electrónico:</span>{" "}
-                  <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded break-all">{fe.id}</code>
-                </p>
-                {fe.cdc && (
-                  <p className="text-slate-600 break-all">
-                    <span className="text-slate-400">CDC:</span> <code className="text-xs break-all">{fe.cdc}</code>
-                  </p>
-                )}
-                {fe.sifen_d_prot_cons_lote?.trim() && (
-                  <p className="text-slate-600 break-all">
-                    <span className="text-slate-400">dProtConsLote (SET):</span>{" "}
-                    <code className="text-xs break-all">{fe.sifen_d_prot_cons_lote}</code>
-                  </p>
-                )}
-                <details className="rounded-lg border border-slate-200 bg-slate-50/50 text-xs">
-                  <summary className="cursor-pointer px-3 py-2 font-semibold text-slate-600 select-none">
-                    Rutas de almacenamiento (XML)
-                  </summary>
-                  <div className="px-3 pb-3 pt-0 space-y-2 text-slate-600">
-                    <p className="break-all">
-                      <span className="text-slate-400">xml_path:</span>{" "}
-                      <code className="text-[11px]">{fe.xml_path ?? "—"}</code>
-                    </p>
-                    <p className="break-all">
-                      <span className="text-slate-400">xml_firmado_path:</span>{" "}
-                      <code className="text-[11px]">{fe.xml_firmado_path ?? "—"}</code>
-                    </p>
-                  </div>
-                </details>
-                {ultimaConsulta && (
-                  <details className="rounded-lg border border-sky-200 bg-sky-50/50 text-xs open:shadow-sm">
-                    <summary className="cursor-pointer px-3 py-2 font-semibold text-sky-950 select-none">
-                      Respuesta consulta lote ({etiquetaAmbienteSet})
+                {!debugUi && (fe.cdc || fe.sifen_d_prot_cons_lote?.trim()) ? (
+                  <details className="rounded-lg border border-slate-100 text-xs text-slate-600">
+                    <summary className="cursor-pointer px-2 py-1.5 font-medium text-slate-700 select-none">
+                      Referencias (DE)
                     </summary>
-                    <div className="px-3 pb-3 pt-0 space-y-2 max-h-[min(420px,55vh)] overflow-y-auto">
-                    <p className="text-slate-700">
-                      <span className="text-slate-500">dCodResLot:</span>{" "}
-                      <code className="bg-white/80 px-1 rounded">
-                        {ultimaConsulta.dCodResLot ?? "—"}
-                      </code>
-                    </p>
-                    <p className="text-slate-700 break-words">
-                      <span className="text-slate-500">dMsgResLot:</span>{" "}
-                      {ultimaConsulta.dMsgResLot ?? "—"}
-                    </p>
-                    {ultimaConsulta.detallePorCdc.length > 0 && (
-                      <ul className="list-disc pl-4 space-y-2 text-slate-800">
-                        {ultimaConsulta.detallePorCdc.map((d) => (
-                          <li key={d.cdc}>
-                            <span className="text-slate-500">CDC:</span>{" "}
-                            <code className="bg-white/80 px-1 rounded break-all">{d.cdc}</code>
-                            <br />
-                            <span className="text-slate-500">dEstRes:</span> {d.dEstRes}
-                            {d.dProtAut != null && d.dProtAut !== "" && (
-                              <>
-                                <br />
-                                <span className="text-slate-500">dProtAut:</span> {d.dProtAut}
-                              </>
-                            )}
-                            {d.grupoRes.length > 0 && (
-                              <ul className="list-circle pl-4 mt-1 space-y-0.5">
-                                {d.grupoRes.map((g, i) => (
-                                  <li key={`${d.cdc}-${g.dCodRes}-${i}`}>
-                                    <code>{g.dCodRes}</code> — {decodeXmlNumericEntities(g.dMsgRes)}
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {ultimaConsulta.loteSinDetalleCdc && !ultimaConsulta.soapFault && (
-                      <p className="text-amber-900 leading-snug">{mensajeConsultaSinFilasPorCdc(ultimaConsulta)}</p>
-                    )}
-                    {ultimaConsulta.soapFault && ultimaConsulta.faultString && (
-                      <p className="text-red-700">Fault: {ultimaConsulta.faultString}</p>
-                    )}
+                    <div className="px-2 pb-2 pt-0 space-y-1.5">
+                      <p className="text-[10px] text-slate-500 break-all">
+                        <span className="font-medium text-slate-600">ID:</span> {fe.id}
+                      </p>
+                      {fe.cdc ? (
+                        <p className="text-[10px] text-slate-500 break-all">
+                          <span className="font-medium text-slate-600">CDC:</span> {fe.cdc}
+                        </p>
+                      ) : null}
+                      {fe.sifen_d_prot_cons_lote?.trim() ? (
+                        <p className="text-[10px] text-slate-500 break-all">
+                          <span className="font-medium text-slate-600">Protocolo lote:</span>{" "}
+                          {fe.sifen_d_prot_cons_lote}
+                        </p>
+                      ) : null}
                     </div>
                   </details>
-                )}
+                ) : null}
+                {debugUi && fe ? (
+                  <>
+                    <p className="text-slate-600 text-xs">
+                      <span className="text-slate-400">ID DE:</span>{" "}
+                      <code className="bg-slate-100 px-1 rounded break-all">{fe.id}</code>
+                    </p>
+                    {fe.cdc ? (
+                      <p className="text-slate-600 text-xs break-all">
+                        <span className="text-slate-400">CDC:</span>{" "}
+                        <code className="bg-slate-100 px-1 rounded break-all">{fe.cdc}</code>
+                      </p>
+                    ) : null}
+                    <details className="rounded-lg border border-slate-200 bg-slate-50/50 text-xs">
+                      <summary className="cursor-pointer px-3 py-2 font-semibold text-slate-600 select-none">
+                        Rutas XML (storage)
+                      </summary>
+                      <div className="px-3 pb-3 pt-0 space-y-2 text-slate-600 break-all">
+                        <p>
+                          <span className="text-slate-400">xml_path:</span>{" "}
+                          <code className="text-[11px]">{fe.xml_path ?? "—"}</code>
+                        </p>
+                        <p>
+                          <span className="text-slate-400">xml_firmado_path:</span>{" "}
+                          <code className="text-[11px]">{fe.xml_firmado_path ?? "—"}</code>
+                        </p>
+                      </div>
+                    </details>
+                    {ultimaConsulta ? (
+                      <details className="rounded-lg border border-sky-200 bg-sky-50/50 text-xs open:shadow-sm">
+                        <summary className="cursor-pointer px-3 py-2 font-semibold text-sky-950 select-none">
+                          Respuesta consulta lote ({etiquetaAmbienteSet})
+                        </summary>
+                        <div className="px-3 pb-3 pt-0 space-y-2 max-h-[min(420px,55vh)] overflow-y-auto">
+                          <p className="text-slate-700">
+                            <span className="text-slate-500">dCodResLot:</span>{" "}
+                            <code className="bg-white/80 px-1 rounded">
+                              {ultimaConsulta.dCodResLot ?? "—"}
+                            </code>
+                          </p>
+                          <p className="text-slate-700 break-words">
+                            <span className="text-slate-500">dMsgResLot:</span>{" "}
+                            {ultimaConsulta.dMsgResLot ?? "—"}
+                          </p>
+                          {ultimaConsulta.detallePorCdc.length > 0 && (
+                            <ul className="list-disc pl-4 space-y-2 text-slate-800">
+                              {ultimaConsulta.detallePorCdc.map((d) => (
+                                <li key={d.cdc}>
+                                  <span className="text-slate-500">CDC:</span>{" "}
+                                  <code className="bg-white/80 px-1 rounded break-all">{d.cdc}</code>
+                                  <br />
+                                  <span className="text-slate-500">dEstRes:</span> {d.dEstRes}
+                                  {d.dProtAut != null && d.dProtAut !== "" && (
+                                    <>
+                                      <br />
+                                      <span className="text-slate-500">dProtAut:</span> {d.dProtAut}
+                                    </>
+                                  )}
+                                  {d.grupoRes.length > 0 && (
+                                    <ul className="list-circle pl-4 mt-1 space-y-0.5">
+                                      {d.grupoRes.map((g, i) => (
+                                        <li key={`${d.cdc}-${g.dCodRes}-${i}`}>
+                                          <code>{g.dCodRes}</code> — {decodeXmlNumericEntities(g.dMsgRes)}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {ultimaConsulta.loteSinDetalleCdc && !ultimaConsulta.soapFault && (
+                            <p className="text-amber-900 leading-snug">
+                              {mensajeConsultaSinFilasPorCdc(ultimaConsulta)}
+                            </p>
+                          )}
+                          {ultimaConsulta.soapFault && ultimaConsulta.faultString && (
+                            <p className="text-red-700">Fault: {ultimaConsulta.faultString}</p>
+                          )}
+                        </div>
+                      </details>
+                    ) : null}
+                  </>
+                ) : null}
                 {mostrarErrorPersistido && (
                   <div className="rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm px-3 py-2 whitespace-pre-wrap break-words">
                     <span className="font-semibold">Error: </span>
@@ -760,49 +818,50 @@ export function FacturaElectronicaPanel({
             )}
             </div>
 
-              <details className="rounded-lg border border-slate-100 text-xs text-slate-500">
-                <summary className="cursor-pointer px-2 py-1.5 font-medium text-slate-600 select-none">
-                  Payload / documento (API)
-                </summary>
-                <p className="px-2 pb-2 pt-0 flex flex-wrap gap-x-3 gap-y-1">
-                  <a
-                    className="text-[#0EA5E9] font-medium hover:underline"
-                    href={`/api/facturas/${facturaId}/sifen/payload`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    JSON
-                  </a>
-                  <a
-                    className="text-[#0EA5E9] font-medium hover:underline"
-                    href={`/api/facturas/${facturaId}/sifen/documento`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Documento
-                  </a>
-                </p>
-              </details>
+              {debugUi ? (
+                <details className="rounded-lg border border-dashed border-slate-200 text-xs text-slate-500">
+                  <summary className="cursor-pointer px-2 py-1.5 font-medium text-slate-600 select-none">
+                    Debug: payload / documento (API)
+                  </summary>
+                  <p className="px-2 pb-2 pt-0 flex flex-wrap gap-x-3 gap-y-1">
+                    <a
+                      className="text-[#0EA5E9] font-medium hover:underline"
+                      href={`/api/facturas/${facturaId}/sifen/payload`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      JSON
+                    </a>
+                    <a
+                      className="text-[#0EA5E9] font-medium hover:underline"
+                      href={`/api/facturas/${facturaId}/sifen/documento`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Documento
+                    </a>
+                  </p>
+                </details>
+              ) : null}
             </>
           )}
 
         </div>
 
-        <aside className="lg:w-[min(100%,400px)] shrink-0 lg:border-l lg:border-slate-100 lg:pl-8 pt-6 lg:pt-0 border-t border-slate-100">
-          <FacturaCorreccionFiscalNC
-            facturaId={facturaId}
-            clienteId={clienteId}
-            clienteDisplay={facturaComercial.cliente_display}
-            monto={facturaComercial.monto}
-            saldo={facturaComercial.saldo}
-            estado={facturaComercial.estado}
-            moneda={facturaComercial.moneda}
-            puedeCancelarDe={Boolean(resumen?.cancelacion?.puede_cancelar)}
-            deAprobado={deAprobado}
-            onAfterNcMutation={onComercialUpdated}
-            embedded
-          />
-        </aside>
+        <FacturaCorreccionFiscalNC
+          facturaId={facturaId}
+          clienteId={clienteId}
+          clienteDisplay={facturaComercial.cliente_display}
+          monto={facturaComercial.monto}
+          saldo={facturaComercial.saldo}
+          estado={facturaComercial.estado}
+          moneda={facturaComercial.moneda}
+          puedeCancelarDe={Boolean(resumen?.cancelacion?.puede_cancelar)}
+          deAprobado={deAprobado}
+          onAfterNcMutation={onComercialUpdated}
+          embedded
+          debugUi={debugUi}
+        />
       </div>
 
       {cancelModal != null && (
