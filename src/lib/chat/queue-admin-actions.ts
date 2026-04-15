@@ -72,9 +72,11 @@ export async function createQueueDraft(): Promise<string> {
       priority: 0,
     })
     .select("id")
-    .single();
+    .maybeSingle();
   if (error) throw new Error(error.message);
-  return data?.id as string;
+  const id = data?.id as string | undefined;
+  if (!id) throw new Error("No se pudo crear la cola. Verificá migraciones omnicanal (chat_queues).");
+  return id;
 }
 
 export async function saveQueueAdmin(input: {

@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 
 type ConfigCollapsibleSectionProps = {
   title: string;
@@ -43,14 +43,8 @@ export function ConfigCollapsibleSection({
   const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
   const [internalActive, setInternalActive] = useState(defaultActive);
 
-  useEffect(() => {
-    if (controlled) return;
-    setInternalExpanded(defaultExpanded);
-    setInternalActive(defaultActive);
-  }, [controlled, defaultExpanded, defaultActive]);
-
-  const expanded = controlled ? expandedProp : internalExpanded;
-  const isActive = controlled ? activeProp : internalActive;
+  const expanded = controlled ? (expandedProp as boolean) : internalExpanded;
+  const isActive = controlled ? Boolean(activeProp) : internalActive;
 
   const setExpanded = (next: boolean) => {
     if (controlled) onExpandedChange(next);
@@ -116,7 +110,7 @@ export function ConfigCollapsibleSection({
               type="checkbox"
               role="switch"
               aria-checked={isActive}
-              checked={isActive}
+              checked={Boolean(isActive)}
               onChange={(e) => setActive(e.target.checked)}
               className="peer sr-only"
             />

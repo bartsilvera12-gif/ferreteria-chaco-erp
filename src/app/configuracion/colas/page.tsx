@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { createQueueDraft, listQueuesAdmin, type ChatQueueAdminRow } from "@/lib/chat/queue-admin-actions";
@@ -21,6 +22,7 @@ const STRAT_LABEL: Record<string, string> = {
 };
 
 export default function ConfiguracionColasPage() {
+  const router = useRouter();
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [rows, setRows] = useState<ChatQueueAdminRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +60,7 @@ export default function ConfiguracionColasPage() {
   async function handleNew() {
     try {
       const id = await createQueueDraft();
-      window.location.href = `/configuracion/colas/${id}`;
+      router.push(`/configuracion/colas/${id}`);
     } catch (e) {
       alert(e instanceof Error ? e.message : "No se pudo crear");
     }

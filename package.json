@@ -30,6 +30,7 @@
     "e2e:super-admin-sidebar": "tsx scripts/e2e-super-admin-modulos.ts",
     "test:factura-post-tipo": "tsx scripts/validate-factura-post-tipo.ts",
     "db:apply-omnichannel-etapa1": "tsx scripts/apply-omnichannel-etapa1-migration.ts",
+    "db:apply-omnichannel-ensure": "tsx scripts/apply-omnichannel-ensure-columns.ts",
     "db:repair-migration-history": "tsx scripts/repair-remote-supabase-migration-history.ts",
     "db:apply-nota-credito-fase1": "tsx scripts/apply-nota-credito-fase1-remote.ts",
     "db:verify-nota-credito-db": "tsx scripts/verify-nota-credito-fase1-db.ts",

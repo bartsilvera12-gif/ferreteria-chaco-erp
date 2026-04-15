@@ -30,6 +30,13 @@ export function defaultChannelFormSectionState(): ChannelFormSectionStateMap {
   };
 }
 
+function hasPersistedFormSectionState(config: unknown): boolean {
+  if (!config || typeof config !== "object" || Array.isArray(config)) return false;
+  const raw = (config as Record<string, unknown>).form_section_state;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+  return Object.keys(raw as Record<string, unknown>).length > 0;
+}
+
 export function parseFormSectionStateFromChannelConfig(config: unknown): ChannelFormSectionStateMap {
   const out = defaultChannelFormSectionState();
   if (!config || typeof config !== "object" || Array.isArray(config)) return out;
@@ -45,6 +52,23 @@ export function parseFormSectionStateFromChannelConfig(config: unknown): Channel
       active: typeof o.active === "boolean" ? o.active : b.active,
       expanded: typeof o.expanded === "boolean" ? o.expanded : b.expanded,
     };
+  }
+  return out;
+}
+
+/**
+ * Alinea switches de comprobantes con `enabled` real cuando aún no hay `form_section_state` persistido
+ * (evita “Activo” en verde si la validación de comprobantes está apagada).
+ */
+export function parseFormSectionStateFromChannelConfigWithCvSync(
+  config: unknown,
+  comprobanteValidationEnabled: boolean
+): ChannelFormSectionStateMap {
+  const out = parseFormSectionStateFromChannelConfig(config);
+  if (!hasPersistedFormSectionState(config)) {
+    out.comprobantes_core.active = comprobanteValidationEnabled;
+    out.comprobantes_bank.active = comprobanteValidationEnabled;
+    out.comprobantes_messages.active = comprobanteValidationEnabled;
   }
   return out;
 }

@@ -129,7 +129,7 @@ export function GenericOmnichannelChannelForm({
         />
       </div>
       <label className="flex items-center gap-2 text-sm text-slate-700">
-        <input type="checkbox" checked={activo} onChange={(e) => setActivo(e.target.checked)} />
+        <input type="checkbox" checked={Boolean(activo)} onChange={(e) => setActivo(e.target.checked)} />
         Habilitado (preparación; la integración end-to-end sigue en roadmap)
       </label>
 

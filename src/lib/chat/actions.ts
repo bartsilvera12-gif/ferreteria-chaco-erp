@@ -482,6 +482,10 @@ export type YCloudWhatsappChannelInput = {
   ycloud_webhook_secret?: string;
   ycloud_sender_id?: string;
   ycloud_channel_id?: string;
+  /** Misma persistencia que Meta: validación de comprobantes, automatización, estado UI de secciones. */
+  comprobante_validation?: Record<string, unknown>;
+  business_automation?: Record<string, unknown>;
+  form_section_state?: Record<string, { active: boolean; expanded: boolean }>;
 };
 
 /** WhatsApp vía YCloud (coexistencia). Sin ruta omnicanal Meta. */
@@ -518,6 +522,16 @@ export async function saveYCloudWhatsappChannel(input: YCloudWhatsappChannelInpu
   if (input.ycloud_channel_id !== undefined) {
     const s = input.ycloud_channel_id.trim();
     if (s) config.ycloud_channel_id = s;
+  }
+
+  if (input.comprobante_validation !== undefined) {
+    config.comprobante_validation = input.comprobante_validation;
+  }
+  if (input.business_automation !== undefined) {
+    config.business_automation = input.business_automation;
+  }
+  if (input.form_section_state !== undefined) {
+    config.form_section_state = input.form_section_state;
   }
 
   const hasKey =

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { fetchChatChannels, type ChatChannelRow } from "@/lib/chat/actions";
 import {
@@ -32,6 +32,7 @@ const STRATS: { value: string; label: string }[] = [
 ];
 
 export default function EditarColaPage() {
+  const router = useRouter();
   const params = useParams();
   const queueId = typeof params?.queueId === "string" ? params.queueId : "";
 
@@ -134,7 +135,7 @@ export default function EditarColaPage() {
     if (!confirm("¿Eliminar esta cola? Los agentes asociados se eliminarán.")) return;
     try {
       await deleteQueueAdmin(queueId);
-      window.location.href = "/configuracion/colas";
+      router.push("/configuracion/colas");
     } catch (e) {
       alert(e instanceof Error ? e.message : "Error");
     }

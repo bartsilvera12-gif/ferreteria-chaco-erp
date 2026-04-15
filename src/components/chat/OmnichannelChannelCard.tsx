@@ -28,9 +28,10 @@ function resolveRowsForType(rows: ChatChannelRow[], type: string): ChatChannelRo
 
 export function resolveCardUiStatus(rows: ChatChannelRow[]): ChannelCardUiStatus {
   if (rows.length === 0) return "inactive";
-  const anyActive = rows.some((r) => r.activo && r.config_status === "active");
+  const st = (r: ChatChannelRow) => String(r.config_status ?? "incomplete");
+  const anyActive = rows.some((r) => r.activo && st(r) === "active");
   if (anyActive) return "active";
-  const anyIncomplete = rows.some((r) => r.activo && r.config_status === "incomplete");
+  const anyIncomplete = rows.some((r) => r.activo && st(r) === "incomplete");
   if (anyIncomplete) return "incomplete";
   const anyRow = rows.some((r) => r.activo);
   if (!anyRow) return "inactive";
@@ -88,7 +89,7 @@ export function OmnichannelChannelCard({
           <div className="min-w-0">
             <h2 className="font-semibold text-slate-900 truncate">{def.label}</h2>
             <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400 mt-0.5">
-              {def.type} · {primary?.provider ?? def.defaultProvider}
+              {def.type} · {String(primary?.provider ?? def.defaultProvider)}
             </p>
           </div>
         </div>

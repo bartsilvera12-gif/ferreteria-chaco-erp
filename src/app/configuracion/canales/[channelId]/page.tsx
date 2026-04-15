@@ -6,7 +6,6 @@ import { useCallback, useEffect, useState } from "react";
 import { ChannelBadge, channelTypeLabel } from "@/components/chat/ChannelBadge";
 import { GenericOmnichannelChannelForm } from "@/components/chat/GenericOmnichannelChannelForm";
 import { WhatsAppChannelForm } from "@/components/chat/WhatsAppChannelForm";
-import { YCloudWhatsAppChannelForm } from "@/components/chat/YCloudWhatsAppChannelForm";
 import { OMNICHANNEL_CARD_DEFINITIONS } from "@/lib/chat/omnichannel-catalog";
 import {
   deleteChatChannel,
@@ -109,7 +108,8 @@ export default function EditarCanalPage() {
 
   const type = row.type.trim().toLowerCase();
   const isWhatsapp = type === "whatsapp";
-  const isYcloud = isWhatsapp && row.provider.trim().toLowerCase() === "ycloud";
+  const providerNorm = String(row.provider ?? "meta").trim().toLowerCase();
+  const isYcloud = isWhatsapp && providerNorm === "ycloud";
   const cardDef = OMNICHANNEL_CARD_DEFINITIONS.find((d) => d.type === type);
 
   return (
@@ -132,7 +132,7 @@ export default function EditarCanalPage() {
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <ChannelBadge type={row.type} nombre={null} />
             <span className="text-[11px] font-semibold uppercase text-slate-400">
-              {row.provider}
+              {String(row.provider ?? "meta")}
               {row.connection_mode ? ` · ${row.connection_mode}` : ""}
             </span>
             {row.config_status === "active" && row.activo ? (
@@ -164,17 +164,10 @@ export default function EditarCanalPage() {
         <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 lg:mb-6">
           Credenciales y opciones
         </h2>
-        {isWhatsapp && isYcloud ? (
-          <YCloudWhatsAppChannelForm
-            mode="edit"
-            channelId={row.id}
-            initialRow={row}
-            cancelHref="/configuracion/canales"
-            onSaved={() => void load()}
-          />
-        ) : isWhatsapp ? (
+        {isWhatsapp ? (
           <WhatsAppChannelForm
             mode="edit"
+            connectionProfile={isYcloud ? "ycloud" : "meta"}
             channelId={row.id}
             initialRow={row}
             cancelHref="/configuracion/canales"

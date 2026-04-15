@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { WhatsAppChannelForm } from "@/components/chat/WhatsAppChannelForm";
-import { YCloudWhatsAppChannelForm } from "@/components/chat/YCloudWhatsAppChannelForm";
 
 type Conn = "pick" | "official" | "ycloud";
 
@@ -59,7 +58,13 @@ export function WhatsAppConnectWizard({
             Cambiar
           </button>
         </div>
-        <YCloudWhatsAppChannelForm mode="create" cancelHref={cancelHref} onSaved={onSavedYcloud} />
+        <WhatsAppChannelForm
+          mode="create"
+          connectionProfile="ycloud"
+          cancelHref={cancelHref}
+          submitLabelCreate="Conectar y guardar"
+          onSaved={onSavedYcloud}
+        />
       </div>
     );
   }

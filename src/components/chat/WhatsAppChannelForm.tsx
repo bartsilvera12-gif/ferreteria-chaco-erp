@@ -23,16 +23,19 @@ import {
 } from "@/lib/chat/channel-business-automation-types";
 import {
   saveChatChannel,
+  saveYCloudWhatsappChannel,
   type ChatChannelFormInput,
   type ChatChannelRow,
 } from "@/lib/chat/actions";
 import {
   defaultChannelFormSectionState,
   formSectionStateForPersistence,
-  parseFormSectionStateFromChannelConfig,
+  parseFormSectionStateFromChannelConfigWithCvSync,
   type ChannelFormSectionKey,
   type ChannelFormSectionStateMap,
 } from "@/lib/chat/channel-form-section-state";
+
+export type WhatsAppConnectionProfile = "meta" | "ycloud";
 
 export function emptyWhatsAppChannelForm(): ChatChannelFormInput {
   return {
@@ -64,6 +67,16 @@ function rowToForm(row: ChatChannelRow): ChatChannelFormInput {
   };
 }
 
+function ycloudRowToLocal(row: ChatChannelRow) {
+  const cfg = row.config ?? {};
+  return {
+    ycloud_api_key: "",
+    ycloud_webhook_secret: typeof cfg.ycloud_webhook_secret === "string" ? cfg.ycloud_webhook_secret : "",
+    ycloud_sender_id: typeof cfg.ycloud_sender_id === "string" ? cfg.ycloud_sender_id : "",
+    ycloud_channel_id: typeof cfg.ycloud_channel_id === "string" ? cfg.ycloud_channel_id : "",
+  };
+}
+
 function FormFeedback({
   error,
   success,
@@ -90,13 +103,11 @@ function FormFeedback({
 
 export type WhatsAppChannelFormProps = {
   mode: "create" | "edit";
-  /** En edición, id del canal */
+  /** Perfil de conexión: mismos bloques operativos; solo cambian credenciales iniciales. */
+  connectionProfile?: WhatsAppConnectionProfile;
   channelId?: string;
-  /** Fila cargada del servidor (edit) */
   initialRow?: ChatChannelRow | null;
-  /** Navegación al cancelar (si no se usa onCancel) */
   cancelHref?: string;
-  /** Cancelar embebido (p. ej. panel en otra página) */
   onCancel?: () => void;
   onSaved?: (channelId: string) => void;
   submitLabelCreate?: string;
@@ -105,6 +116,7 @@ export type WhatsAppChannelFormProps = {
 
 export function WhatsAppChannelForm({
   mode,
+  connectionProfile = "meta",
   channelId,
   initialRow,
   cancelHref = "/configuracion/canales",
@@ -113,24 +125,38 @@ export function WhatsAppChannelForm({
   submitLabelCreate = "Crear canal",
   submitLabelEdit = "Guardar cambios",
 }: WhatsAppChannelFormProps) {
+  const isYcloud = connectionProfile === "ycloud";
+
   const [form, setForm] = useState<ChatChannelFormInput>(() =>
     mode === "edit" && initialRow ? rowToForm(initialRow) : emptyWhatsAppChannelForm()
   );
-  const [cvSettings, setCvSettings] = useState<ComprobanteValidationSettings>(() =>
-    mode === "edit" && initialRow
-      ? parseComprobanteValidationConfig(initialRow.config)
-      : defaultComprobanteValidationSettings()
+  const [yc, setYc] = useState(() =>
+    mode === "edit" && initialRow && isYcloud ? ycloudRowToLocal(initialRow) : {
+        ycloud_api_key: "",
+        ycloud_webhook_secret: "",
+        ycloud_sender_id: "",
+        ycloud_channel_id: "",
+      }
   );
+  const [cvSettings, setCvSettings] = useState<ComprobanteValidationSettings>(() => {
+    const cv =
+      mode === "edit" && initialRow
+        ? parseComprobanteValidationConfig(initialRow.config)
+        : defaultComprobanteValidationSettings();
+    return cv;
+  });
   const [baSettings, setBaSettings] = useState<BusinessAutomationSettings>(() =>
     mode === "edit" && initialRow
       ? parseBusinessAutomationFromChannelConfig(initialRow.config)
       : defaultBusinessAutomationSettings()
   );
-  const [sectionUi, setSectionUi] = useState<ChannelFormSectionStateMap>(() =>
-    mode === "edit" && initialRow
-      ? parseFormSectionStateFromChannelConfig(initialRow.config)
-      : defaultChannelFormSectionState()
-  );
+  const [sectionUi, setSectionUi] = useState<ChannelFormSectionStateMap>(() => {
+    if (mode === "edit" && initialRow) {
+      const cv = parseComprobanteValidationConfig(initialRow.config);
+      return parseFormSectionStateFromChannelConfigWithCvSync(initialRow.config, cv.enabled);
+    }
+    return defaultChannelFormSectionState();
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -145,11 +171,15 @@ export function WhatsAppChannelForm({
   useEffect(() => {
     if (mode === "edit" && initialRow) {
       setForm(rowToForm(initialRow));
-      setCvSettings(parseComprobanteValidationConfig(initialRow.config));
+      const cv = parseComprobanteValidationConfig(initialRow.config);
+      setCvSettings(cv);
       setBaSettings(parseBusinessAutomationFromChannelConfig(initialRow.config));
-      setSectionUi(parseFormSectionStateFromChannelConfig(initialRow.config));
+      setSectionUi(parseFormSectionStateFromChannelConfigWithCvSync(initialRow.config, cv.enabled));
+      if (isYcloud) {
+        setYc(ycloudRowToLocal(initialRow));
+      }
     }
-  }, [mode, initialRow]);
+  }, [mode, initialRow, isYcloud]);
 
   function patchSection(key: ChannelFormSectionKey, patch: Partial<ChannelFormSectionStateMap[ChannelFormSectionKey]>) {
     setSectionUi((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
@@ -161,6 +191,45 @@ export function WhatsAppChannelForm({
     setError(null);
     setSuccess(null);
     try {
+      const cvPayload = comprobanteValidationSettingsForForm(cvSettings);
+      const baPayload = businessAutomationSettingsForPersistence(baSettings);
+      const fsPayload = formSectionStateForPersistence(sectionUi);
+
+      if (isYcloud) {
+        if (mode === "edit") {
+          if (!channelId?.trim()) throw new Error("Canal no válido.");
+          const id = await saveYCloudWhatsappChannel({
+            id: channelId.trim(),
+            nombre: form.nombre,
+            activo: form.activo,
+            ycloud_api_key: yc.ycloud_api_key || undefined,
+            ycloud_webhook_secret: yc.ycloud_webhook_secret,
+            ycloud_sender_id: yc.ycloud_sender_id,
+            ycloud_channel_id: yc.ycloud_channel_id,
+            comprobante_validation: cvPayload,
+            business_automation: baPayload,
+            form_section_state: fsPayload,
+          });
+          setSuccess("Cambios guardados.");
+          onSaved?.(id);
+        } else {
+          const id = await saveYCloudWhatsappChannel({
+            nombre: form.nombre,
+            activo: form.activo,
+            ycloud_api_key: yc.ycloud_api_key || undefined,
+            ycloud_webhook_secret: yc.ycloud_webhook_secret,
+            ycloud_sender_id: yc.ycloud_sender_id,
+            ycloud_channel_id: yc.ycloud_channel_id,
+            comprobante_validation: cvPayload,
+            business_automation: baPayload,
+            form_section_state: fsPayload,
+          });
+          setSuccess("Canal creado.");
+          onSaved?.(id);
+        }
+        return;
+      }
+
       if (mode === "edit") {
         if (!channelId?.trim()) {
           throw new Error("Canal no válido.");
@@ -168,18 +237,18 @@ export function WhatsAppChannelForm({
         const id = await saveChatChannel({
           ...form,
           id: channelId.trim(),
-          comprobante_validation: comprobanteValidationSettingsForForm(cvSettings),
-          business_automation: businessAutomationSettingsForPersistence(baSettings),
-          form_section_state: formSectionStateForPersistence(sectionUi),
+          comprobante_validation: cvPayload,
+          business_automation: baPayload,
+          form_section_state: fsPayload,
         });
         setSuccess("Cambios guardados.");
         onSaved?.(id);
       } else {
         const id = await saveChatChannel({
           ...form,
-          comprobante_validation: comprobanteValidationSettingsForForm(cvSettings),
-          business_automation: businessAutomationSettingsForPersistence(baSettings),
-          form_section_state: formSectionStateForPersistence(sectionUi),
+          comprobante_validation: cvPayload,
+          business_automation: baPayload,
+          form_section_state: fsPayload,
         });
         setSuccess("Canal creado.");
         onSaved?.(id);
@@ -191,6 +260,11 @@ export function WhatsAppChannelForm({
     }
   }
 
+  const credTitle = isYcloud ? "Credenciales YCloud (coexistencia)" : "Credenciales y conexión";
+  const credDescription = isYcloud
+    ? "API key, secret de webhook e identificadores del canal en YCloud. El resto de opciones es común con Meta."
+    : "Identificadores Meta, token para enviar mensajes y estado del canal en el ERP.";
+
   return (
     <div className="w-full space-y-6">
       <FormFeedback error={error} success={success} id="canal-form-feedback-top" />
@@ -198,8 +272,8 @@ export function WhatsAppChannelForm({
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-3">
           <ConfigCollapsibleSection
-            title="Credenciales y conexión"
-            description="Identificadores Meta, token para enviar mensajes y estado del canal en el ERP."
+            title={credTitle}
+            description={credDescription}
             active={sectionUi.credentials.active}
             expanded={sectionUi.credentials.expanded}
             onActiveChange={(v) => patchSection("credentials", { active: v })}
@@ -215,108 +289,163 @@ export function WhatsAppChannelForm({
                   placeholder="Ej: WhatsApp ventas"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                  Phone number ID (Graph API) *
-                </label>
-                <input
-                  required
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
-                  value={form.meta_phone_number_id}
-                  onChange={(e) => setForm((p) => ({ ...p, meta_phone_number_id: e.target.value }))}
-                  placeholder="Ej: 123456789012345"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                  Provider channel ID (opcional)
-                </label>
-                <input
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
-                  value={form.provider_channel_id}
-                  onChange={(e) => setForm((p) => ({ ...p, provider_channel_id: e.target.value }))}
-                  placeholder="Por defecto se usa el mismo Phone number ID"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                  Número visible (opcional)
-                </label>
-                <input
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
-                  value={form.display_phone_number ?? ""}
-                  onChange={(e) => setForm((p) => ({ ...p, display_phone_number: e.target.value }))}
-                  placeholder="+595 981 000000"
-                />
-                <p className="text-xs text-slate-400 mt-1">
-                  Se guarda en config para referencia; no afecta el webhook.
-                </p>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                  WhatsApp Business Account ID (WABA) — opcional
-                </label>
-                <input
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
-                  value={form.meta_waba_id ?? ""}
-                  onChange={(e) => setForm((p) => ({ ...p, meta_waba_id: e.target.value }))}
-                  placeholder="ID de la cuenta de negocio en Meta"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                  App ID Meta — opcional
-                </label>
-                <input
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
-                  value={form.meta_app_id ?? ""}
-                  onChange={(e) => setForm((p) => ({ ...p, meta_app_id: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                  Verify token (referencia en ERP) — opcional
-                </label>
-                <input
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
-                  value={form.meta_verify_token ?? ""}
-                  onChange={(e) => setForm((p) => ({ ...p, meta_verify_token: e.target.value }))}
-                  placeholder="Si usás verificación por token distinto al global del servidor"
-                />
-                <p className="text-xs text-slate-400 mt-1">
-                  El webhook público sigue validando contra{" "}
-                  <code className="text-[10px] bg-slate-100 px-1 rounded">WHATSAPP_VERIFY_TOKEN</code> en el
-                  servidor; este campo queda documentado en la fila del canal.
-                </p>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                  Token de acceso Meta (enviar mensajes)
-                </label>
-                <input
-                  type="password"
-                  autoComplete="off"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
-                  value={form.whatsapp_access_token ?? ""}
-                  onChange={(e) => setForm((p) => ({ ...p, whatsapp_access_token: e.target.value }))}
-                  placeholder={
-                    mode === "edit"
-                      ? "Dejar vacío para no cambiar el token guardado"
-                      : "Pegá el token permanente de la app (WhatsApp)"
-                  }
-                />
-                <p className="text-xs text-slate-400 mt-1">
-                  Necesario para enviar desde Conversaciones. Alternativa: variable{" "}
-                  <code className="text-[10px] bg-slate-100 px-1 rounded">WHATSAPP_TOKEN</code> en el servidor.
-                </p>
-              </div>
+
+              {isYcloud ? (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                      API key / secret YCloud {mode === "create" ? "*" : "(vacío = no cambiar)"}
+                    </label>
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
+                      value={yc.ycloud_api_key}
+                      onChange={(e) => setYc((p) => ({ ...p, ycloud_api_key: e.target.value }))}
+                      placeholder={mode === "edit" ? "Dejar vacío para conservar la clave guardada" : ""}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Webhook secret</label>
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
+                      value={yc.ycloud_webhook_secret}
+                      onChange={(e) => setYc((p) => ({ ...p, ycloud_webhook_secret: e.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                        Sender / external ID
+                      </label>
+                      <input
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
+                        value={yc.ycloud_sender_id}
+                        onChange={(e) => setYc((p) => ({ ...p, ycloud_sender_id: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                        Channel ID YCloud
+                      </label>
+                      <input
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
+                        value={yc.ycloud_channel_id}
+                        onChange={(e) => setYc((p) => ({ ...p, ycloud_channel_id: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                      Phone number ID (Graph API) *
+                    </label>
+                    <input
+                      required
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
+                      value={form.meta_phone_number_id}
+                      onChange={(e) => setForm((p) => ({ ...p, meta_phone_number_id: e.target.value }))}
+                      placeholder="Ej: 123456789012345"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                      Provider channel ID (opcional)
+                    </label>
+                    <input
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
+                      value={form.provider_channel_id}
+                      onChange={(e) => setForm((p) => ({ ...p, provider_channel_id: e.target.value }))}
+                      placeholder="Por defecto se usa el mismo Phone number ID"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                      Número visible (opcional)
+                    </label>
+                    <input
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
+                      value={form.display_phone_number ?? ""}
+                      onChange={(e) => setForm((p) => ({ ...p, display_phone_number: e.target.value }))}
+                      placeholder="+595 981 000000"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">
+                      Se guarda en config para referencia; no afecta el webhook.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                      WhatsApp Business Account ID (WABA) — opcional
+                    </label>
+                    <input
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
+                      value={form.meta_waba_id ?? ""}
+                      onChange={(e) => setForm((p) => ({ ...p, meta_waba_id: e.target.value }))}
+                      placeholder="ID de la cuenta de negocio en Meta"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                      App ID Meta — opcional
+                    </label>
+                    <input
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
+                      value={form.meta_app_id ?? ""}
+                      onChange={(e) => setForm((p) => ({ ...p, meta_app_id: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                      Verify token (referencia en ERP) — opcional
+                    </label>
+                    <input
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
+                      value={form.meta_verify_token ?? ""}
+                      onChange={(e) => setForm((p) => ({ ...p, meta_verify_token: e.target.value }))}
+                      placeholder="Si usás verificación por token distinto al global del servidor"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">
+                      El webhook público sigue validando contra{" "}
+                      <code className="text-[10px] bg-slate-100 px-1 rounded">WHATSAPP_VERIFY_TOKEN</code> en el
+                      servidor; este campo queda documentado en la fila del canal.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                      Token de acceso Meta (enviar mensajes)
+                    </label>
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
+                      value={form.whatsapp_access_token ?? ""}
+                      onChange={(e) => setForm((p) => ({ ...p, whatsapp_access_token: e.target.value }))}
+                      placeholder={
+                        mode === "edit"
+                          ? "Dejar vacío para no cambiar el token guardado"
+                          : "Pegá el token permanente de la app (WhatsApp)"
+                      }
+                    />
+                    <p className="text-xs text-slate-400 mt-1">
+                      Necesario para enviar desde Conversaciones. Alternativa: variable{" "}
+                      <code className="text-[10px] bg-slate-100 px-1 rounded">WHATSAPP_TOKEN</code> en el servidor.
+                    </p>
+                  </div>
+                </>
+              )}
+
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input
                   type="checkbox"
-                  checked={form.activo}
+                  checked={Boolean(form.activo)}
                   onChange={(e) => setForm((p) => ({ ...p, activo: e.target.checked }))}
                 />
-                Canal activo (recibe mensajes del webhook)
+                Canal activo
+                {isYcloud ? " (marca el canal como operativo en el ERP)" : " (recibe mensajes del webhook Meta)"}
               </label>
             </div>
           </ConfigCollapsibleSection>
