@@ -66,6 +66,28 @@ export async function fetchQueueSupervisorUsuarioIds(
 }
 
 /**
+ * Ids de colas en las que el usuario actúa como supervisor (`chat_queue_supervisors`).
+ */
+export async function fetchQueueIdsForSupervisorUsuario(
+  supabase: AppSupabaseClient,
+  empresaId: string,
+  supervisorUsuarioId: string
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("chat_queue_supervisors")
+    .select("queue_id")
+    .eq("empresa_id", empresaId)
+    .eq("usuario_id", supervisorUsuarioId);
+
+  if (error) {
+    if (isMissingSupervisionTable(error)) return [];
+    throw new Error(error.message);
+  }
+  const rows = (data ?? []) as { queue_id?: string }[];
+  return [...new Set(rows.map((r) => String(r.queue_id ?? "").trim()).filter(Boolean))];
+}
+
+/**
  * Agentes (`agent_usuario_id`) asignados a un supervisor en la empresa.
  */
 export async function fetchAgentsForSupervisorUsuarioIds(
