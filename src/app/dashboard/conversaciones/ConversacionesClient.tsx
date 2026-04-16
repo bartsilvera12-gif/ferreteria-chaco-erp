@@ -1685,7 +1685,7 @@ export function ConversacionesClient({
                   ref={fileInputRef}
                   type="file"
                   className="hidden"
-                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                  accept="image/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
                   onChange={(e) => void handleSendFile(e)}
                 />
                 {sendError && (
@@ -1699,7 +1699,7 @@ export function ConversacionesClient({
                     disabled={uploadingFile || !selectedId}
                     onClick={() => fileInputRef.current?.click()}
                     className="shrink-0 border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 px-2.5 py-2 rounded-lg text-sm font-medium min-h-[2.5rem]"
-                    title="Adjuntar imagen o documento"
+                    title="Adjuntar imagen, audio o documento"
                   >
                     {uploadingFile ? "…" : "Adjunto"}
                   </button>

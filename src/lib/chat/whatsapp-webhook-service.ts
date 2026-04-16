@@ -5,6 +5,7 @@ import {
 import { createFlowEngine } from "@/lib/chat/flow-engine-service";
 import { flowTrace } from "@/lib/chat/flow-trace-log";
 import { persistInboundChatMessageAndBump } from "@/lib/chat/incoming-message-service";
+import { assignConversation } from "@/lib/chat/assign-conversation-service";
 import {
   fetchOmnichannelRouteByMetaPhone,
   syncOmnichannelRouteForWhatsappChannel,
@@ -27,7 +28,7 @@ import {
 } from "@/lib/chat/resolve-whatsapp-active-flow";
 import { runWhatsappBusinessAutomationAfterInbound } from "@/lib/chat/channel-business-automation-runtime";
 import { sendWhatsAppText } from "@/lib/chat/whatsapp-send-service";
-import { saveProspectoFromWebhook } from "@/lib/crm/storage";
+import { ensureWhatsappInboundCrmProspecto } from "@/lib/crm/whatsapp-inbound-lead";
 import type {
   MetaInboundMessage,
   MetaWebhookValue,
@@ -227,30 +228,6 @@ async function findWhatsappChannelInTenantSchemas(
     }
   }
   return null;
-}
-
-async function resolveInitialCrmEtapaCodigo(
-  supabase: SupabaseAdmin,
-  empresaId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("crm_etapas")
-    .select("codigo")
-    .eq("empresa_id", empresaId)
-    .eq("activo", true)
-    .order("orden", { ascending: true });
-
-  if (error) {
-    console.error("[webhook][crm] resolveInitialCrmEtapaCodigo:", error.message);
-    return null;
-  }
-
-  const rows = (data ?? []) as Array<{ codigo?: string | null }>;
-  const terminal = new Set(["GANADO", "PERDIDO"]);
-
-  const candidate = rows.find((r) => r.codigo && !terminal.has(r.codigo))?.codigo ?? null;
-  if (candidate) return candidate;
-  return rows[0]?.codigo ?? null;
 }
 
 /**
@@ -672,36 +649,22 @@ export async function processInboundWebhookValue(
         flow_status: (existingConv as { flow_status?: string | null }).flow_status ?? null,
       });
 
-      // ── Integración CRM Funnel (WhatsApp) ─────────────────────────────
-      // Si el contacto no tiene prospecto, crear uno en crm_prospectos y enlazarlo a chat_contacts.
-      const contactCrmProspectoId =
-        (contact as { crm_prospecto_id?: string | null }).crm_prospecto_id ?? null;
-
-      if (!contactCrmProspectoId) {
-        const etapaCodigo = await resolveInitialCrmEtapaCodigo(catalogSupabase, empresaId);
-        if (!etapaCodigo) {
-          errors.push("CRM: no se pudo resolver etapa inicial para el lead whatsapp");
-        } else {
-          const prospecto = await saveProspectoFromWebhook({
-            empresa_id: empresaId,
-            telefono: from,
-            contacto: displayName,
-            empresa_nombre: "WhatsApp",
-            etapa: etapaCodigo,
-            origen_creacion: "whatsapp",
-            origen_detalle: null,
-          });
-
-          if (prospecto?.id) {
-            await supabase
-              .from("chat_contacts")
-              .update({ crm_prospecto_id: prospecto.id, updated_at: new Date().toISOString() })
-              .eq("id", contactId)
-              .eq("empresa_id", empresaId);
-          } else {
-            errors.push("CRM: no se pudo crear el prospecto desde WhatsApp");
-          }
-        }
+      // ── Integración CRM Funnel (WhatsApp): tras autoasignación, creado por = canal, responsable = asesor.
+      const arCrm = await assignConversation(supabase, conversationId);
+      if (!arCrm.ok) {
+        console.warn("[webhook/whatsapp][crm] assignConversation", arCrm.error);
+      }
+      const crmRes = await ensureWhatsappInboundCrmProspecto({
+        chatSupabase: supabase,
+        etapaSupabase: catalogSupabase,
+        empresaId,
+        contactId,
+        conversationId,
+        channelId,
+        firstMessagePreview: preview,
+      });
+      if (!crmRes.ok) {
+        errors.push(crmRes.error);
       }
 
       const flowEngine = createFlowEngine({ supabase });

@@ -10,35 +10,17 @@ function digitsToE164(digits: string): string | null {
   return `+${d}`;
 }
 
-/**
- * Envía texto por WhatsApp usando la API REST de YCloud (no Meta Graph).
- * Autenticación: header `X-API-Key` (esquema documentado en OpenAPI).
- */
-export async function sendMessageViaYCloud(params: {
-  apiKey: string;
-  /** Número de negocio en E.164 (p. ej. +54911…), desde config.ycloud_sender_id */
-  fromE164: string;
-  /** Solo dígitos del cliente (mismo formato que usa Meta en el ERP) */
-  toDigits: string;
-  text: string;
-}): Promise<SendWhatsAppTextResult> {
-  const toE164 = digitsToE164(params.toDigits);
-  if (!toE164) {
-    return { ok: false, error: "Teléfono de destino inválido para YCloud" };
-  }
-
+async function postYCloudWhatsappMessage(
+  apiKey: string,
+  body: Record<string, unknown>
+): Promise<SendWhatsAppTextResult> {
   const res = await fetch(YCLOUD_WHATSAPP_MESSAGES_URL, {
     method: "POST",
     headers: {
-      "X-API-Key": params.apiKey,
+      "X-API-Key": apiKey,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      from: params.fromE164,
-      to: toE164,
-      type: "text",
-      text: { body: params.text },
-    }),
+    body: JSON.stringify(body),
   });
 
   const raw = (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -62,6 +44,80 @@ export async function sendMessageViaYCloud(params: {
   const waMessageId = wamid || id;
   console.info("[ycloud-send] accepted", { waMessageId, status: res.status });
   return { ok: true, waMessageId, raw };
+}
+
+/**
+ * Envía texto por WhatsApp usando la API REST de YCloud (no Meta Graph).
+ * Autenticación: header `X-API-Key` (esquema documentado en OpenAPI).
+ */
+export async function sendMessageViaYCloud(params: {
+  apiKey: string;
+  /** Número de negocio en E.164 (p. ej. +54911…), desde config.ycloud_sender_id */
+  fromE164: string;
+  /** Solo dígitos del cliente (mismo formato que usa Meta en el ERP) */
+  toDigits: string;
+  text: string;
+}): Promise<SendWhatsAppTextResult> {
+  const toE164 = digitsToE164(params.toDigits);
+  if (!toE164) {
+    return { ok: false, error: "Teléfono de destino inválido para YCloud" };
+  }
+
+  return postYCloudWhatsappMessage(params.apiKey, {
+    from: params.fromE164,
+    to: toE164,
+    type: "text",
+    text: { body: params.text },
+  });
+}
+
+export type YCloudOutboundMediaKind = "image" | "document" | "audio" | "video";
+
+/**
+ * Envía imagen / documento / audio / video con URL https pública (p. ej. Supabase Storage),
+ * mismo patrón que la WhatsApp Cloud API.
+ */
+export async function sendYCloudWhatsappMediaViaLink(params: {
+  apiKey: string;
+  fromE164: string;
+  toDigits: string;
+  kind: YCloudOutboundMediaKind;
+  mediaLink: string;
+  caption?: string;
+  filename?: string;
+}): Promise<SendWhatsAppTextResult> {
+  const toE164 = digitsToE164(params.toDigits);
+  if (!toE164) {
+    return { ok: false, error: "Teléfono de destino inválido para YCloud" };
+  }
+  const link = params.mediaLink.trim();
+  if (!/^https:\/\//i.test(link)) {
+    return { ok: false, error: "El archivo debe estar en una URL https pública" };
+  }
+
+  const kind = params.kind;
+  const cap = params.caption?.trim();
+
+  let mediaPayload: Record<string, unknown> = { link };
+  if (kind === "image") {
+    if (cap) mediaPayload = { link, caption: cap };
+  } else if (kind === "document") {
+    mediaPayload = {
+      link,
+      filename: (params.filename?.trim() || "archivo").slice(0, 240),
+    };
+    if (cap) mediaPayload.caption = cap;
+  } else if (kind === "video") {
+    if (cap) mediaPayload = { link, caption: cap };
+  }
+  /* audio: solo link (WhatsApp Cloud API) */
+
+  return postYCloudWhatsappMessage(params.apiKey, {
+    from: params.fromE164,
+    to: toE164,
+    type: kind,
+    [kind]: mediaPayload,
+  });
 }
 
 export function ycloudSenderToE164(senderId: string): string | null {

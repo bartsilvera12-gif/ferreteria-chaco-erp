@@ -257,6 +257,10 @@ export async function saveProspectoFromWebhook(datos: {
   origen_creacion?: Prospecto["origen_creacion"];
   origen_detalle?: string | null;
   servicio?: string;
+  /** Etiqueta del canal (ej. nombre del canal en Conversaciones); por defecto "WhatsApp". */
+  creado_por?: string | null;
+  /** Asesor ya asignado a la conversación, si existe. */
+  responsable?: string | null;
 }): Promise<Prospecto | null> {
   const sb = await createServiceRoleClientForEmpresa(datos.empresa_id);
 
@@ -277,10 +281,10 @@ export async function saveProspectoFromWebhook(datos: {
     etapa: datos.etapa?.trim() || "LEAD",
     proxima_accion: null,
     fecha_proxima_accion: null,
-    creado_por: "WhatsApp",
+    creado_por: (datos.creado_por?.trim() || "WhatsApp") as string,
     origen_creacion: (datos.origen_creacion ?? "whatsapp") as string,
     origen_detalle: datos.origen_detalle ?? null,
-    responsable: null,
+    responsable: datos.responsable?.trim() ? datos.responsable.trim() : null,
     observaciones: null,
   };
 

@@ -28,6 +28,10 @@ import {
 } from "@/lib/chat/webhooks/ycloud-inbound-payload";
 import { persistYCloudInboundMessagePg } from "@/lib/chat/webhooks/ycloud-inbound-persist-pg";
 import { resolveYCloudChannelForWebhook } from "@/lib/chat/webhooks/ycloud-resolve-channel";
+import { enrichYCloudStoredRawPayloadWithResolvableMediaUrl } from "@/lib/chat/ycloud-inbound-media-enrich";
+import { ensureWhatsappInboundCrmProspecto } from "@/lib/crm/whatsapp-inbound-lead";
+import type { SupabaseAdmin } from "@/lib/chat/types";
+import { createServiceRoleClientForEmpresa } from "@/lib/supabase/empresa-data-schema";
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +116,7 @@ export async function POST(request: NextRequest) {
 
   let conversationId: string;
   let messageId: string;
+  let inboundContactId: string | undefined;
 
   const fromMe = mode === "smb_echo";
   const senderType = mode === "smb_echo" ? "human" : "contact";
@@ -144,6 +149,7 @@ export async function POST(request: NextRequest) {
     }
     conversationId = save.conversation_id;
     messageId = save.message_id;
+    inboundContactId = save.contact_id;
 
     if (mode === "inbound") {
       const ar1 = await assignConversationPg(pool!, resolved.data_schema, conversationId);
@@ -193,6 +199,7 @@ export async function POST(request: NextRequest) {
     }
     conversationId = save.conversation_id;
     messageId = save.message_id;
+    inboundContactId = save.contact_id;
 
     if (mode === "inbound") {
       const ar = await assignConversation(supabase, conversationId);
@@ -208,6 +215,70 @@ export async function POST(request: NextRequest) {
       }
     } else {
       console.info(LOG, LOG_IN, "echo_smb_sin_autoasignación", { conversation_id: conversationId });
+    }
+  }
+
+  if (mode === "inbound" && inboundContactId) {
+    try {
+      const sb = (await createServiceRoleClientForEmpresa(resolved.empresa_id)) as SupabaseAdmin;
+      const crm = await ensureWhatsappInboundCrmProspecto({
+        chatSupabase: sb,
+        etapaSupabase: sb,
+        empresaId: resolved.empresa_id,
+        contactId: inboundContactId,
+        conversationId,
+        channelId: resolved.channel_id,
+        firstMessagePreview: content,
+      });
+      if (!crm.ok) {
+        console.warn(LOG, LOG_IN, "crm_lead", crm.error);
+      }
+
+      const mediaKinds = new Set(["image", "audio", "video", "document", "sticker"]);
+      if (mediaKinds.has(message_type)) {
+        const { data: chMeta, error: chErr } = await sb
+          .from("chat_channels")
+          .select("config")
+          .eq("id", resolved.channel_id)
+          .eq("empresa_id", resolved.empresa_id)
+          .maybeSingle();
+        if (chErr) {
+          console.warn(LOG, LOG_IN, "canal_config", chErr.message);
+        } else {
+          const cfgRaw = (chMeta as { config?: unknown } | null)?.config;
+          const cfg =
+            cfgRaw && typeof cfgRaw === "object" && !Array.isArray(cfgRaw)
+              ? (cfgRaw as Record<string, unknown>)
+              : {};
+          const apiKey = typeof cfg.ycloud_api_key === "string" ? cfg.ycloud_api_key.trim() : "";
+          if (apiKey) {
+            const { data: msgRow, error: mErr } = await sb
+              .from("chat_messages")
+              .select("raw_payload")
+              .eq("id", messageId)
+              .eq("empresa_id", resolved.empresa_id)
+              .maybeSingle();
+            if (!mErr && msgRow && typeof msgRow.raw_payload === "object" && msgRow.raw_payload !== null) {
+              const raw = msgRow.raw_payload as Record<string, unknown>;
+              const enriched = await enrichYCloudStoredRawPayloadWithResolvableMediaUrl({
+                apiKey,
+                waMessageId: externalId,
+                storedRaw: raw,
+              });
+              if (JSON.stringify(enriched) !== JSON.stringify(raw)) {
+                const { error: upErr } = await sb
+                  .from("chat_messages")
+                  .update({ raw_payload: enriched })
+                  .eq("id", messageId)
+                  .eq("empresa_id", resolved.empresa_id);
+                if (upErr) console.warn(LOG, LOG_IN, "media_enrich", upErr.message);
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(LOG, LOG_IN, "post_inbound_extras", e);
     }
   }
 
