@@ -78,7 +78,7 @@ export function SettingsModuleCard({
       </Link>
     ) : (
       <button type="button" disabled={disabled} onClick={onSelect} className={`${footerClass} disabled:cursor-not-allowed disabled:opacity-50`}>
-        {disabled ? "No disponible" : actionLabel}
+        {actionLabel}
       </button>
     );
 
