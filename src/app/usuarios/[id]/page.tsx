@@ -10,6 +10,7 @@ import {
   nivelFromRolDb,
   rolFromNivelForm,
   usuarioFormInputGray,
+  usuarioFormLabel,
   UsuarioFormFields,
   type UsuarioFormValues,
 } from "@/components/usuarios/UsuarioForm";
@@ -37,6 +38,18 @@ type Usuario = {
   puede_editar_modulos?: boolean;
   puede_editar_rol?: boolean;
   es_admin_empresa?: boolean;
+  omnicanal?: {
+    agent_enabled: boolean;
+    work_schedule_id: string | null;
+    schedules: {
+      id: string;
+      nombre: string;
+      time_start: string;
+      time_end: string;
+      days_of_week: number[];
+      is_active: boolean;
+    }[];
+  } | null;
 };
 
 function labelTipoContrato(t: string | null | undefined): string {
@@ -130,6 +143,9 @@ function UsuarioDetailContent() {
   const [pwdError, setPwdError] = useState<string | null>(null);
   const [pwdSuccess, setPwdSuccess] = useState<string | null>(null);
 
+  const [omniAgent, setOmniAgent] = useState(false);
+  const [omniScheduleId, setOmniScheduleId] = useState<string>("");
+
   useEffect(() => {
     if (!id) return;
     setLoadError(null);
@@ -143,6 +159,13 @@ function UsuarioDetailContent() {
         const u = data as Usuario;
         setUsuario(u);
         setForm(usuarioToForm(u));
+        if (u.omnicanal) {
+          setOmniAgent(Boolean(u.omnicanal.agent_enabled));
+          setOmniScheduleId(u.omnicanal.work_schedule_id ?? "");
+        } else {
+          setOmniAgent(false);
+          setOmniScheduleId("");
+        }
       })
       .catch((err) => {
         setLoadError(err instanceof Error ? err.message : "No se pudo cargar el usuario");
@@ -213,6 +236,12 @@ function UsuarioDetailContent() {
         body.modulo_ids = form.modulo_ids;
       }
 
+      if (usuario.puede_editar_modulos && usuario.omnicanal) {
+        body.omnicanal_agent_enabled = omniAgent;
+        body.omnicanal_work_schedule_id =
+          omniAgent && omniScheduleId.trim() ? omniScheduleId.trim() : null;
+      }
+
       const res = await fetchWithSupabaseSession(`/api/empresas/usuarios/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -231,6 +260,16 @@ function UsuarioDetailContent() {
           : Number(String(form.salario_base).replace(/\./g, "").replace(/\s/g, ""));
       const salarioOk = salarioParsed != null && Number.isFinite(salarioParsed) ? salarioParsed : null;
 
+      const nextOmni =
+        usuario.omnicanal && usuario.puede_editar_modulos
+          ? {
+              ...usuario.omnicanal,
+              agent_enabled: omniAgent,
+              work_schedule_id:
+                omniAgent && omniScheduleId.trim() ? omniScheduleId.trim() : null,
+            }
+          : usuario.omnicanal;
+
       setUsuario({
         ...usuario,
         nombre: form.nombre.trim(),
@@ -247,6 +286,7 @@ function UsuarioDetailContent() {
         rol: rolActualizado ?? usuario.rol,
         modulo_ids:
           usuario.puede_editar_modulos && !usuario.es_admin_empresa ? [...form.modulo_ids] : usuario.modulo_ids,
+        omnicanal: nextOmni ?? usuario.omnicanal,
       });
       setEditing(false);
       setSuccessMessage("Cambios guardados correctamente en la base de datos.");
@@ -442,6 +482,31 @@ function UsuarioDetailContent() {
             </div>
           </SectionCard>
 
+          {usuario.omnicanal && (
+            <SectionCard title="Omnicanal" icon="💬">
+              <p className="text-xs text-gray-500 mb-3">
+                Colas y asignación: requiere habilitación explícita (independiente del rol ERP).
+              </p>
+              <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                <div>
+                  <p className="text-xs text-gray-400">Habilitado como agente</p>
+                  <p className="font-medium text-gray-800">{usuario.omnicanal.agent_enabled ? "Sí" : "No"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400">Horario de trabajo</p>
+                  <p className="font-medium text-gray-800">
+                    {(() => {
+                      const sid = usuario.omnicanal.work_schedule_id;
+                      if (!sid) return "—";
+                      const s = usuario.omnicanal.schedules.find((x) => x.id === sid);
+                      return s?.nombre ?? "—";
+                    })()}
+                  </p>
+                </div>
+              </div>
+            </SectionCard>
+          )}
+
           {(usuario.modulos_empresa?.length ?? 0) > 0 && (
             <SectionCard title="Módulos del usuario" icon="📦">
               {usuario.es_admin_empresa ? (
@@ -595,6 +660,56 @@ function UsuarioDetailContent() {
                     </div>
                   </SectionCard>
                 ) : null}
+
+                {usuario.puede_editar_modulos && usuario.omnicanal ? (
+                  <SectionCard title="Omnicanal" icon="💬">
+                    <p className="text-xs text-gray-500 mb-4">
+                      Solo usuarios habilitados entran en autoasignación y circuito operativo de agentes (además de colas,
+                      estado disponible y sesión en línea).
+                    </p>
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={omniAgent}
+                        onChange={(e) => {
+                          setOmniAgent(e.target.checked);
+                          if (!e.target.checked) setOmniScheduleId("");
+                        }}
+                        className="rounded border-gray-300 text-gray-900 focus:ring-gray-900/20"
+                      />
+                      <span className="text-sm font-medium text-gray-800">Habilitar como agente omnicanal</span>
+                    </label>
+                    {omniAgent ? (
+                      <div className="mt-4 max-w-md">
+                        <label className={usuarioFormLabel}>Horario de trabajo</label>
+                        <select
+                          value={omniScheduleId}
+                          onChange={(e) => setOmniScheduleId(e.target.value)}
+                          className={`${usuarioFormInputGray} mt-1 w-full`}
+                        >
+                          <option value="">— Elegir horario —</option>
+                          {usuario.omnicanal.schedules
+                            .filter((s) => s.is_active !== false)
+                            .map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.nombre} ({String(s.time_start ?? "").slice(0, 5)} –{" "}
+                                {String(s.time_end ?? "").slice(0, 5)})
+                              </option>
+                            ))}
+                        </select>
+                        {usuario.omnicanal.schedules.length === 0 ? (
+                          <p className="mt-2 text-xs text-amber-700">
+                            No hay plantillas de horario. Creá una en{" "}
+                            <Link href="/configuracion/omnicanal-horarios" className="font-semibold underline">
+                              Configuración → Horarios omnicanal
+                            </Link>
+                            .
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </SectionCard>
+                ) : null}
               </>
             }
           />
@@ -612,6 +727,10 @@ function UsuarioDetailContent() {
               onClick={() => {
                 setEditing(false);
                 if (usuario) setForm({ ...usuarioToForm(usuario), modulo_ids: usuario.modulo_ids ?? [] });
+                if (usuario?.omnicanal) {
+                  setOmniAgent(Boolean(usuario.omnicanal.agent_enabled));
+                  setOmniScheduleId(usuario.omnicanal.work_schedule_id ?? "");
+                }
                 setFormError(null);
               }}
               className="text-sm text-gray-500 hover:text-gray-800 transition-colors px-4 py-2.5"

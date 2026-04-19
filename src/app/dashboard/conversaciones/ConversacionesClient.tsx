@@ -1198,6 +1198,21 @@ export function ConversacionesClient({
     void handleSelect(requestedConversationId);
   }, [requestedConversationId, conversations, selectedId, handleSelect]);
 
+  const transferFromUrl = searchParams?.get("transferir") === "1";
+  const transferUrlConsumed = useRef(false);
+  useEffect(() => {
+    transferUrlConsumed.current = false;
+  }, [transferFromUrl, requestedConversationId]);
+
+  useEffect(() => {
+    if (!transferFromUrl || !requestedConversationId) return;
+    if (selectedId !== requestedConversationId) return;
+    if (transferUrlConsumed.current) return;
+    transferUrlConsumed.current = true;
+    setTransferModalOpen(true);
+    patchInboxQuery({ transferir: null });
+  }, [transferFromUrl, requestedConversationId, selectedId, patchInboxQuery]);
+
   useEffect(() => {
     if (selectedId && !conversations.some((c) => c.id === selectedId)) {
       setSelectedId(null);

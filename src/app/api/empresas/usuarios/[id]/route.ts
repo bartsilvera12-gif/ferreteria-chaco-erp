@@ -6,6 +6,7 @@ import {
   esRolAdminEmpresa,
   filterModuloIdsForEmpresa,
 } from "@/lib/modulos/resolve-effective-modules";
+import { createServiceRoleClientForEmpresa } from "@/lib/supabase/empresa-data-schema";
 
 const ERP_ROLES = ["usuario", "supervisor", "administrador"] as const;
 
@@ -141,6 +142,45 @@ export async function GET(
       (currentUser?.rol ?? "").trim() === "super_admin" ||
       ["admin", "administrador"].includes((currentUser?.rol ?? "").trim());
 
+    type OmnicanalPack = {
+      agent_enabled: boolean;
+      work_schedule_id: string | null;
+      schedules: {
+        id: string;
+        nombre: string;
+        time_start: string;
+        time_end: string;
+        days_of_week: number[];
+        is_active: boolean;
+      }[];
+    };
+
+    let omnicanal: OmnicanalPack | null = null;
+    if (usuario.empresa_id) {
+      try {
+        const tenant = await createServiceRoleClientForEmpresa(usuario.empresa_id as string);
+        const { data: prefs } = await tenant
+          .from("chat_usuario_omnicanal")
+          .select("omnicanal_agent_enabled, work_schedule_id")
+          .eq("empresa_id", usuario.empresa_id)
+          .eq("usuario_id", id)
+          .maybeSingle();
+        const { data: schedules } = await tenant
+          .from("chat_omnicanal_work_schedules")
+          .select("id, nombre, time_start, time_end, days_of_week, is_active")
+          .eq("empresa_id", usuario.empresa_id)
+          .order("nombre", { ascending: true });
+        const pr = prefs as { omnicanal_agent_enabled?: boolean; work_schedule_id?: string | null } | null;
+        omnicanal = {
+          agent_enabled: Boolean(pr?.omnicanal_agent_enabled),
+          work_schedule_id: (pr?.work_schedule_id as string | null | undefined) ?? null,
+          schedules: (schedules ?? []) as OmnicanalPack["schedules"],
+        };
+      } catch {
+        omnicanal = { agent_enabled: false, work_schedule_id: null, schedules: [] };
+      }
+    }
+
     const { empresa_id: _e, ...rest } = usuario;
     return NextResponse.json({
       ...rest,
@@ -149,6 +189,7 @@ export async function GET(
       puede_editar_modulos,
       puede_editar_rol,
       es_admin_empresa,
+      omnicanal,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error";
@@ -348,6 +389,60 @@ export async function PATCH(
         const { error: errIns } = await supabase.from("usuario_modulos").insert(rows);
         if (errIns) {
           return NextResponse.json({ error: errIns.message }, { status: 400 });
+        }
+      }
+    }
+
+    const omnicanalProvided =
+      Object.prototype.hasOwnProperty.call(body, "omnicanal_agent_enabled") ||
+      Object.prototype.hasOwnProperty.call(body, "omnicanal_work_schedule_id");
+
+    if (omnicanalProvided && usuario.empresa_id) {
+      if (!puedeModulos) {
+        return NextResponse.json({ error: "Sin permiso para editar preferencias omnicanal" }, { status: 403 });
+      }
+      const tenant = await createServiceRoleClientForEmpresa(usuario.empresa_id as string);
+      let scheduleId: string | null =
+        body.omnicanal_work_schedule_id === null || body.omnicanal_work_schedule_id === ""
+          ? null
+          : String(body.omnicanal_work_schedule_id).trim();
+
+      const enabledRaw = body.omnicanal_agent_enabled;
+      const enabled =
+        typeof enabledRaw === "boolean"
+          ? enabledRaw
+          : enabledRaw === "true" || enabledRaw === true || enabledRaw === 1 || enabledRaw === "1";
+
+      if (!enabled) {
+        scheduleId = null;
+      } else if (scheduleId) {
+        const { data: sch } = await tenant
+          .from("chat_omnicanal_work_schedules")
+          .select("id")
+          .eq("empresa_id", usuario.empresa_id)
+          .eq("id", scheduleId)
+          .maybeSingle();
+        if (!sch) {
+          return NextResponse.json({ error: "Horario omnicanal inválido para esta empresa." }, { status: 400 });
+        }
+      }
+
+      const ts = new Date().toISOString();
+      const { error: oe } = await tenant.from("chat_usuario_omnicanal").upsert(
+        {
+          empresa_id: usuario.empresa_id,
+          usuario_id: id,
+          omnicanal_agent_enabled: enabled,
+          work_schedule_id: scheduleId,
+          updated_at: ts,
+          created_at: ts,
+        },
+        { onConflict: "empresa_id,usuario_id" }
+      );
+      if (oe) {
+        const m = (oe.message ?? "").toLowerCase();
+        if (!m.includes("does not exist") && !m.includes("schema cache") && !m.includes("could not find")) {
+          return NextResponse.json({ error: oe.message }, { status: 400 });
         }
       }
     }

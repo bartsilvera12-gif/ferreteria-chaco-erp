@@ -130,7 +130,7 @@ export async function assignConversationPg(
   }
 
   const agentsRes = await pool.query(
-    `SELECT id, max_conversations, priority_in_queue, operational_status, last_heartbeat_at
+    `SELECT id, usuario_id, max_conversations, priority_in_queue, operational_status, last_heartbeat_at
      FROM ${agT}
      WHERE empresa_id = $1::uuid AND queue_id = $2::uuid
        AND is_active = true AND receives_new_chats = true
@@ -139,17 +139,42 @@ export async function assignConversationPg(
   );
   const agentRows = agentsRes.rows as {
     id: string;
+    usuario_id: string;
     max_conversations: number;
     priority_in_queue: number;
     operational_status: string | null;
     last_heartbeat_at: string | Date | null;
   }[];
 
+  const uoT = quoteSchemaTable(sch, "chat_usuario_omnicanal");
+  const uidList = [...new Set(agentRows.map((a) => String(a.usuario_id ?? "").trim()).filter(Boolean))];
+  let omnicanalEnabled = new Set<string>();
+  if (uidList.length > 0) {
+    try {
+      const prefRes = await pool.query(
+        `SELECT usuario_id::text AS uid FROM ${uoT}
+         WHERE empresa_id = $1::uuid AND omnicanal_agent_enabled = true
+           AND usuario_id = ANY($2::uuid[])`,
+        [empresaId, uidList]
+      );
+      omnicanalEnabled = new Set((prefRes.rows ?? []).map((r: { uid: string }) => r.uid));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("does not exist") || msg.includes("undefined_table")) {
+        omnicanalEnabled = new Set(uidList);
+      } else {
+        console.warn("[assignConversationPg] chat_usuario_omnicanal:", msg);
+        omnicanalEnabled = new Set(uidList);
+      }
+    }
+  }
+
   const assignDbg = process.env.OMNICANAL_ASSIGN_DEBUG === "1";
   const idShort = (id: string) => id.slice(0, 8);
 
   let discardedPause = 0;
   let discardedOffline = 0;
+  let discardedOmnicanal = 0;
   const agents: { id: string; max_conversations: number; priority_in_queue: number }[] = [];
   for (const ar of agentRows) {
     const status = String(ar.operational_status ?? "").trim();
@@ -161,6 +186,12 @@ export async function assignConversationPg(
     if (!isAgentSessionOnline(ar.last_heartbeat_at)) {
       discardedOffline++;
       if (assignDbg) console.info(`[assignConversationPg] discard offline agent=${idShort(ar.id)}`);
+      continue;
+    }
+    const uCur = String(ar.usuario_id ?? "").trim();
+    if (!uCur || !omnicanalEnabled.has(uCur)) {
+      discardedOmnicanal++;
+      if (assignDbg) console.info(`[assignConversationPg] discard omnicanal_disabled agent=${idShort(ar.id)}`);
       continue;
     }
     agents.push({
@@ -188,6 +219,7 @@ export async function assignConversationPg(
         total_in_queue: agentRows.length,
         discarded_pause: discardedPause,
         discarded_offline: discardedOffline,
+        discarded_omnicanal_disabled: discardedOmnicanal,
       });
     }
     return { ok: true, assigned: false, reason: "no_agent" };

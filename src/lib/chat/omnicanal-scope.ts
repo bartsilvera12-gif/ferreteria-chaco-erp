@@ -61,8 +61,8 @@ async function usuarioTieneFilaChatAgents(
  * Alcance omnicanal unificado para un usuario en una empresa.
  *
  * - **admin**: `queueIds` y `agentUsuarioIds` vacíos → sin filtro por estas listas (acceso total a nivel módulo cuando se aplique).
- * - **supervisor**: solo conversaciones asignadas a agentes en `chat_supervisor_agents` (equipo). Las colas en
- *   `chat_queue_supervisors` son opcionales para otros usos; **no** amplían el inbox/monitoreo por cola completa.
+ * - **supervisor**: conversaciones asignadas a agentes del equipo **más** conversaciones sin asignar cuya cola
+ *   esté en el alcance (colas de los agentes a cargo y, si aplica, colas de `chat_queue_supervisors`).
  * - **agente**: `agentUsuarioIds = [usuarioId]`, `queueIds` vacío.
  * - **sin rol** pero con fila en `chat_agents`: `role` null, `agentUsuarioIds = [usuarioId]` (vista mínima tipo operador).
  * - **sin rol** y sin `chat_agents`: todo vacío y `role` null.
@@ -239,18 +239,41 @@ export async function appendOmnicanalConversationScopeToQuery(
 
   if (isOmnicanalAdminScope(scope)) return wrap(q);
 
-  /** Supervisor: solo equipo humano (`chat_supervisor_agents` → chat_agents), sin ver colas enteras ni chats sin asignar por cola. */
+  /**
+   * Supervisor: conversaciones asignadas a agentes del equipo O sin asignar cuya cola esté en el
+   * alcance (colas de los agentes a cargo ∪ colas en `chat_queue_supervisors` si aplica).
+   */
   if (scope.role === "supervisor") {
     const agentFkIds = await resolveChatAgentIdsForUsuarios(supabase, empresaId, scope.agentUsuarioIds);
-    if (agentFkIds.length === 0) {
+    const teamQueueIds = await resolveQueueIdsForUsuarios(supabase, empresaId, scope.agentUsuarioIds);
+    const queueIdsUnion = [...new Set([...teamQueueIds, ...(scope.queueIds ?? [])])];
+
+    if (agentFkIds.length === 0 && queueIdsUnion.length === 0) {
       if ((scope.agentUsuarioIds?.length ?? 0) > 0) {
         console.warn(
-          "[appendOmnicanalConversationScopeToQuery] supervisor con agentes declarados pero sin filas chat_agents activas; alcance vacío."
+          "[appendOmnicanalConversationScopeToQuery] supervisor sin agentes activos ni colas resueltas; alcance vacío."
         );
       }
       return wrap(q.eq("id", NO_CONVERSATION_MATCH));
     }
-    return wrap(q.in("assigned_agent_id", agentFkIds));
+
+    const orParts: string[] = [];
+    if (agentFkIds.length > 0) {
+      const aIn = agentFkIds.map((id) => `"${normalizeId(id)}"`).join(",");
+      orParts.push(`assigned_agent_id.in.(${aIn})`);
+    }
+    if (queueIdsUnion.length > 0) {
+      const qIn = queueIdsUnion.map((id) => `"${normalizeId(id)}"`).join(",");
+      orParts.push(`and(assigned_agent_id.is.null,queue_id.in.(${qIn}))`);
+    }
+
+    if (orParts.length === 0) {
+      return wrap(q.eq("id", NO_CONVERSATION_MATCH));
+    }
+    if (orParts.length === 1) {
+      return wrap(q.or(orParts[0]));
+    }
+    return wrap(q.or(orParts.join(",")));
   }
 
   const agentFkIds = await resolveChatAgentIdsForUsuarios(supabase, empresaId, scope.agentUsuarioIds);

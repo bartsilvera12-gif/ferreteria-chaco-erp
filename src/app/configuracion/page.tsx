@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  CalendarClock,
   FileText,
   GitBranch,
   Inbox,
@@ -168,6 +169,18 @@ export default function ConfiguracionPage() {
               icon={UsersRound}
               badge={omnicanalModuleBadge}
               href={hasConversacionesModulo ? "/configuracion/omnicanal-equipos" : undefined}
+              disabled={!hasConversacionesModulo}
+              actionLabel={hasConversacionesModulo ? "Editar" : "Sin acceso"}
+            />
+          </li>
+          <li>
+            <SettingsModuleCard
+              title="Horarios de trabajo omnicanal"
+              subtitle="OMNICANAL · TURNOS"
+              description="Franjas y días reutilizables para agentes y futuras reglas de asignación y métricas."
+              icon={CalendarClock}
+              badge={omnicanalModuleBadge}
+              href={hasConversacionesModulo ? "/configuracion/omnicanal-horarios" : undefined}
               disabled={!hasConversacionesModulo}
               actionLabel={hasConversacionesModulo ? "Editar" : "Sin acceso"}
             />

@@ -13,9 +13,19 @@ import {
 } from "@/lib/chat/chat-ops-actions";
 import { formatWaitHuman } from "@/lib/chat/format-wait-human";
 import { assignmentWaitBadge, assignmentWaitBadgeClass } from "@/lib/chat/inbox-assignment-labels";
-import { Flame } from "lucide-react";
+import { ArrowLeftRight, Eye, Flame } from "lucide-react";
 
 /** `formatWaitHuman` depende de `Date.now()`; sin re-render el monitoreo mostraba tiempos “congelados”. */
+function buildMonitoreoInboxHref(row: MonitoringUnassignedRow, opts: { transferir?: boolean }) {
+  const p = new URLSearchParams();
+  p.set("asignacion", "sin_asignar");
+  p.set("conversationId", row.id);
+  const qid = row.queue_id?.trim();
+  if (qid) p.set("cola", qid);
+  if (opts.transferir) p.set("transferir", "1");
+  return `/dashboard/conversaciones?${p.toString()}`;
+}
+
 function TickingSinceLabel({ iso }: { iso: string | null | undefined }) {
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -149,7 +159,7 @@ export default function MonitoreoPage() {
                   <th className="pb-2 pr-3">Canal</th>
                   <th className="pb-2 pr-3">Cola</th>
                   <th className="pb-2 pr-3">Motivo</th>
-                  <th className="pb-2">Estado</th>
+                  <th className="pb-2 pr-3 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -177,10 +187,25 @@ export default function MonitoreoPage() {
                         {w.label}
                       </span>
                     </td>
-                    <td className="py-2">
-                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
-                        {r.status}
-                      </span>
+                    <td className="py-2 text-right whitespace-nowrap">
+                      <div className="inline-flex items-center gap-1">
+                        <Link
+                          href={buildMonitoreoInboxHref(r, {})}
+                          title="Abrir en inbox"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:border-[#0EA5E9] hover:text-[#0284C7]"
+                        >
+                          <Eye className="h-4 w-4" aria-hidden />
+                          <span className="sr-only">Ver en inbox</span>
+                        </Link>
+                        <Link
+                          href={buildMonitoreoInboxHref(r, { transferir: true })}
+                          title="Transferir…"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:border-[#0EA5E9] hover:text-[#0284C7]"
+                        >
+                          <ArrowLeftRight className="h-4 w-4" aria-hidden />
+                          <span className="sr-only">Transferir conversación</span>
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                   );

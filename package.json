@@ -39,6 +39,7 @@
     "db:apply-chat-channel-quick-replies": "tsx scripts/apply-chat-channel-quick-replies-migration.ts",
     "db:verify-chat-quick-replies-smoke": "tsx scripts/verify-chat-quick-replies-smoke.ts",
     "db:apply-chat-closure-taxonomy": "tsx scripts/apply-chat-queue-closure-taxonomy-migration.ts",
+    "db:apply-omnicanal-work-schedules": "tsx scripts/apply-omnicanal-work-schedules-migration.ts",
     "db:apply-stale-flow-session-pointers": "tsx scripts/apply-stale-flow-session-pointers-migration.ts",
     "verify:admin-catalog-nc": "tsx scripts/verify-admin-catalog-notas-credito.ts"
   },
