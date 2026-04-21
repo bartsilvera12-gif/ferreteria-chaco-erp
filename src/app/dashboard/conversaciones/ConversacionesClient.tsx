@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import type { ComprobanteValidacionListRow } from "@/lib/chat/comprobante-validation-types";
 import {
   approveComprobanteValidacion,
   fetchChatChannels,
@@ -14,7 +15,6 @@ import {
   releaseConversationToBot,
   type ChatInboxAssignmentFilter,
   type ChatInboxFilters,
-  type ComprobanteValidacionListRow,
   type ConversacionesVista,
   type InboxConversation,
 } from "@/lib/chat/actions";

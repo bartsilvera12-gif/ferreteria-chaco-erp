@@ -1476,7 +1476,7 @@ export async function saveChatChannel(input: ChatChannelFormInput): Promise<stri
   return newId;
 }
 
-export type { ComprobanteValidacionListRow };
+export type { ComprobanteValidacionListRow } from "@/lib/chat/comprobante-validation-types";
 
 export async function fetchComprobanteValidacionesForConversation(
   conversationId: string
