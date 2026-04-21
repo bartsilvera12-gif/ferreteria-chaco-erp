@@ -791,12 +791,30 @@ export default function FlowEditorPage() {
   }
 
   async function deleteOption(node: FlowNode, optionId: string) {
+    setError(null);
+    setSuccess(null);
+    console.info("[flow-editor]", "delete_option_request", {
+      flowCode,
+      node_code: node.node_code,
+      optionId,
+    });
     const res = await fetchWithSupabaseSession(
-      `/api/chat/flows/${encodeURIComponent(flowCode)}/nodes/${encodeURIComponent(node.node_code)}/options/${optionId}`,
+      `/api/chat/flows/${encodeURIComponent(flowCode)}/nodes/${encodeURIComponent(node.node_code)}/options/${encodeURIComponent(optionId)}`,
       { method: "DELETE", credentials: "same-origin" }
     );
-    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-    if (!res.ok || !json.ok) throw new Error(json.error ?? "No se pudo eliminar opción");
+    const raw = await res.text();
+    let json = {} as { ok?: boolean; error?: string };
+    try {
+      json = raw ? (JSON.parse(raw) as typeof json) : {};
+    } catch {
+      throw new Error(raw.trim().slice(0, 220) || `HTTP ${res.status}`);
+    }
+    if (!res.ok || !json.ok) {
+      const msg = json.error ?? `No se pudo eliminar la opción (HTTP ${res.status}).`;
+      console.warn("[flow-editor]", "delete_option_failed", { status: res.status, msg });
+      throw new Error(msg);
+    }
+    console.info("[flow-editor]", "delete_option_ok", { optionId });
     setSuccess("Opción eliminada.");
   }
 
@@ -1735,9 +1753,26 @@ export default function FlowEditorPage() {
                           onClick={async () => {
                             try {
                               await deleteOption(node, opt.id);
+                              setOptionSimpleDrafts((prev) => {
+                                const next = { ...prev };
+                                delete next[opt.id];
+                                return next;
+                              });
+                              setOptionPayloadDrafts((prev) => {
+                                const next = { ...prev };
+                                delete next[opt.id];
+                                return next;
+                              });
+                              setOptionEditorMode((prev) => {
+                                const next = { ...prev };
+                                delete next[opt.id];
+                                return next;
+                              });
                               await reload();
                             } catch (e) {
-                              setError(e instanceof Error ? e.message : "Error al eliminar opción");
+                              const msg = e instanceof Error ? e.message : "Error al eliminar opción";
+                              setError(msg);
+                              console.warn("[flow-editor]", "delete_option_ui_error", msg);
                             }
                           }}
                           className="text-red-600 hover:underline text-sm"

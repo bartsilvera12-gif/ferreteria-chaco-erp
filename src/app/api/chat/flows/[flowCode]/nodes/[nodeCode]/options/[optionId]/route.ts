@@ -89,9 +89,69 @@ export async function DELETE(
       return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 });
     }
     const params = await context.params;
+    const optionId = params.optionId?.trim();
+    if (!optionId) {
+      return NextResponse.json({ ok: false, error: "optionId requerido" }, { status: 400 });
+    }
     const supabase = await getChatServiceClientForEmpresa(auth.empresa_id);
-    const { error } = await supabase.from("chat_flow_options").delete().eq("id", params.optionId);
-    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+
+    const { data: optRow, error: optErr } = await supabase
+      .from("chat_flow_options")
+      .select("id, node_id")
+      .eq("id", optionId)
+      .maybeSingle();
+    if (optErr) {
+      console.warn("[flow-api]", "delete_chat_flow_option_load_failed", optErr.message);
+      return NextResponse.json({ ok: false, error: optErr.message }, { status: 400 });
+    }
+    if (!optRow) {
+      return NextResponse.json({ ok: false, error: "Opción no encontrada" }, { status: 404 });
+    }
+
+    const { data: nodeRow, error: nodeErr } = await supabase
+      .from("chat_flow_nodes")
+      .select("id, empresa_id, node_type")
+      .eq("id", optRow.node_id as string)
+      .maybeSingle();
+    if (nodeErr) {
+      return NextResponse.json({ ok: false, error: nodeErr.message }, { status: 400 });
+    }
+    if (!nodeRow || nodeRow.empresa_id !== auth.empresa_id) {
+      return NextResponse.json({ ok: false, error: "Opción no encontrada" }, { status: 404 });
+    }
+
+    const { data: siblingRows, error: sibErr } = await supabase
+      .from("chat_flow_options")
+      .select("id")
+      .eq("node_id", optRow.node_id as string);
+    if (sibErr) {
+      return NextResponse.json({ ok: false, error: sibErr.message }, { status: 400 });
+    }
+    const siblingCount = Array.isArray(siblingRows) ? siblingRows.length : 0;
+    if (
+      siblingCount <= 1 &&
+      (nodeRow.node_type === "buttons" || nodeRow.node_type === "list")
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Este paso debe tener al menos una opción. Agregá otra opción antes de eliminar esta.",
+        },
+        { status: 400 }
+      );
+    }
+
+    console.info("[flow-api]", "delete_chat_flow_option", {
+      empresa_id: auth.empresa_id,
+      option_id: optionId,
+      node_id: optRow.node_id,
+    });
+    const { error } = await supabase.from("chat_flow_options").delete().eq("id", optionId);
+    if (error) {
+      console.warn("[flow-api]", "delete_chat_flow_option_failed", error.message);
+      return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("[api/chat/flows/.../options/:optionId][DELETE]", e);

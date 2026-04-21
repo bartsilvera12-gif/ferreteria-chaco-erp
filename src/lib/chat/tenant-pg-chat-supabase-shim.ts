@@ -87,7 +87,7 @@ export function createTenantPgChatSupabaseShim(opts: TenantPgChatSupabaseShimOpt
 
   class Query implements PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }> {
     readonly table: string;
-    op: "select" | "insert" | "update" | "upsert" = "select";
+    op: "select" | "insert" | "update" | "upsert" | "delete" = "select";
     cols = "*";
     returningCols?: string;
     selectCountOpts?: { count: "exact"; head?: boolean };
@@ -133,6 +133,11 @@ export function createTenantPgChatSupabaseShim(opts: TenantPgChatSupabaseShimOpt
       this.op = "upsert";
       this.upsertRows = Array.isArray(rows) ? rows : [rows];
       this.upsertConflict = opt?.onConflict ?? "";
+      return this;
+    }
+
+    delete() {
+      this.op = "delete";
       return this;
     }
 
@@ -310,6 +315,26 @@ export function createTenantPgChatSupabaseShim(opts: TenantPgChatSupabaseShimOpt
           }
         }
 
+        if (this.op === "delete") {
+          const wh = this.buildWhere(params);
+          if (!wh) {
+            return {
+              data: null,
+              error: pgErr(
+                "[tenant-pg-shim] DELETE rechazado sin WHERE (evita borrar toda la tabla)"
+              ),
+            };
+          }
+          const q = `DELETE FROM ${tsql} ${wh}`.trim();
+          try {
+            await pool.query(q, params);
+            return { data: null, error: null };
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            return { data: null, error: pgErr(msg) };
+          }
+        }
+
         if (this.op === "update" && this.updatePatch) {
           const sets = Object.entries(this.updatePatch).map(([col, val]) => {
             if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(col)) throw new Error(`columna update inválida: ${col}`);
@@ -430,6 +455,7 @@ export function createTenantPgChatSupabaseShim(opts: TenantPgChatSupabaseShimOpt
             },
           });
         },
+        delete: () => q.delete(),
         eq: (c: string, v: unknown) => q.eq(c, v),
         neq: (c: string, v: unknown) => q.neq(c, v),
         is: (c: string, v: unknown) => q.is(c, v),
