@@ -82,18 +82,39 @@ export async function getEtapas(): Promise<EtapaCrm[]> {
   return (data as EtapaRow[]).map(rowToEtapa);
 }
 
-/** Lista todas las etapas (incluidas inactivas) para configuración. */
+/**
+ * Lista todas las etapas (incluidas inactivas) para configuración.
+ * Usa el mismo origen que el Kanban: GET /api/crm/etapas?config=1 (service role + PG en tenants no expuestos a PostgREST).
+ * El acceso directo con anon+RLS devolvía [] aunque el board mostrara columnas.
+ */
 export async function getEtapasParaConfig(): Promise<EtapaCrm[]> {
+  if (typeof window !== "undefined") {
+    try {
+      const res = await fetchWithSupabaseSession("/api/crm/etapas?config=1", { cache: "no-store" });
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        console.error("[crm] getEtapasParaConfig API:", res.status, t);
+        return fallBackEtapasConfigDesdeBrowser();
+      }
+      const json = (await res.json()) as { success?: boolean; data?: EtapaRow[] };
+      if (json?.success && Array.isArray(json.data)) {
+        return json.data.map(rowToEtapa);
+      }
+      return fallBackEtapasConfigDesdeBrowser();
+    } catch (e) {
+      console.error("[crm] getEtapasParaConfig:", e);
+      return fallBackEtapasConfigDesdeBrowser();
+    }
+  }
+
   const usuario = await getCurrentUser();
   if (!usuario?.empresa_id) return [];
-
   const supabase = await getBrowserSupabaseForEmpresaData();
   const { data, error } = await supabase
     .from("crm_etapas")
     .select("*")
     .eq("empresa_id", usuario.empresa_id)
     .order("orden", { ascending: true });
-
   if (error) {
     console.error("[crm] getEtapasParaConfig:", error.message);
     return [];
@@ -101,16 +122,58 @@ export async function getEtapasParaConfig(): Promise<EtapaCrm[]> {
   return (data as EtapaRow[]).map(rowToEtapa);
 }
 
-/** Crea etapa. Solo admin. */
+/** Último recurso si la API falla (misma lógica previa). */
+async function fallBackEtapasConfigDesdeBrowser(): Promise<EtapaCrm[]> {
+  const usuario = await getCurrentUser();
+  if (!usuario?.empresa_id) return [];
+  try {
+    const supabase = await getBrowserSupabaseForEmpresaData();
+    const { data, error } = await supabase
+      .from("crm_etapas")
+      .select("*")
+      .eq("empresa_id", usuario.empresa_id)
+      .order("orden", { ascending: true });
+    if (error) {
+      console.error("[crm] getEtapasParaConfig fallback:", error.message);
+      return [];
+    }
+    return (data as EtapaRow[]).map(rowToEtapa);
+  } catch (e) {
+    console.error("[crm] getEtapasParaConfig fallback:", e);
+    return [];
+  }
+}
+
+/** Crea etapa. Solo admin. En el navegador va por API (misma resolución tenant/RLS que el Kanban). */
 export async function createEtapa(datos: {
   codigo: string;
   nombre: string;
   color: string;
   orden: number;
 }): Promise<EtapaCrm | null> {
+  if (typeof window !== "undefined") {
+    const res = await fetchWithSupabaseSession("/api/crm/etapas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        codigo: datos.codigo.trim().toUpperCase().replace(/\s+/g, "_"),
+        nombre: datos.nombre.trim(),
+        color: datos.color || "gray",
+        orden: datos.orden,
+      }),
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      console.error("[crm] createEtapa API:", res.status, t);
+      return null;
+    }
+    const json = (await res.json()) as { success?: boolean; data?: EtapaRow };
+    if (json?.success && json.data) return rowToEtapa(json.data as EtapaRow);
+    return null;
+  }
+
   const usuario = await getCurrentUser();
   if (!usuario?.empresa_id) throw new Error("Usuario no autenticado o sin empresa");
-
   const insert = {
     empresa_id: usuario.empresa_id,
     codigo: datos.codigo.trim().toUpperCase().replace(/\s+/g, "_"),
@@ -119,14 +182,8 @@ export async function createEtapa(datos: {
     orden: datos.orden,
     activo: true,
   };
-
   const supabase = await getBrowserSupabaseForEmpresaData();
-  const { data, error } = await supabase
-    .from("crm_etapas")
-    .insert([insert])
-    .select()
-    .single();
-
+  const { data, error } = await supabase.from("crm_etapas").insert([insert]).select().single();
   if (error) {
     console.error("[crm] createEtapa:", error.message);
     return null;
@@ -134,7 +191,7 @@ export async function createEtapa(datos: {
   return rowToEtapa(data as EtapaRow);
 }
 
-/** Actualiza etapa. */
+/** Actualiza etapa. En el navegador: PUT /api/crm/etapas/:id */
 export async function updateEtapa(
   id: string,
   datos: Partial<Pick<EtapaCrm, "nombre" | "color" | "orden" | "activo">>
@@ -144,15 +201,26 @@ export async function updateEtapa(
   if (datos.color !== undefined) patch.color = datos.color;
   if (datos.orden !== undefined) patch.orden = datos.orden;
   if (datos.activo !== undefined) patch.activo = datos.activo;
+  if (Object.keys(patch).length === 0) return null;
+
+  if (typeof window !== "undefined") {
+    const res = await fetchWithSupabaseSession(`/api/crm/etapas/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      console.error("[crm] updateEtapa API:", res.status, t);
+      return null;
+    }
+    const json = (await res.json()) as { success?: boolean; data?: EtapaRow };
+    if (json?.success && json.data) return rowToEtapa(json.data as EtapaRow);
+    return null;
+  }
 
   const supabase = await getBrowserSupabaseForEmpresaData();
-  const { data, error } = await supabase
-    .from("crm_etapas")
-    .update(patch)
-    .eq("id", id)
-    .select()
-    .single();
-
+  const { data, error } = await supabase.from("crm_etapas").update(patch).eq("id", id).select().single();
   if (error) {
     console.error("[crm] updateEtapa:", error.message);
     return null;
@@ -160,8 +228,18 @@ export async function updateEtapa(
   return rowToEtapa(data as EtapaRow);
 }
 
-/** Elimina etapa (o la desactiva si tiene prospectos). */
+/** Elimina etapa. En el navegador: DELETE /api/crm/etapas/:id */
 export async function deleteEtapa(id: string): Promise<boolean> {
+  if (typeof window !== "undefined") {
+    const res = await fetchWithSupabaseSession(`/api/crm/etapas/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      console.error("[crm] deleteEtapa API:", res.status, t);
+      return false;
+    }
+    const json = (await res.json().catch(() => ({}))) as { success?: boolean };
+    return Boolean(json?.success);
+  }
   const supabase = await getBrowserSupabaseForEmpresaData();
   const { error } = await supabase.from("crm_etapas").delete().eq("id", id);
   if (error) {

@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ConfigFormCard, ConfigSectionTitle } from "@/components/config/global-config-primitives";
 import { GlobalConfigSubpageShell } from "@/components/config/GlobalConfigSubpageShell";
-import { getCurrentUser } from "@/lib/auth";
-import { esRolAdminEmpresaOGlobal } from "@/lib/auth/rol-empresa";
 import { apiFetch } from "@/lib/api/fetch-with-supabase-session";
 import {
   createEtapa,
@@ -16,9 +14,13 @@ import {
 } from "@/lib/crm/etapas";
 import type { ClienteTipoServicioRow } from "@/lib/clientes/tipo-servicio-catalogo";
 
+const FUENTE_ETAPAS_CONFIG = "GET /api/crm/etapas?config=1 (Postgres o PostgREST, mismo origen que el Kanban)";
+
 export default function ConfiguracionCrmPipelinePage() {
   const [rolCargado, setRolCargado] = useState(false);
   const [puedeConfig, setPuedeConfig] = useState(false);
+  const [rolDetectado, setRolDetectado] = useState<string | null>(null);
+  const [empresaIdCtx, setEmpresaIdCtx] = useState<string | null>(null);
   const [etapasCrm, setEtapasCrm] = useState<EtapaCrm[]>([]);
   const [nuevaEtapa, setNuevaEtapa] = useState({ nombre: "", codigo: "", color: "gray", orden: 0 });
   const [editandoEtapa, setEditandoEtapa] = useState<string | null>(null);
@@ -29,16 +31,31 @@ export default function ConfiguracionCrmPipelinePage() {
   const [mensajeTipos, setMensajeTipos] = useState<{ ok?: string; err?: string }>({});
 
   useEffect(() => {
-    getCurrentUser()
-      .then((u) => {
-        setPuedeConfig(esRolAdminEmpresaOGlobal(u?.rol));
-      })
-      .catch(() => {
-        setPuedeConfig(false);
-      })
-      .finally(() => {
-        setRolCargado(true);
-      });
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch("/api/auth/empresa-context", { cache: "no-store" });
+        const j = (await res.json()) as {
+          success?: boolean;
+          data?: { es_admin?: boolean; rol?: string | null; empresa_id?: string | null };
+        };
+        if (cancelled) return;
+        if (res.ok && j.success && j.data) {
+          setPuedeConfig(Boolean(j.data.es_admin));
+          setRolDetectado(j.data.rol != null && j.data.rol !== "" ? String(j.data.rol) : null);
+          setEmpresaIdCtx(j.data.empresa_id != null && j.data.empresa_id !== "" ? String(j.data.empresa_id) : null);
+        } else {
+          setPuedeConfig(false);
+        }
+      } catch {
+        if (!cancelled) setPuedeConfig(false);
+      } finally {
+        if (!cancelled) setRolCargado(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const loadEtapas = useCallback(() => {
@@ -82,6 +99,18 @@ export default function ConfiguracionCrmPipelinePage() {
   useEffect(() => {
     void loadTipos();
   }, [loadTipos]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "development" || !rolCargado) return;
+    console.debug("[config-crm] diagnóstico", {
+      rol_detectado: rolDetectado,
+      es_admin: puedeConfig,
+      empresa_id: empresaIdCtx,
+      fuente_etapas: FUENTE_ETAPAS_CONFIG,
+      n_etapas: etapasCrm.length,
+      n_tipos_servicio: tiposServ.length,
+    });
+  }, [rolCargado, rolDetectado, puedeConfig, empresaIdCtx, etapasCrm.length, tiposServ.length]);
 
   const reordenarTipo = (rowId: string, direction: "up" | "down") => {
     if (!puedeConfig) return;
@@ -131,9 +160,11 @@ export default function ConfiguracionCrmPipelinePage() {
           </p>
           {rolCargado && !puedeConfig && (
             <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">
-              <strong>Modo solo lectura</strong> para el pipeline. Para crear o editar etapas, tu usuario debe tener rol{" "}
-              <span className="font-mono">admin</span>, <span className="font-mono">administrador</span> o{" "}
-              <span className="font-mono">super_admin</span>.
+              <strong>Modo solo lectura</strong> para el pipeline. Para crear o editar etapas hace falta un rol de
+              administración en el catálogo (misma regla que Facturación).{" "}
+              <span className="block pt-1 text-amber-950/90">
+                Rol detectado en catálogo: <span className="font-mono">{rolDetectado ?? "—"}</span>
+              </span>
             </div>
           )}
           {!rolCargado && (
@@ -307,9 +338,11 @@ export default function ConfiguracionCrmPipelinePage() {
           </p>
           {rolCargado && !puedeConfig && (
             <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">
-              <strong>Modo solo lectura</strong> para los segmentos. Para agregar, editar o reordenar, hace falta rol{" "}
-              <span className="font-mono">admin</span>, <span className="font-mono">administrador</span> o{" "}
-              <span className="font-mono">super_admin</span>.
+              <strong>Modo solo lectura</strong> para los segmentos. Podés ver los nombres y el orden, pero no modificarlos
+              sin rol de administración.{" "}
+              <span className="block pt-1 text-amber-950/90">
+                Rol detectado en catálogo: <span className="font-mono">{rolDetectado ?? "—"}</span>
+              </span>
             </div>
           )}
           {puedeConfig && mensajeTipos.ok && (

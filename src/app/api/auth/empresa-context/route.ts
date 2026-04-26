@@ -26,6 +26,7 @@ export async function GET(request: Request) {
       successResponse({
         es_admin: isAdmin(auth),
         rol: ctx.usuarioRol ?? null,
+        empresa_id: ctx.empresa_id ?? null,
       })
     );
   } catch (err) {

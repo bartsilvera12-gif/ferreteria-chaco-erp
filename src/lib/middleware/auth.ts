@@ -1,4 +1,5 @@
 import type { User } from "@supabase/supabase-js";
+import { esRolAdminEmpresaOGlobal } from "@/lib/auth/rol-empresa";
 import { resolveApiAuthContext } from "@/lib/middleware/api-auth-context";
 
 export interface UsuarioConEmpresa {
@@ -14,8 +15,7 @@ export interface UsuarioConEmpresaYRol extends UsuarioConEmpresa {
 }
 
 function esRolAdmin(rol?: string): boolean {
-  const r = (rol ?? "").trim().toLowerCase();
-  return r === "admin" || r === "administrador" || r === "super_admin";
+  return esRolAdminEmpresaOGlobal(rol);
 }
 
 /**

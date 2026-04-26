@@ -632,3 +632,28 @@ export async function listCrmEtapasActivasPg(
   }
 }
 
+/** Todas las etapas (activas e inactivas) — Configuración CRM, misma fuente que el Kanban. */
+export async function listCrmEtapasTodasPg(
+  pool: Pool,
+  tenantDataSchema: string,
+  empresaId: string
+): Promise<Record<string, unknown>[] | null> {
+  const resolved = await resolveCrmProspectosSchemaForTenant(pool, tenantDataSchema);
+  if (!resolved) return null;
+  const sch = assertAllowedChatDataSchema(resolved.crmSchema);
+  const ce = quoteSchemaTable(sch, "crm_etapas");
+  try {
+    const r = await pool.query(
+      `SELECT *
+       FROM ${ce}
+       WHERE empresa_id = $1::uuid
+       ORDER BY orden ASC NULLS LAST, codigo ASC`,
+      [empresaId]
+    );
+    return (r.rows ?? []) as Record<string, unknown>[];
+  } catch (e) {
+    console.error("[crm-prospectos-pg] etapas_todas:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
