@@ -215,6 +215,7 @@ export default function ClienteDetailPage() {
     { id: string; slug: string; nombre: string; requiere_detalle_otro: boolean }[]
   >([]);
   const [formTributario, setFormTributario] = useState<TributarioFormState>(() => emptyTributarioForm());
+  const [tributBlockOpen, setTributBlockOpen] = useState(false);
 
   // Estados de notas
   const [nuevaNota,     setNuevaNota]     = useState("");
@@ -302,6 +303,12 @@ export default function ClienteDetailPage() {
         estado:               c.estado,
       });
       setFormTributario(formStateFromPerfil(c.perfil_tributario ?? null));
+      setTributBlockOpen(
+        Boolean(
+          c.perfil_tributario_activo ||
+            (c.perfil_tributario && c.perfil_tributario.perfil_activo)
+        )
+      );
       setCargandoCliente(false);
       setCargandoDetalleCliente(true);
       try {
@@ -1569,14 +1576,39 @@ export default function ClienteDetailPage() {
               </section>
 
               {gestionTributariaEmpresa && (
-                <section className="space-y-4">
-                  <ClientePerfilTributarioForm
-                    catalog={catalogoObligacionesTrib}
-                    value={formTributario}
-                    onChange={setFormTributario}
-                    tipoCliente={form.tipo_cliente}
-                    claveYaConfigurada={Boolean(cliente.perfil_tributario?.clave_tributaria_configurada)}
-                  />
+                <section className="space-y-3">
+                  <details
+                    className="group rounded-2xl border border-indigo-100/80 bg-gradient-to-b from-slate-50/80 to-white shadow-sm open:shadow-md transition-shadow [open]:shadow-md"
+                    open={tributBlockOpen}
+                    onToggle={(e) => {
+                      setTributBlockOpen((e.currentTarget as HTMLDetailsElement).open);
+                    }}
+                  >
+                    <summary className="cursor-pointer list-none px-4 py-3 sm:px-5 sm:py-3.5 flex items-center justify-between gap-2 text-left [&::-webkit-details-marker]:hidden">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Opcional</p>
+                        <p className="text-sm font-semibold text-slate-800 mt-0.5">Perfil tributario</p>
+                        <p className="text-xs text-slate-500 mt-0.5 max-w-xl">
+                          Obligaciones, honorarios y vencimientos. El RUC principal sigue en Identificación.
+                        </p>
+                      </div>
+                      <span
+                        className="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 group-open:bg-indigo-50 group-open:text-indigo-800 group-open:border-indigo-100"
+                        aria-hidden
+                      >
+                        Expandir
+                      </span>
+                    </summary>
+                    <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-0">
+                      <ClientePerfilTributarioForm
+                        catalog={catalogoObligacionesTrib}
+                        value={formTributario}
+                        onChange={setFormTributario}
+                        tipoCliente={form.tipo_cliente}
+                        claveYaConfigurada={Boolean(cliente.perfil_tributario?.clave_tributaria_configurada)}
+                      />
+                    </div>
+                  </details>
                 </section>
               )}
 
