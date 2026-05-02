@@ -193,7 +193,7 @@ export async function assignConversation(
     return { ok: false, error: e instanceof Error ? e.message : "Error carga" };
   }
 
-  let eligible = filterAgentsUnderCap(agents, loadById);
+  const eligible = filterAgentsUnderCap(agents, loadById);
 
   /** Misma asesor: ancla = última asignación persistida en el contacto para este canal (last_routed_at). */
   let sameAdvisorPick: EligibleAgent | null = null;

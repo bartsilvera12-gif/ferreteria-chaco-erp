@@ -120,7 +120,7 @@ export function fechaVencimientoSuscripcion(fechaEmisionYmd: string, diaVencimie
   const mo = parseInt(parts[2], 10);
   const dim = new Date(y, mo, 0).getDate();
   const dV = Math.min(Math.max(1, diaVencimiento), dim);
-  let cand = `${y}-${String(mo).padStart(2, "0")}-${String(dV).padStart(2, "0")}`;
+  const cand = `${y}-${String(mo).padStart(2, "0")}-${String(dV).padStart(2, "0")}`;
   if (cand >= fechaEmisionYmd) return cand;
   let nm = mo + 1;
   let ny = y;

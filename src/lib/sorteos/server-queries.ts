@@ -59,7 +59,7 @@ async function fetchSorteoEntradasPgDirect(
   const rows = (entRes.rows ?? []) as Record<string, unknown>[];
   const sorteoIds = [...new Set(rows.map((r) => r.sorteo_id).filter(Boolean).map(String))];
 
-  let nombreById: Record<string, string> = {};
+  const nombreById: Record<string, string> = {};
   if (sorteoIds.length > 0) {
     const sortRes = await pool.query(
       `SELECT id, nombre FROM ${tSort} WHERE empresa_id = $1::uuid AND id = ANY($2::uuid[])`,
@@ -124,7 +124,7 @@ async function fetchSorteoCuponesOrdenesPgDirect(
   }
 
   const sorteoIds = [...new Set(entradas.map((r) => r.sorteo_id).filter(Boolean).map(String))];
-  let nombreById: Record<string, string> = {};
+  const nombreById: Record<string, string> = {};
   if (sorteoIds.length > 0) {
     const sortRes = await pool.query(
       `SELECT id, nombre FROM ${tSort} WHERE empresa_id = $1::uuid AND id = ANY($2::uuid[])`,
@@ -258,7 +258,7 @@ export async function fetchSorteoEntradasServer(): Promise<{
     const rows = (entradas ?? []) as Record<string, unknown>[];
     const sorteoIds = [...new Set(rows.map((r) => r.sorteo_id).filter(Boolean).map(String))];
 
-    let nombreById: Record<string, string> = {};
+    const nombreById: Record<string, string> = {};
     if (sorteoIds.length > 0) {
       const { data: sos, error: e2 } = await sb
         .from("sorteos")
@@ -410,7 +410,7 @@ export async function fetchSorteoCuponesOrdenesServer(): Promise<{
     }
 
     const sorteoIds = [...new Set(entradas.map((r) => r.sorteo_id).filter(Boolean).map(String))];
-    let nombreById: Record<string, string> = {};
+    const nombreById: Record<string, string> = {};
     if (sorteoIds.length > 0) {
       const { data: sos, error: e3 } = await sb
         .from("sorteos")

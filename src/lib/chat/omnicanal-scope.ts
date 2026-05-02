@@ -351,7 +351,7 @@ export async function resolveSupervisorConversationScopeBundle(
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function applySupervisorBundleToQuery(
   q: any,
   b: Extract<SupervisorConversationScopeBundle, { kind: "ok" }>
@@ -405,7 +405,7 @@ export type OmnicanalScopedPostgrestBuilder = { builder: any };
  * No aplicar si `shouldBypassOmnicanalConversationScope` es true.
  * Admin operativo (`role === admin`) no debe llamar esta función (no-op si se llama).
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export async function appendOmnicanalConversationScopeToQuery(
   supabase: AppSupabaseClient,
   empresaId: string,
@@ -542,7 +542,7 @@ export async function filterConversationIdsByOmnicanalScope(
   }
 
   try {
-    let q = supabase.from("chat_conversations").select("id").eq("empresa_id", empresaId).in("id", ids);
+    const q = supabase.from("chat_conversations").select("id").eq("empresa_id", empresaId).in("id", ids);
     const { builder } = await appendOmnicanalConversationScopeToQuery(
       supabase,
       empresaId,

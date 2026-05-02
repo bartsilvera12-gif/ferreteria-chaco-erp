@@ -59,8 +59,8 @@ export async function GET(
     const usuarios = usuariosRaw ?? [];
     const userIds = usuarios.map((u) => u.id);
 
-    let usuarioModulosMap: Record<string, string[]> = {};
-    let usuarioDashboardMap: Record<string, string[]> = {};
+    const usuarioModulosMap: Record<string, string[]> = {};
+    const usuarioDashboardMap: Record<string, string[]> = {};
     if (userIds.length > 0) {
       const { data: umData } = await supabase
         .from("usuario_modulos")

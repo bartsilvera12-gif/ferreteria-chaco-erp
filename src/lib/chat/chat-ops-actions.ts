@@ -602,7 +602,7 @@ async function loadMonitoringDashboardForContext(
   const agentRows = agentsRes.data ?? [];
   const distinctUsers = new Set(agentRows.map((r) => r.usuario_id as string).filter(Boolean));
 
-  let convList = (recentRes.data ?? []) as Record<string, unknown>[];
+  const convList = (recentRes.data ?? []) as Record<string, unknown>[];
   const queueIds = [
     ...new Set(convList.map((c: Record<string, unknown>) => (c.queue_id as string | null)?.trim()).filter(Boolean)),
   ] as string[];

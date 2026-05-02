@@ -167,7 +167,7 @@ export async function fetchChatConversationsFromTenantPg(
 
   const params: unknown[] = [empresa_id];
   let pi = 2;
-  let whereParts: string[] = [`empresa_id = $1::uuid`];
+  const whereParts: string[] = [`empresa_id = $1::uuid`];
 
   if (vista === "inbox") {
     whereParts.push(`status IN ('open','pending')`);

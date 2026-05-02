@@ -617,7 +617,7 @@ export function ConversacionesClient({
 
   const filteredTransferAgents = useMemo(() => {
     const q = transferAgentSearch.trim().toLowerCase();
-    let rows = opsAgentLoads.filter((a) =>
+    const rows = opsAgentLoads.filter((a) =>
       transferQueueTarget === "" ? true : a.queue_id === transferQueueTarget
     );
     if (!q) return rows;

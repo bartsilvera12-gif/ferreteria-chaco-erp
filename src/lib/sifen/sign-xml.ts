@@ -94,7 +94,7 @@ export function extractKeyAndCertFromP12(p12Buffer: Buffer, password: string): P
   const shrouded = pkcs8Bags[forge.pki.oids.pkcs8ShroudedKeyBag];
   const plain = keyBags[forge.pki.oids.keyBag];
 
-  let privateKey = shrouded?.[0]?.key ?? plain?.[0]?.key;
+  const privateKey = shrouded?.[0]?.key ?? plain?.[0]?.key;
   if (!privateKey) {
     throw new Error("El .p12 no contiene una clave privada reconocida (pkcs8ShroudedKeyBag/keyBag)");
   }

@@ -160,7 +160,7 @@ function drawTableChunk(
   const xPr = margin + 228;
   const xCan = margin + 282;
   const { xEx, x5, x10 } = kudeTableMoneyXs(margin);
-  let headerBaseline = fromTop + 11;
+  const headerBaseline = fromTop + 11;
 
   const drawH = (txt: string, x: number, bold: boolean) => {
     page.drawText(txt, {

@@ -206,7 +206,7 @@ async function pgSelectAgentsRaw(
     }
   };
 
-  let rows =
+  const rows =
     (await tryCols(`
       id::text, queue_id::text, is_online, operational_status::text,
       operational_status_changed_at, last_heartbeat_at, max_conversations,

@@ -23,6 +23,7 @@ export default function SorteosTicketsPage() {
   const [sorteoId, setSorteoId] = useState("");
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -46,9 +47,65 @@ export default function SorteosTicketsPage() {
   }
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- carga inicial
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- carga inicial; filtros con botón Filtrar
   }, []);
+
+  async function openSignedUrl(ticketId: string) {
+    setBusyId(ticketId);
+    setErr(null);
+    try {
+      const res = await fetchWithSupabaseSession(
+        `/api/sorteos/tickets/${encodeURIComponent(ticketId)}/signed-url?ttl=600`,
+        { cache: "no-store" }
+      );
+      const json = (await res.json()) as { success?: boolean; data?: { url?: string }; error?: string };
+      if (!res.ok || !json.success || !json.data?.url) {
+        throw new Error(json.error || "Sin URL");
+      }
+      window.open(json.data.url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error al obtener URL firmada");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function resendTicket(ticketId: string) {
+    if (!confirm("¿Reenviar la imagen por WhatsApp al cliente?")) return;
+    setBusyId(ticketId);
+    setErr(null);
+    try {
+      const res = await fetchWithSupabaseSession(`/api/sorteos/tickets/${encodeURIComponent(ticketId)}/resend`, {
+        method: "POST",
+      });
+      const json = (await res.json()) as { success?: boolean; error?: string };
+      if (!res.ok || !json.success) throw new Error(json.error || "Falló reenvío");
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function regenerateTicket(ticketId: string) {
+    if (!confirm("¿Regenerar el PNG (nueva revisión)? No se reenvía solo.")) return;
+    setBusyId(ticketId);
+    setErr(null);
+    try {
+      const res = await fetchWithSupabaseSession(`/api/sorteos/tickets/${encodeURIComponent(ticketId)}/regenerate`, {
+        method: "POST",
+      });
+      const json = (await res.json()) as { success?: boolean; error?: string };
+      if (!res.ok || !json.success) throw new Error(json.error || "Falló regeneración");
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -99,7 +156,7 @@ export default function SorteosTicketsPage() {
         </div>
         <button
           type="button"
-          onClick={() => load()}
+          onClick={() => void load()}
           className="bg-slate-800 text-white text-sm px-4 py-2 rounded-lg"
         >
           Filtrar
@@ -133,15 +190,33 @@ export default function SorteosTicketsPage() {
                   <td className="px-3 py-2 text-xs">
                     {(r.cliente_documento ?? "").trim() || "—"} / {(r.telefono ?? "").trim() || "—"}
                   </td>
-                  <td className="px-3 py-2 space-x-2">
-                    <a
-                      href={`/api/sorteos/tickets/${encodeURIComponent(r.id)}/signed-url`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sky-600 hover:underline"
-                    >
-                      URL firmada
-                    </a>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <button
+                        type="button"
+                        disabled={busyId === r.id || r.status === "pending"}
+                        onClick={() => void openSignedUrl(r.id)}
+                        className="text-sky-600 hover:underline disabled:opacity-40 text-xs"
+                      >
+                        {busyId === r.id ? "…" : "Ver / descargar"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyId === r.id}
+                        onClick={() => void resendTicket(r.id)}
+                        className="text-emerald-700 hover:underline disabled:opacity-40 text-xs"
+                      >
+                        Reenviar WA
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyId === r.id}
+                        onClick={() => void regenerateTicket(r.id)}
+                        className="text-violet-700 hover:underline disabled:opacity-40 text-xs"
+                      >
+                        Regenerar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -378,7 +378,7 @@ export async function restartWhatsappConversationToFlowStart(
 
   const pref = opts.preferFlowCode?.trim() || null;
   const codes = catalog.allActiveCodes;
-  let targetFlow: string | null =
+  const targetFlow: string | null =
     pref && codes.includes(pref) ? pref : catalog.flowCode;
   if (pref && !codes.includes(pref)) {
     console.warn(CONV_LOG, "restart_prefer_not_in_catalog_using_canonical", {

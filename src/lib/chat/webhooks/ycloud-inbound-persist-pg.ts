@@ -115,7 +115,7 @@ export async function persistYCloudInboundMessagePg(input: YCloudPersistPgInput)
       active_flow_session_id: string | null;
     };
 
-    let convRes = await client.query(
+    const convRes = await client.query(
       `SELECT id::text, status, unread_count, flow_code, flow_current_node, flow_status, human_taken_over, active_flow_session_id
        FROM ${convT}
        WHERE contact_id = $1::uuid AND channel_id = $2::uuid

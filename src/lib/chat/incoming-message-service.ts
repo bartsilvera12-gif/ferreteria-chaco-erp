@@ -289,7 +289,7 @@ export async function saveIncomingMessage(params: SaveIncomingMessageParams): Pr
       .eq("id", contactId);
   }
 
-  let { data: existingConvRaw } = await supabase
+  const { data: existingConvRaw } = await supabase
     .from("chat_conversations")
     .select(
       "id, status, unread_count, flow_code, flow_current_node, flow_status, human_taken_over, active_flow_session_id"
