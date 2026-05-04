@@ -1,6 +1,12 @@
 /**
  * Construye payload `template` para Meta Cloud API / YCloud a partir del snapshot de plantilla y variables por slot ({{1}}, {{2}}, …).
  */
+import "server-only";
+import {
+  isHttpsUrl,
+  logTemplatePayloadHeaderImage,
+  templateSnapshotHasHeaderImage,
+} from "@/lib/campaigns/campaign-header-image";
 
 export function extractBodyVariableSlotsOrdered(componentsJson: unknown[]): string[] {
   const comps = Array.isArray(componentsJson)
@@ -28,20 +34,49 @@ export function buildMetaCloudTemplatePayload(params: {
   languageCode: string;
   componentsSnapshot: unknown[];
   mappedBySlot: Record<string, string>;
+  /** URL https pública para HEADER IMAGE (misma para toda la campaña, fase 1). */
+  headerImageUrl?: string | null;
 }): Record<string, unknown> {
+  const components: Array<Record<string, unknown>> = [];
+  const needsHeader = templateSnapshotHasHeaderImage(params.componentsSnapshot);
+  const headerUrl = String(params.headerImageUrl ?? "").trim();
+
+  if (needsHeader && headerUrl && isHttpsUrl(headerUrl)) {
+    try {
+      logTemplatePayloadHeaderImage(new URL(headerUrl).hostname);
+    } catch {
+      logTemplatePayloadHeaderImage("(parse)");
+    }
+    components.push({
+      type: "header",
+      parameters: [
+        {
+          type: "image",
+          image: {
+            link: headerUrl.slice(0, 4000),
+          },
+        },
+      ],
+    });
+  }
+
   const slots = extractBodyVariableSlotsOrdered(params.componentsSnapshot);
-  const parameters = slots.map((slot) => ({
+  const bodyParameters = slots.map((slot) => ({
     type: "text",
     text: String(params.mappedBySlot[slot] ?? "").slice(0, 4096),
   }));
+
+  if (bodyParameters.length > 0) {
+    components.push({ type: "body", parameters: bodyParameters });
+  }
 
   const template: Record<string, unknown> = {
     name: params.templateName,
     language: { code: params.languageCode },
   };
 
-  if (parameters.length > 0) {
-    template.components = [{ type: "body", parameters }];
+  if (components.length > 0) {
+    template.components = components;
   }
 
   return template;

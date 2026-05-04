@@ -15,6 +15,7 @@ type CampaignDetail = Record<string, unknown> & {
   template_language: string;
   template_components_json: unknown[];
   variable_mapping_json: Record<string, unknown>;
+  send_config_json?: Record<string, unknown> | null;
   total_count: number;
   sent_count: number;
   failed_count: number;
@@ -104,6 +105,21 @@ export default function CampanasDetailClient({ campaignId }: { campaignId: strin
     while ((m = re.exec(text)) !== null) out.push(m[1]);
     return [...new Set(out)].sort((a, b) => Number(a) - Number(b));
   }, [campaign]);
+
+  const templateHasHeaderImage = useMemo(() => {
+    const vs = campaign?.template_components_json as unknown;
+    if (!vs || !Array.isArray(vs)) return false;
+    return (vs as { type?: string; format?: string }[]).some(
+      (c) =>
+        String(c.type ?? "").toUpperCase() === "HEADER" &&
+        String(c.format ?? "").toUpperCase() === "IMAGE"
+    );
+  }, [campaign]);
+
+  const headerImageError =
+    typeof campaign?.send_config_json?.header_image_error === "string"
+      ? String(campaign.send_config_json.header_image_error)
+      : null;
 
   async function uploadFile(file: File) {
     setBusy(true);
@@ -195,6 +211,12 @@ export default function CampanasDetailClient({ campaignId }: { campaignId: strin
 
       {err ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{err}</div> : null}
 
+      {headerImageError ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {headerImageError}
+        </div>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-4">
         {[
           ["Total", campaign.total_count],
@@ -222,6 +244,13 @@ export default function CampanasDetailClient({ campaignId }: { campaignId: strin
           className="block text-sm text-slate-600"
         />
         <p className="text-xs text-slate-500">Máximo 5.000 filas / 5 MB.</p>
+        {templateHasHeaderImage ? (
+          <p className="text-xs text-slate-600">
+            <strong>Imagen de cabecera (Meta):</strong> agregá una columna <code className="rounded bg-slate-100 px-1">header_image_url</code>{" "}
+            en el Excel con una URL <strong>https</strong> pública. En esta fase todas las filas válidas deben usar la
+            misma URL.
+          </p>
+        ) : null}
       </section>
 
       {slots.length > 0 ? (

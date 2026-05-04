@@ -9,6 +9,12 @@ import {
   CAMPAIGN_IMPORT_MAX_ROWS,
 } from "@/lib/campaigns/campaign-import-service";
 import { normalizeCampaignPhone } from "@/lib/campaigns/campaign-phone";
+import {
+  applyHeaderImageSendConfigUpdate,
+  evaluateHeaderImageOnImport,
+  findHeaderImageUrlColumnKey,
+  templateSnapshotHasHeaderImage,
+} from "@/lib/campaigns/campaign-header-image";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
@@ -60,7 +66,7 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
 
     const { data: camp, error: campErr } = await sb
       .from("chat_campaigns")
-      .select("id, status")
+      .select("id, status, template_components_json, send_config_json")
       .eq("id", campaignId)
       .eq("empresa_id", auth.empresaId)
       .maybeSingle();
@@ -87,6 +93,11 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
     let valid = 0;
     let invalid = 0;
 
+    const headerImageCol = findHeaderImageUrlColumnKey(parsed.headers);
+    const headerUrlPerValid: string[] = [];
+    const tplComponents = (camp as { template_components_json?: unknown }).template_components_json;
+    const needsHeaderImage = templateSnapshotHasHeaderImage(tplComponents);
+
     const ts = new Date().toISOString();
 
     for (const row of parsed.rows) {
@@ -111,6 +122,9 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
         } else {
           seen.add(d);
           valid += 1;
+          if (headerImageCol) {
+            headerUrlPerValid.push(String(row[headerImageCol] ?? "").trim());
+          }
         }
       }
 
@@ -138,6 +152,17 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
       }
     }
 
+    const headerImportResolution = evaluateHeaderImageOnImport({
+      needsHeader: needsHeaderImage,
+      headerCol: headerImageCol,
+      valuesPerValidRow: headerUrlPerValid,
+      validCount: valid,
+    });
+    const sendConfigMerged = applyHeaderImageSendConfigUpdate(
+      (camp as { send_config_json?: unknown }).send_config_json,
+      headerImportResolution
+    );
+
     await sb
       .from("chat_campaigns")
       .update({
@@ -147,6 +172,7 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
         invalid_count: invalid,
         pending_count: valid,
         status: "draft",
+        send_config_json: sendConfigMerged,
         updated_at: ts,
       })
       .eq("id", campaignId)

@@ -58,7 +58,7 @@ export async function runCampaignProcessOnce(params: {
   const { data: campaign, error: cErr } = await supabase
     .from("chat_campaigns")
     .select(
-      "id, empresa_id, status, channel_id, queue_id, provider, template_name, template_language, template_components_json, template_id"
+      "id, empresa_id, status, channel_id, queue_id, provider, template_name, template_language, template_components_json, template_id, send_config_json"
     )
     .eq("id", campaignId)
     .eq("empresa_id", empresaId)

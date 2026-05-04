@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getChatServiceClientForEmpresa } from "@/app/api/chat/_chat-service-client";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { requireCampanasApiAccess } from "@/lib/campaigns/campaign-auth";
+import {
+  applyHeaderImageSendConfigUpdate,
+  resolveHeaderImageUrlForCampaign,
+  templateSnapshotHasHeaderImage,
+} from "@/lib/campaigns/campaign-header-image";
 import { mappingSatisfiedForTemplate } from "@/lib/campaigns/campaign-mapping";
 import { runCampaignProcessOnce } from "@/lib/campaigns/campaign-job-service";
 import type { SupabaseAdmin } from "@/lib/chat/types";
@@ -21,7 +26,7 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
 
     const { data: campaign, error: cErr } = await sb
       .from("chat_campaigns")
-      .select("id, status, template_components_json, template_name")
+      .select("id, status, template_components_json, template_name, send_config_json")
       .eq("id", campaignId)
       .eq("empresa_id", auth.empresaId)
       .maybeSingle();
@@ -37,7 +42,7 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
 
     const { data: recipients, error: rErr } = await sb
       .from("chat_campaign_recipients")
-      .select("id, mapped_variables_json, status")
+      .select("id, mapped_variables_json, status, row_payload_json")
       .eq("campaign_id", campaignId)
       .eq("empresa_id", auth.empresaId);
 
@@ -46,6 +51,31 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
     }
 
     const tpl = (campaign as { template_components_json?: unknown }).template_components_json ?? [];
+
+    const headerResolution = resolveHeaderImageUrlForCampaign({
+      templateComponentsJson: tpl,
+      sendConfigJson: (campaign as { send_config_json?: unknown }).send_config_json,
+      recipients: (recipients ?? []) as Array<{ status: string; row_payload_json: unknown }>,
+    });
+
+    if (templateSnapshotHasHeaderImage(tpl) && !headerResolution.ok) {
+      return NextResponse.json(errorResponse(headerResolution.message), { status: 400 });
+    }
+
+    if (templateSnapshotHasHeaderImage(tpl) && headerResolution.ok && headerResolution.url) {
+      const mergedSend = applyHeaderImageSendConfigUpdate(
+        (campaign as { send_config_json?: unknown }).send_config_json,
+        headerResolution
+      );
+      await sb
+        .from("chat_campaigns")
+        .update({
+          send_config_json: mergedSend,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", campaignId)
+        .eq("empresa_id", auth.empresaId);
+    }
 
     const rows = (recipients ?? []) as Array<{
       id: string;

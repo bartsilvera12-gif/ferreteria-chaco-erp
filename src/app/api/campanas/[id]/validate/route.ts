@@ -3,6 +3,11 @@ import { getChatServiceClientForEmpresa } from "@/app/api/chat/_chat-service-cli
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { requireCampanasApiAccess } from "@/lib/campaigns/campaign-auth";
 import {
+  applyHeaderImageSendConfigUpdate,
+  resolveHeaderImageUrlForCampaign,
+  templateSnapshotHasHeaderImage,
+} from "@/lib/campaigns/campaign-header-image";
+import {
   buildMappedVariablesFromRow,
   mappingSatisfiedForTemplate,
   normalizeVariableMapping,
@@ -24,7 +29,7 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
 
     const { data: campaign, error: cErr } = await sb
       .from("chat_campaigns")
-      .select("variable_mapping_json, template_components_json, status")
+      .select("variable_mapping_json, template_components_json, status, send_config_json")
       .eq("id", campaignId)
       .eq("empresa_id", auth.empresaId)
       .maybeSingle();
@@ -115,10 +120,24 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
         .eq("empresa_id", auth.empresaId);
     }
 
+    const headerResolution = resolveHeaderImageUrlForCampaign({
+      templateComponentsJson: tplComponents,
+      sendConfigJson: (campaign as { send_config_json?: unknown }).send_config_json,
+      recipients: (recipients ?? []) as Array<{ status: string; row_payload_json: unknown }>,
+    });
+    const sendConfigAfterHeader = applyHeaderImageSendConfigUpdate(
+      (campaign as { send_config_json?: unknown }).send_config_json,
+      headerResolution
+    );
+
+    const needsHeader = templateSnapshotHasHeaderImage(tplComponents);
+    const headerBlocked = needsHeader && !headerResolution.ok;
+
     await sb
       .from("chat_campaigns")
       .update({
-        status: mappingErrors > 0 ? "draft" : "ready",
+        status: mappingErrors > 0 || headerBlocked ? "draft" : "ready",
+        send_config_json: sendConfigAfterHeader,
         updated_at: ts,
       })
       .eq("id", campaignId)
@@ -129,10 +148,20 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
       campaign_id: campaignId,
       recipient_id: null,
       event_type: "import_validated",
-      event_payload_json: { mapping_errors: mappingErrors },
+      event_payload_json: {
+        mapping_errors: mappingErrors,
+        header_image_ok: needsHeader ? headerResolution.ok : null,
+      },
     });
 
-    return NextResponse.json(successResponse({ mapping_errors: mappingErrors, ready: mappingErrors === 0 }));
+    const ready = mappingErrors === 0 && !headerBlocked;
+    return NextResponse.json(
+      successResponse({
+        mapping_errors: mappingErrors,
+        ready,
+        header_image_ok: !needsHeader || headerResolution.ok,
+      })
+    );
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error";
     return NextResponse.json(errorResponse(msg), { status: 500 });

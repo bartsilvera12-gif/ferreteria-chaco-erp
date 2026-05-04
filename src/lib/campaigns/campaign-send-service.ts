@@ -5,6 +5,10 @@ import { normalizeWaPhone } from "@/lib/chat/wa-phone";
 import { resolveOutboundTextContextFromIds } from "@/lib/chat/outbound-send-dispatch";
 import { sendWhatsAppTemplateMessage } from "@/lib/chat/whatsapp-send-service";
 import { sendYCloudWhatsappTemplateMessage } from "@/lib/chat/ycloud-send-service";
+import {
+  isHttpsUrl,
+  templateSnapshotHasHeaderImage,
+} from "@/lib/campaigns/campaign-header-image";
 import { buildMetaCloudTemplatePayload } from "@/lib/campaigns/campaign-template-payload";
 import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
 
@@ -17,6 +21,7 @@ export type CampaignOutboundRow = {
   template_name: string;
   template_language: string;
   template_components_json: unknown[];
+  send_config_json?: Record<string, unknown> | null;
 };
 
 export type CampaignRecipientSendRow = {
@@ -155,11 +160,27 @@ export async function sendCampaignRecipientMessage(params: {
     (recipient.mapped_variables_json || {}) as Record<string, unknown>
   );
 
+  const cfg = (campaign.send_config_json ?? {}) as Record<string, unknown>;
+  const headerFromConfig =
+    typeof cfg.header_image_url === "string" ? cfg.header_image_url.trim() : "";
+
+  if (templateSnapshotHasHeaderImage(campaign.template_components_json)) {
+    if (!headerFromConfig || !isHttpsUrl(headerFromConfig)) {
+      console.warn("[campaign-image-header][missing-url]");
+      return {
+        ok: false,
+        error:
+          "Falta header_image_url válida (https) en la campaña. Validá el Excel y la configuración antes de enviar.",
+      };
+    }
+  }
+
   const templatePayload = buildMetaCloudTemplatePayload({
     templateName: campaign.template_name,
     languageCode: campaign.template_language,
     componentsSnapshot: campaign.template_components_json,
     mappedBySlot,
+    headerImageUrl: headerFromConfig || null,
   });
 
   const ctx = await resolveOutboundTextContextFromIds(
