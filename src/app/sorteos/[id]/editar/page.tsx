@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSorteoById, updateSorteo } from "@/lib/sorteos/actions";
-import type { SorteoEstado, SorteoTicketDeliveryMode } from "@/lib/sorteos/types";
+import type { SorteoCouponNumberMode, SorteoEstado, SorteoTicketDeliveryMode } from "@/lib/sorteos/types";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { normalizeTicketImageConfig } from "@/lib/sorteos/sorteo-ticket-types";
 
@@ -99,6 +99,12 @@ export default function EditarSorteoPage() {
   /** Preview si hay template en Storage sin path en config (legado). */
   const [legacyTemplateUrl, setLegacyTemplateUrl] = useState<string | null>(null);
 
+  const [couponNumberingEnabled, setCouponNumberingEnabled] = useState(false);
+  const [couponStart, setCouponStart] = useState(0);
+  const [couponMode, setCouponMode] = useState<SorteoCouponNumberMode>("correlative");
+  const [couponLimit, setCouponLimit] = useState("");
+  const [totalBoletosVendidos, setTotalBoletosVendidos] = useState(0);
+
   type AssetPhase = "idle" | "uploading" | "ok" | "error";
   const [templatePickName, setTemplatePickName] = useState<string | null>(null);
   const [templateObjectUrl, setTemplateObjectUrl] = useState<string | null>(null);
@@ -173,6 +179,25 @@ export default function EditarSorteoPage() {
         );
         setTicketCaption(typeof tic.caption === "string" ? tic.caption : "");
         setTicketStub(typeof tic.ticket_image_only_stub === "string" ? tic.ticket_image_only_stub : "");
+        setCouponNumberingEnabled(Boolean(s.coupon_numbering_enabled));
+        setCouponStart(
+          s.coupon_number_start != null && Number.isFinite(Number(s.coupon_number_start))
+            ? Math.trunc(Number(s.coupon_number_start))
+            : 0
+        );
+        setCouponMode(
+          s.coupon_number_mode === "random" || s.coupon_number_mode === "correlative"
+            ? s.coupon_number_mode
+            : "correlative"
+        );
+        setCouponLimit(
+          s.coupon_number_limit != null && Number.isFinite(Number(s.coupon_number_limit))
+            ? String(Math.trunc(Number(s.coupon_number_limit)))
+            : ""
+        );
+        setTotalBoletosVendidos(
+          typeof s.total_boletos_vendidos === "number" ? s.total_boletos_vendidos : Number(s.total_boletos_vendidos) || 0
+        );
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Error"))
       .finally(() => setCargando(false));
@@ -219,6 +244,30 @@ export default function EditarSorteoPage() {
       setError("El máximo de boletos debe ser al menos 1.");
       return;
     }
+    if (couponNumberingEnabled) {
+      if (!Number.isFinite(couponStart) || couponStart < 0) {
+        setError("El número inicial de cupón debe ser un entero mayor o igual a 0.");
+        return;
+      }
+      if (couponMode === "random") {
+        const lim = couponLimit.trim() === "" ? NaN : Number(couponLimit);
+        if (!Number.isFinite(lim)) {
+          setError("En modo aleatorio el límite máximo es obligatorio.");
+          return;
+        }
+        if (lim < couponStart) {
+          setError("El límite máximo debe ser mayor o igual al número inicial.");
+          return;
+        }
+      }
+      if (couponMode === "correlative" && couponLimit.trim() !== "") {
+        const lim = Number(couponLimit);
+        if (!Number.isFinite(lim) || lim < couponStart) {
+          setError("El límite máximo debe ser mayor o igual al número inicial.");
+          return;
+        }
+      }
+    }
 
     let json: Record<string, unknown> = {};
     try {
@@ -253,6 +302,13 @@ export default function EditarSorteoPage() {
         imagen_url: imagenUrl.trim() || null,
         ticket_delivery_mode: ticketDeliveryMode,
         ticket_image_config: ticketMerged,
+        coupon_numbering_enabled: couponNumberingEnabled,
+        coupon_number_start: couponNumberingEnabled ? Math.trunc(couponStart) : null,
+        coupon_number_mode: couponNumberingEnabled ? couponMode : null,
+        coupon_number_limit:
+          couponNumberingEnabled && couponLimit.trim() !== ""
+            ? Math.trunc(Number(couponLimit))
+            : null,
       });
       if (updated.ticket_image_config && typeof updated.ticket_image_config === "object") {
         setTicketImageConfigBase({ ...(updated.ticket_image_config as Record<string, unknown>) });
@@ -542,6 +598,75 @@ export default function EditarSorteoPage() {
               onChange={(e) => setImagenUrl(e.target.value)}
             />
           </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+          <h2 className="text-sm font-semibold text-slate-800 border-b border-slate-100 pb-2">
+            Numeración de cupones
+          </h2>
+          <label className="flex items-center gap-2 text-sm text-slate-800 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={couponNumberingEnabled}
+              onChange={(e) => setCouponNumberingEnabled(e.target.checked)}
+              className="rounded border-slate-300"
+            />
+            Personalizar numeración de cupones
+          </label>
+          <p className="text-xs text-slate-500">
+            Esta configuración solo afecta nuevos cupones generados desde este sorteo. No modifica cupones ya emitidos.
+          </p>
+          {totalBoletosVendidos > 0 && couponNumberingEnabled ? (
+            <p className="text-xs text-amber-800 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+              Esto no renumera cupones existentes. Solo aplica a próximas ventas.
+            </p>
+          ) : null}
+          {couponNumberingEnabled ? (
+            <div className="space-y-3 pl-0 sm:pl-1">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Número inicial</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  placeholder="0"
+                  className="w-full max-w-xs border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                  value={Number.isFinite(couponStart) ? couponStart : 0}
+                  onChange={(e) => setCouponStart(e.target.value === "" ? 0 : Number(e.target.value))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Modo de generación</label>
+                <select
+                  className="w-full max-w-xs border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                  value={couponMode}
+                  onChange={(e) => setCouponMode(e.target.value as SorteoCouponNumberMode)}
+                >
+                  <option value="correlative">Correlativo</option>
+                  <option value="random">Aleatorio</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Límite máximo
+                  {couponMode === "random" ? (
+                    <span className="text-amber-700"> (obligatorio en aleatorio)</span>
+                  ) : (
+                    <span className="text-slate-400"> (opcional en correlativo)</span>
+                  )}
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  className="w-full max-w-xs border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                  value={couponLimit}
+                  onChange={(e) => setCouponLimit(e.target.value)}
+                  placeholder={couponMode === "random" ? "Ej. 9999" : "Sin tope (vacío)"}
+                />
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <section

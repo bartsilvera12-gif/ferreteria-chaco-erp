@@ -800,8 +800,8 @@ export async function mergeComprobanteFromValidationRowIntoFlowData(
   empresaId: string,
   flowData: Record<string, string>
 ): Promise<Record<string, string>> {
-  let url = resolveComprobanteUrlFromFlowData(flowData);
-  let mediaId = norm(flowData[SORTEO_COMPROBANTE_MEDIA_ID_FIELD]);
+  const url = resolveComprobanteUrlFromFlowData(flowData);
+  const mediaId = norm(flowData[SORTEO_COMPROBANTE_MEDIA_ID_FIELD]);
   if (url && mediaId) return flowData;
   const vid = norm(flowData[SORTEO_COMPROBANTE_VALIDACION_ID_FIELD]);
   if (!vid || !/^[0-9a-f-]{36}$/i.test(vid)) return flowData;
@@ -1087,9 +1087,43 @@ export async function ensureSorteoOrderFromChat(
   const msgFallback =
     "No pudimos registrar tu compra en el sorteo. Intentá de nuevo en unos minutos o escribí a soporte.";
 
+  const dbSorteo = createServiceRoleClientWithDbSchema(dataSchema);
+  let useCustomCouponNumbering = false;
+  try {
+    const { data: sn, error: snErr } = await dbSorteo
+      .from("sorteos")
+      .select("coupon_numbering_enabled")
+      .eq("id", sorteoId)
+      .eq("empresa_id", input.empresaId)
+      .maybeSingle();
+    if (!snErr && sn && (sn as { coupon_numbering_enabled?: boolean }).coupon_numbering_enabled === true) {
+      useCustomCouponNumbering = true;
+    }
+  } catch {
+    useCustomCouponNumbering = false;
+  }
+
   let row: Record<string, unknown> | null = null;
 
-  if (dataSchema !== SUPABASE_APP_SCHEMA) {
+  if (useCustomCouponNumbering) {
+    if (!hasDirectPg) {
+      return {
+        ok: false,
+        message:
+          "La numeración personalizada de cupones requiere conexión directa a la base (variables de entorno en el servidor). Contactá soporte.",
+      };
+    }
+    const directOut = await ensureSorteoOrderViaDirectPostgres(directOrderArgs);
+    if (!directOut.ok) {
+      return { ok: false, message: directOut.message };
+    }
+    row = mapDirectPgOkToRpcRow(directOut);
+    console.info(FLOW_SORTEO_LOG, "ensureSorteoOrderFromChat_path", {
+      path: "direct_pg_custom_coupon_numbering",
+      schema: dataSchema,
+      conversationId: input.conversationId,
+    });
+  } else if (dataSchema !== SUPABASE_APP_SCHEMA) {
     if (!hasDirectPg) {
       return {
         ok: false,

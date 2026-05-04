@@ -3,6 +3,8 @@ export type SorteoEstado = "activo" | "pausado" | "cerrado" | "finalizado";
 
 export type SorteoTicketDeliveryMode = "text_only" | "text_and_image" | "image_only";
 
+export type SorteoCouponNumberMode = "correlative" | "random";
+
 /** Estados de conversación de sorteo */
 export type SorteoConversacionEstado =
   | "new_lead"
@@ -33,6 +35,11 @@ export interface Sorteo {
   imagen_url: string | null;
   ticket_delivery_mode?: SorteoTicketDeliveryMode;
   ticket_image_config?: Record<string, unknown>;
+  /** Numeración opcional; si false, se usa el comportamiento legacy. */
+  coupon_numbering_enabled?: boolean;
+  coupon_number_start?: number | null;
+  coupon_number_mode?: SorteoCouponNumberMode | null;
+  coupon_number_limit?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -119,6 +126,8 @@ export interface SorteoCupon {
   sorteo_id: string;
   entrada_id: string;
   numero_cupon: string;
+  /** Valor numérico para rangos/unicidad cuando numeración personalizada está activa. */
+  coupon_number_value?: number | null;
   ganador: boolean | null;
   created_at: string;
   sorteos?: { nombre: string } | null;

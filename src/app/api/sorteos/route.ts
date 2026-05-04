@@ -6,6 +6,7 @@ import { API_ERRORS } from "@/lib/api/errors";
 import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { isLikelyUnexposedTenantChatSchema } from "@/lib/supabase/chat-data-schema";
+import { mergeCouponNumberingFromUnknown } from "@/lib/sorteos/coupon-numbering-api";
 
 /**
  * GET /api/sorteos — lista sorteos del tenant (Postgres shim si schema no expuesto).
@@ -56,6 +57,10 @@ export type SorteoCreateBody = {
   imagen_url?: string | null;
   ticket_delivery_mode?: string;
   ticket_image_config?: Record<string, unknown>;
+  coupon_numbering_enabled?: boolean;
+  coupon_number_start?: number | null;
+  coupon_number_mode?: string | null;
+  coupon_number_limit?: number | null;
 };
 
 /**
@@ -80,6 +85,11 @@ export async function POST(request: NextRequest) {
     }
 
     const sb = await getChatServiceClientForEmpresa(empresaId);
+    const numbering = mergeCouponNumberingFromUnknown(body as Record<string, unknown>);
+    if ("error" in numbering) {
+      return NextResponse.json(errorResponse(numbering.error), { status: 400 });
+    }
+
     const row = {
       empresa_id: empresaId,
       nombre,
@@ -99,6 +109,7 @@ export async function POST(request: NextRequest) {
         body.ticket_image_config && typeof body.ticket_image_config === "object"
           ? body.ticket_image_config
           : {},
+      ...numbering,
     };
 
     const { data, error } = await sb.from("sorteos").insert(row).select("*").single();

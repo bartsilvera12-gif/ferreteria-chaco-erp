@@ -48,7 +48,9 @@
     "db:apply-chat-campaigns-migration": "tsx scripts/apply-chat-campaigns-migration.ts",
     "db:apply-chat-campaign-button-actions-migration": "tsx scripts/apply-chat-campaign-button-actions-migration.ts",
     "verify:ocr-ref-dup": "tsx scripts/verify-ocr-ref-strong-dup-rules.ts",
-    "vercel:check-deploy": "tsx scripts/check-vercel-deploy.ts"
+    "vercel:check-deploy": "tsx scripts/check-vercel-deploy.ts",
+    "db:apply-sorteo-coupon-numbering": "node scripts/apply-migration-file-pg.cjs supabase/migrations/20260504120000_sorteos_coupon_numbering.sql",
+    "qa:sorteo-coupon-numbering": "tsx scripts/qa-sorteo-coupon-numbering-unit.ts"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

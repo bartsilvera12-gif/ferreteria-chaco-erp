@@ -89,7 +89,7 @@ export function logChatListClassificationInvariant(params: {
   const shownIdSet = new Set(
     listAfterTabSplit.map((r) => String((r as { id?: unknown }).id ?? "").trim()).filter(Boolean)
   );
-  let sampleMissingIds: string[] = [];
+  const sampleMissingIds: string[] = [];
   if (vista === "inbox") {
     for (const id of nonBotIdSet) {
       if (!shownIdSet.has(id)) sampleMissingIds.push(id);

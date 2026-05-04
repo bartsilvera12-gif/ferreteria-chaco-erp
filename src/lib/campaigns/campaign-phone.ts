@@ -16,7 +16,7 @@ export function normalizeCampaignPhone(raw: string): PhoneNormalizeResult {
   const t = raw.trim();
   if (!t) return { ok: false, error: "Vacío" };
 
-  let d = t.replace(/\D/g, "");
+  const d = t.replace(/\D/g, "");
   if (!d) return { ok: false, error: "Sin dígitos" };
 
   // Ya viene en formato internacional largo

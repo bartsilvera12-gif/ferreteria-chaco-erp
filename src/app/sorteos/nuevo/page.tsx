@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createSorteo } from "@/lib/sorteos/actions";
-import type { SorteoEstado } from "@/lib/sorteos/types";
+import type { SorteoCouponNumberMode, SorteoEstado } from "@/lib/sorteos/types";
 
 export default function NuevoSorteoPage() {
   const router = useRouter();
@@ -19,6 +19,10 @@ export default function NuevoSorteoPage() {
   const [estado, setEstado] = useState<SorteoEstado>("activo");
   const [imagenUrl, setImagenUrl] = useState("");
   const [datosBancarios, setDatosBancarios] = useState("{}");
+  const [couponNumberingEnabled, setCouponNumberingEnabled] = useState(false);
+  const [couponStart, setCouponStart] = useState(0);
+  const [couponMode, setCouponMode] = useState<SorteoCouponNumberMode>("correlative");
+  const [couponLimit, setCouponLimit] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,6 +41,30 @@ export default function NuevoSorteoPage() {
     if (!Number.isFinite(maxBoletos) || maxBoletos < 1) {
       setError("El máximo de boletos debe ser al menos 1.");
       return;
+    }
+    if (couponNumberingEnabled) {
+      if (!Number.isFinite(couponStart) || couponStart < 0) {
+        setError("El número inicial de cupón debe ser un entero mayor o igual a 0.");
+        return;
+      }
+      if (couponMode === "random") {
+        const lim = couponLimit.trim() === "" ? NaN : Number(couponLimit);
+        if (!Number.isFinite(lim)) {
+          setError("En modo aleatorio el límite máximo es obligatorio.");
+          return;
+        }
+        if (lim < couponStart) {
+          setError("El límite máximo debe ser mayor o igual al número inicial.");
+          return;
+        }
+      }
+      if (couponMode === "correlative" && couponLimit.trim() !== "") {
+        const lim = Number(couponLimit);
+        if (!Number.isFinite(lim) || lim < couponStart) {
+          setError("El límite máximo debe ser mayor o igual al número inicial.");
+          return;
+        }
+      }
     }
 
     let json: Record<string, unknown> = {};
@@ -68,6 +96,13 @@ export default function NuevoSorteoPage() {
         estado,
         datos_bancarios: json,
         imagen_url: imagenUrl.trim() || null,
+        coupon_numbering_enabled: couponNumberingEnabled,
+        coupon_number_start: couponNumberingEnabled ? Math.trunc(couponStart) : null,
+        coupon_number_mode: couponNumberingEnabled ? couponMode : null,
+        coupon_number_limit:
+          couponNumberingEnabled && couponLimit.trim() !== ""
+            ? Math.trunc(Number(couponLimit))
+            : null,
       });
       setSuccess("Sorteo creado. Redirigiendo al editor…");
       router.push(`/sorteos/${row.id}/editar`);
@@ -181,6 +216,69 @@ export default function NuevoSorteoPage() {
             placeholder="https://..."
           />
         </div>
+
+        <div className="border border-slate-200 rounded-lg p-4 space-y-3 bg-slate-50/50">
+          <h2 className="text-sm font-semibold text-slate-800">Numeración de cupones</h2>
+          <label className="flex items-center gap-2 text-sm text-slate-800 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={couponNumberingEnabled}
+              onChange={(e) => setCouponNumberingEnabled(e.target.checked)}
+              className="rounded border-slate-300"
+            />
+            Personalizar numeración de cupones
+          </label>
+          <p className="text-xs text-slate-500">
+            Esta configuración solo afecta nuevos cupones generados desde este sorteo. No modifica cupones ya emitidos.
+          </p>
+          {couponNumberingEnabled ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Número inicial</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  placeholder="0"
+                  className="w-full max-w-xs border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
+                  value={Number.isFinite(couponStart) ? couponStart : 0}
+                  onChange={(e) => setCouponStart(e.target.value === "" ? 0 : Number(e.target.value))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Modo de generación</label>
+                <select
+                  className="w-full max-w-xs border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
+                  value={couponMode}
+                  onChange={(e) => setCouponMode(e.target.value as SorteoCouponNumberMode)}
+                >
+                  <option value="correlative">Correlativo</option>
+                  <option value="random">Aleatorio</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Límite máximo
+                  {couponMode === "random" ? (
+                    <span className="text-amber-700"> (obligatorio en aleatorio)</span>
+                  ) : (
+                    <span className="text-slate-400"> (opcional en correlativo)</span>
+                  )}
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  className="w-full max-w-xs border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
+                  value={couponLimit}
+                  onChange={(e) => setCouponLimit(e.target.value)}
+                  placeholder={couponMode === "random" ? "Ej. 9999" : "Sin tope (vacío)"}
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Datos bancarios (JSON)</label>
           <textarea

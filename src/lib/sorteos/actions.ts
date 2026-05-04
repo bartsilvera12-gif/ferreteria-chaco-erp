@@ -7,6 +7,7 @@ import type {
   SorteoCuponOrdenRow,
   SorteoEntrada,
   SorteoEstado,
+  SorteoCouponNumberMode,
 } from "@/lib/sorteos/types";
 
 function mapSorteo(r: Record<string, unknown>): Sorteo {
@@ -32,6 +33,16 @@ function mapSorteo(r: Record<string, unknown>): Sorteo {
         : {},
     created_at: (r.created_at as string) ?? "",
     updated_at: (r.updated_at as string) ?? "",
+    coupon_numbering_enabled: Boolean(r.coupon_numbering_enabled),
+    coupon_number_start:
+      r.coupon_number_start != null && Number.isFinite(Number(r.coupon_number_start))
+        ? Math.trunc(Number(r.coupon_number_start))
+        : null,
+    coupon_number_mode: (r.coupon_number_mode as SorteoCouponNumberMode | null) ?? null,
+    coupon_number_limit:
+      r.coupon_number_limit != null && Number.isFinite(Number(r.coupon_number_limit))
+        ? Math.trunc(Number(r.coupon_number_limit))
+        : null,
   };
 }
 
@@ -71,6 +82,10 @@ export type SorteoInput = {
   imagen_url?: string | null;
   ticket_delivery_mode?: Sorteo["ticket_delivery_mode"];
   ticket_image_config?: Record<string, unknown>;
+  coupon_numbering_enabled?: boolean;
+  coupon_number_start?: number | null;
+  coupon_number_mode?: SorteoCouponNumberMode | null;
+  coupon_number_limit?: number | null;
 };
 
 export async function createSorteo(input: SorteoInput): Promise<Sorteo> {
@@ -88,6 +103,10 @@ export async function createSorteo(input: SorteoInput): Promise<Sorteo> {
       imagen_url: input.imagen_url?.trim() || null,
       ticket_delivery_mode: input.ticket_delivery_mode ?? "text_only",
       ticket_image_config: input.ticket_image_config ?? {},
+      coupon_numbering_enabled: input.coupon_numbering_enabled ?? false,
+      coupon_number_start: input.coupon_number_start ?? null,
+      coupon_number_mode: input.coupon_number_mode ?? null,
+      coupon_number_limit: input.coupon_number_limit ?? null,
     }),
   });
   const json = (await res.json()) as { success?: boolean; data?: Record<string, unknown>; error?: string };
@@ -113,6 +132,10 @@ export async function updateSorteo(id: string, input: SorteoInput): Promise<Sort
       imagen_url: input.imagen_url?.trim() || null,
       ticket_delivery_mode: input.ticket_delivery_mode ?? "text_only",
       ticket_image_config: input.ticket_image_config ?? {},
+      coupon_numbering_enabled: input.coupon_numbering_enabled ?? false,
+      coupon_number_start: input.coupon_number_start ?? null,
+      coupon_number_mode: input.coupon_number_mode ?? null,
+      coupon_number_limit: input.coupon_number_limit ?? null,
     }),
   });
   const json = (await res.json()) as { success?: boolean; data?: Record<string, unknown>; error?: string };

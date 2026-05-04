@@ -3,6 +3,7 @@ import { getChatServiceClientForEmpresa } from "@/app/api/chat/_chat-service-cli
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
+import { mergeCouponNumberingFromUnknown } from "@/lib/sorteos/coupon-numbering-api";
 
 /**
  * GET /api/sorteos/:id
@@ -97,6 +98,13 @@ export async function PATCH(
     }
     if (body.ticket_image_config !== undefined && typeof body.ticket_image_config === "object") {
       patch.ticket_image_config = body.ticket_image_config;
+    }
+    if ("coupon_numbering_enabled" in body) {
+      const numbering = mergeCouponNumberingFromUnknown(body as Record<string, unknown>);
+      if ("error" in numbering) {
+        return NextResponse.json(errorResponse(numbering.error), { status: 400 });
+      }
+      Object.assign(patch, numbering);
     }
 
     const sb = await getChatServiceClientForEmpresa(empresaId);
