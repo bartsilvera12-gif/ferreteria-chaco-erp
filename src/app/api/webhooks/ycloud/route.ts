@@ -6,6 +6,9 @@
  * - `whatsapp.smb.message.echoes` — objeto `whatsappMessage` (eco de envíos desde la app WhatsApp Business /
  *   WhatsApp corporativo; `from` = línea del negocio, `to` = cliente). Persistencia como mensaje saliente
  *   (`from_me`, sin incrementar unread). Sin autoasignación.
+ * - `whatsapp.message.updated` — mism objeto `whatsappMessage` con `status` sent/delivered/read/failed
+ *   para mensajes salientes (reconciliación de campañas). Documentación:
+ *   https://docs.ycloud.com/reference/whatsapp-message-updated-webhook-examples
  *
  * Referencia YCloud (ejemplos SMB / sync): https://docs.ycloud.com/reference/whatsapp-business-app-sent-message-sync-webhook-examples
  */
@@ -31,6 +34,10 @@ import { resolveYCloudChannelForWebhook } from "@/lib/chat/webhooks/ycloud-resol
 import { enrichYCloudStoredRawPayloadWithResolvableMediaUrl } from "@/lib/chat/ycloud-inbound-media-enrich";
 import { ensureWhatsappInboundCrmLeadPg } from "@/lib/crm/whatsapp-inbound-lead-pg";
 import { ensureWhatsappInboundCrmProspecto } from "@/lib/crm/whatsapp-inbound-lead";
+import {
+  applyYCloudCampaignMessageUpdated,
+  resolveYCloudCampaignStatusWebhookContext,
+} from "@/lib/campaigns/ycloud-outbound-campaign-status";
 import type { SupabaseAdmin } from "@/lib/chat/types";
 import { createServiceRoleClientForEmpresa } from "@/lib/supabase/empresa-data-schema";
 
@@ -81,6 +88,28 @@ export async function POST(request: NextRequest) {
     }
     msg = wm as Record<string, unknown>;
     ids = extractSmbEchoIdentifiersForRouting(msg);
+  } else if (eventType === "whatsapp.message.updated") {
+    const wm = env?.whatsappMessage;
+    if (!wm || typeof wm !== "object" || Array.isArray(wm)) {
+      console.info(LOG, LOG_IN, "message.updated sin whatsappMessage", { event_id: env?.id });
+      return new Response("OK", { status: 200 });
+    }
+    const wmsg = wm as Record<string, unknown>;
+    const ctx = await resolveYCloudCampaignStatusWebhookContext({
+      rawBody,
+      sigHeader,
+      whatsappMessage: wmsg,
+    });
+    if (!ctx) {
+      console.info(LOG, LOG_IN, "message.updated sin_contexto_campaña", { event_id: env?.id });
+      return new Response("OK", { status: 200 });
+    }
+    await applyYCloudCampaignMessageUpdated({
+      resolved: ctx.resolved,
+      whatsappMessage: wmsg,
+      hintRecipient: ctx.hintRecipient,
+    });
+    return new Response("OK", { status: 200 });
   } else {
     console.info(LOG, LOG_IN, "evento ignorado (ack)", { eventType, event_id: env?.id });
     return new Response("OK", { status: 200 });

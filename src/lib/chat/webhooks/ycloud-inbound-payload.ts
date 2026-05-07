@@ -5,7 +5,7 @@ export type YCloudWebhookEnvelope = {
   type?: string;
   createTime?: string;
   whatsappInboundMessage?: Record<string, unknown>;
-  /** Eco SMB: mensajes enviados desde la app WhatsApp Business / WhatsApp corporativo. */
+  /** Eco SMB o actualizaciones `whatsapp.message.updated` (estado del mensaje saliente). */
   whatsappMessage?: Record<string, unknown>;
 };
 

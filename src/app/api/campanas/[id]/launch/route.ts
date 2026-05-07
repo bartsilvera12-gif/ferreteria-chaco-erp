@@ -7,7 +7,12 @@ import {
   resolveHeaderImageUrlForCampaign,
   templateSnapshotHasHeaderImage,
 } from "@/lib/campaigns/campaign-header-image";
-import { mappingSatisfiedForTemplate } from "@/lib/campaigns/campaign-mapping";
+import {
+  mappingSatisfiedForTemplate,
+  normalizeVariableMapping,
+  variableMappingCoversTemplate,
+} from "@/lib/campaigns/campaign-mapping";
+import { extractBodyPlaceholderKeysOrdered } from "@/lib/campaigns/campaign-template-payload";
 import { runCampaignProcessOnce } from "@/lib/campaigns/campaign-job-service";
 import type { SupabaseAdmin } from "@/lib/chat/types";
 
@@ -26,7 +31,7 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
 
     const { data: campaign, error: cErr } = await sb
       .from("chat_campaigns")
-      .select("id, status, template_components_json, template_name, send_config_json")
+      .select("id, status, template_components_json, template_name, send_config_json, variable_mapping_json")
       .eq("id", campaignId)
       .eq("empresa_id", auth.empresaId)
       .maybeSingle();
@@ -51,6 +56,25 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
     }
 
     const tpl = (campaign as { template_components_json?: unknown }).template_components_json ?? [];
+
+    const vmRaw = (campaign as { variable_mapping_json?: unknown }).variable_mapping_json ?? {};
+    const mappingNorm =
+      vmRaw && typeof vmRaw === "object" && !Array.isArray(vmRaw)
+        ? normalizeVariableMapping(vmRaw as Record<string, unknown>)
+        : {};
+
+    const requiredSlots = extractBodyPlaceholderKeysOrdered(tpl as unknown[]);
+    if (
+      requiredSlots.length > 0 &&
+      (Object.keys(mappingNorm).length === 0 || !variableMappingCoversTemplate(mappingNorm, tpl as unknown[]))
+    ) {
+      return NextResponse.json(
+        errorResponse(
+          "Completá el mapeo de variables (cada {{variable}} del body debe tener una columna del Excel asignada) y validá antes de enviar."
+        ),
+        { status: 400 }
+      );
+    }
 
     const headerResolution = resolveHeaderImageUrlForCampaign({
       templateComponentsJson: tpl,

@@ -22,7 +22,7 @@ export type SendWhatsAppTextParams = {
 
 export type SendWhatsAppTextResult =
   | { ok: true; waMessageId: string | null; raw: unknown }
-  | { ok: false; error: string; status?: number; raw?: unknown };
+  | { ok: false; error: string; status?: number; code?: string; raw?: unknown };
 
 export type SendWhatsAppButtonsParams = {
   toDigits: string;

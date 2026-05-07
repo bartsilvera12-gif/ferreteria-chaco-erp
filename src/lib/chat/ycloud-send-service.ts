@@ -39,6 +39,23 @@ async function postYCloudWhatsappMessage(
     };
   }
 
+  const ycloudStatus = typeof raw.status === "string" ? raw.status.toLowerCase() : "";
+  if (ycloudStatus === "failed") {
+    const errMsg =
+      (typeof raw.errorMessage === "string" && raw.errorMessage.trim()) ||
+      "El proveedor marcó el mensaje como fallido";
+    const errCode = raw.errorCode ?? (raw as { errroCode?: unknown }).errroCode;
+    const codeStr = errCode != null ? String(errCode) : "";
+    console.warn("[ycloud-send] provider_failed", { httpStatus: res.status, ycloudStatus, code: codeStr });
+    return {
+      ok: false,
+      error: errMsg,
+      code: codeStr || undefined,
+      status: res.status,
+      raw,
+    };
+  }
+
   const wamid = typeof raw.wamid === "string" ? raw.wamid : null;
   const id = typeof raw.id === "string" ? raw.id : null;
   const waMessageId = wamid || id;

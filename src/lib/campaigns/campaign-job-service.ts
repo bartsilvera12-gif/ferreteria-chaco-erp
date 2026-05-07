@@ -7,7 +7,7 @@ import {
 
 export const DEFAULT_BATCH_SIZE = 25;
 
-async function refreshCampaignCounters(supabase: SupabaseAdmin, empresaId: string, campaignId: string) {
+export async function refreshCampaignCounters(supabase: SupabaseAdmin, empresaId: string, campaignId: string) {
   const statuses = [
     "pending",
     "invalid",

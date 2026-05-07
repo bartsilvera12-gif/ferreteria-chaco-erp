@@ -288,3 +288,41 @@ export async function resolveYCloudChannelForWebhook(
   });
   return null;
 }
+
+/**
+ * Valida la firma HMAC del body contra los canales YCloud de una sola empresa
+ * (p. ej. eventos `whatsapp.message.updated` con `externalId` y sin from/to en el payload).
+ */
+export async function verifyYCloudWebhookSignatureForEmpresa(
+  rawBody: string,
+  signatureHeader: string | null,
+  empresaId: string
+): Promise<boolean> {
+  const { data: emp, error } = await createServiceRoleClient()
+    .from("empresas")
+    .select("data_schema")
+    .eq("id", empresaId)
+    .maybeSingle();
+  if (error || !emp) {
+    console.warn(LOG, LOG_IN, "verify_empresa", { error: error?.message, empresaId });
+    return false;
+  }
+  const dataSchema = resolveEmpresaDataSchema((emp as { data_schema?: string | null }).data_schema);
+  const { rows, skipReason } = await loadYcloudChannelRows(empresaId, dataSchema);
+  if (skipReason && rows.length === 0) {
+    console.info(LOG, LOG_IN, "verify_empresa_sin_canales", { empresaId, skipReason });
+    return false;
+  }
+  for (const row of rows) {
+    const r = row as ChannelRow;
+    const cfg =
+      r.config && typeof r.config === "object" && !Array.isArray(r.config)
+        ? (r.config as Record<string, unknown>)
+        : {};
+    const secret = cfgStr(cfg, "ycloud_webhook_secret");
+    if (!secret) continue;
+    const sig = verifyYCloudWebhookSignatureWithDebug(rawBody, signatureHeader, secret);
+    if (sig.ok) return true;
+  }
+  return false;
+}

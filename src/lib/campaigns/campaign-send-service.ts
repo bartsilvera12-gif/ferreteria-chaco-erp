@@ -12,6 +12,8 @@ import {
 import {
   buildCampaignTemplatePreviewText,
   buildMetaCloudTemplatePayload,
+  extractBodyPlaceholderKeysOrdered,
+  logCampaignTemplateVarsResolved,
 } from "@/lib/campaigns/campaign-template-payload";
 import { ensureCentralChatConversationMirror } from "@/lib/chat/central-chat-conversation-mirror";
 import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
@@ -240,6 +242,24 @@ export async function sendCampaignRecipientMessage(params: {
   const mappedBySlot = mappedVarsToSlotRecord(
     (recipient.mapped_variables_json || {}) as Record<string, unknown>
   );
+
+  const placeholderKeys = extractBodyPlaceholderKeysOrdered(campaign.template_components_json);
+  const missingPlaceholders = placeholderKeys.filter((k) => !String(mappedBySlot[k] ?? "").trim());
+  if (placeholderKeys.length > 0 && missingPlaceholders.length > 0) {
+    return {
+      ok: false,
+      error: `Faltan valores para: ${missingPlaceholders.map((s) => `{{${s}}}`).join(", ")}`,
+    };
+  }
+
+  logCampaignTemplateVarsResolved({
+    campaign_id: campaign.id,
+    recipient_id: recipient.id,
+    template_name: campaign.template_name,
+    placeholders_count: placeholderKeys.length,
+    params_count: placeholderKeys.length,
+    missing_placeholders: missingPlaceholders,
+  });
 
   const cfg = (campaign.send_config_json ?? {}) as Record<string, unknown>;
   const headerFromConfig =

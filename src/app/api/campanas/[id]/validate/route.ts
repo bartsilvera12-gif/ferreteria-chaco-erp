@@ -9,9 +9,15 @@ import {
 } from "@/lib/campaigns/campaign-header-image";
 import {
   buildMappedVariablesFromRow,
+  formatMissingMappingMessage,
+  formatMissingValueMessage,
+  listSlotsMissingFromMapping,
+  listSlotsWithEmptyMappedValues,
   mappingSatisfiedForTemplate,
   normalizeVariableMapping,
+  variableMappingCoversTemplate,
 } from "@/lib/campaigns/campaign-mapping";
+import { extractBodyPlaceholderKeysOrdered } from "@/lib/campaigns/campaign-template-payload";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
@@ -60,6 +66,7 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
     }
 
     const tplComponents = (campaign as { template_components_json?: unknown }).template_components_json ?? [];
+    const requiredSlots = extractBodyPlaceholderKeysOrdered(tplComponents as unknown[]);
 
     const { data: recipients, error: rErr } = await sb
       .from("chat_campaign_recipients")
@@ -74,6 +81,16 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
     let mappingErrors = 0;
     const ts = new Date().toISOString();
 
+    const mappingDefinitionIncomplete =
+      requiredSlots.length > 0 &&
+      (Object.keys(mapping).length === 0 || !variableMappingCoversTemplate(mapping, tplComponents as unknown[]));
+
+    const missingMappingSlots = listSlotsMissingFromMapping(mapping, tplComponents as unknown[]);
+    const mappingDefinitionMessage =
+      requiredSlots.length > 0 && Object.keys(mapping).length === 0
+        ? "La plantilla tiene variables: definí el mapeo desde cada {{variable}} hacia una columna del Excel."
+        : missingMappingSlots.map(formatMissingMappingMessage).join(" ");
+
     for (const rec of recipients ?? []) {
       const row = rec as {
         id: string;
@@ -82,25 +99,36 @@ export async function POST(request: NextRequest, ctx: RouteCtx) {
       };
       if (row.status === "invalid") continue;
 
-      const payload = (row.row_payload_json ?? {}) as Record<string, string>;
-      const mapped =
-        Object.keys(mapping).length > 0
-          ? buildMappedVariablesFromRow(payload, mapping)
-          : {};
-
-      const okMap =
-        Object.keys(mapping).length === 0
-          ? mappingSatisfiedForTemplate(tplComponents as unknown[], {})
-          : mappingSatisfiedForTemplate(tplComponents as unknown[], mapped);
-
-      if (!okMap) {
+      if (mappingDefinitionIncomplete) {
         mappingErrors += 1;
         await sb
           .from("chat_campaign_recipients")
           .update({
             status: "pending",
+            mapped_variables_json: {},
+            validation_error: mappingDefinitionMessage || "Mapeo de variables incompleto",
+            updated_at: ts,
+          })
+          .eq("id", row.id)
+          .eq("empresa_id", auth.empresaId);
+        continue;
+      }
+
+      const payload = (row.row_payload_json ?? {}) as Record<string, string>;
+      const mapped = buildMappedVariablesFromRow(payload, mapping);
+
+      const okMap = mappingSatisfiedForTemplate(tplComponents as unknown[], mapped);
+
+      if (!okMap) {
+        mappingErrors += 1;
+        const emptySlots = listSlotsWithEmptyMappedValues(mapped, tplComponents as unknown[]);
+        const errMsg = emptySlots.map(formatMissingValueMessage).join(" ");
+        await sb
+          .from("chat_campaign_recipients")
+          .update({
+            status: "pending",
             mapped_variables_json: mapped,
-            validation_error: "Faltan variables de plantilla",
+            validation_error: errMsg || "Faltan variables de plantilla",
             updated_at: ts,
           })
           .eq("id", row.id)
