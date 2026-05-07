@@ -4,31 +4,31 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { ClienteSearchSelect } from "@/app/dashboard/proyectos/components/ClienteSearchSelect";
 
 type Tipo = { id: string; nombre: string; codigo: string };
 type Estado = { id: string; nombre: string };
 type Cliente = { id: string; empresa?: string | null; nombre_contacto?: string | null };
 type Usuario = { id: string; nombre?: string | null };
 
-const WEB_BRIEF_KEYS: { key: string; label: string; type?: "bool" }[] = [
-  { key: "marca", label: "Nombre de la marca" },
-  { key: "rubro", label: "Rubro" },
-  { key: "objetivo", label: "Objetivo de la web" },
-  { key: "tipo_web", label: "Tipo de web (institucional, ecommerce, etc.)" },
-  { key: "secciones", label: "Secciones necesarias" },
-  { key: "estilo_colores", label: "Colores o estilo deseado" },
-  { key: "logo_entregado", label: "Logo entregado", type: "bool" },
-  { key: "redes_sociales", label: "Redes sociales" },
-  { key: "whatsapp_contacto", label: "WhatsApp de contacto" },
-  { key: "dominio_existente", label: "Dominio existente", type: "bool" },
-  { key: "dominio_usar", label: "Dominio a usar" },
-  { key: "hosting_existente", label: "Hosting existente", type: "bool" },
-  { key: "referencias_urls", label: "Referencias de páginas" },
-  { key: "textos_entregados", label: "Textos entregados", type: "bool" },
-  { key: "fotos_entregadas", label: "Fotos entregadas", type: "bool" },
-  { key: "productos_entregados", label: "Productos entregados", type: "bool" },
-  { key: "accesos_entregados", label: "Accesos entregados", type: "bool" },
-  { key: "observaciones_brief", label: "Observaciones del brief" },
+/** Campos del brief web guardados en `brief_data` (JSON). Sin checkbox de logo ni dominio existente (compat.: datos viejos siguen en JSON al editar desde detalle). */
+type BriefFieldDef =
+  | { kind: "checkbox"; key: string; label: string }
+  | { kind: "text"; key: string; label: string; placeholder?: string };
+
+const WEB_BRIEF_FIELDS: BriefFieldDef[] = [
+  { kind: "text", key: "marca", label: "Nombre de la marca" },
+  { kind: "text", key: "rubro", label: "Rubro" },
+  { kind: "text", key: "objetivo", label: "Objetivo de la web" },
+  { kind: "text", key: "tipo_web", label: "Tipo de web (institucional, ecommerce, etc.)" },
+  { kind: "text", key: "secciones", label: "Secciones necesarias" },
+  { kind: "text", key: "estilo_colores", label: "Colores o estilo deseado" },
+  { kind: "text", key: "logo_cliente", label: "Logo del cliente", placeholder: "https://..." },
+  { kind: "text", key: "redes_sociales", label: "Redes sociales" },
+  { kind: "text", key: "whatsapp_contacto", label: "WhatsApp de contacto" },
+  { kind: "text", key: "dominio_usar", label: "Dominio a usar" },
+  { kind: "checkbox", key: "hosting_existente", label: "Hosting existente" },
+  { kind: "text", key: "referencias_urls", label: "Referencias de páginas" },
 ];
 
 export default function ProyectoNuevoClient() {
@@ -52,7 +52,6 @@ export default function ProyectoNuevoClient() {
   const [fechaIngreso, setFechaIngreso] = useState(() => new Date().toISOString().slice(0, 10));
   const [fechaProm, setFechaProm] = useState("");
   const [monto, setMonto] = useState("");
-  const [obsCom, setObsCom] = useState("");
   const [brief, setBrief] = useState<Record<string, string>>({});
 
   const tipoCodigo = useMemo(() => tipos.find((t) => t.id === tipoId)?.codigo ?? "", [tipos, tipoId]);
@@ -94,7 +93,7 @@ export default function ProyectoNuevoClient() {
     const brief_data =
       esWeb
         ? Object.fromEntries(
-            WEB_BRIEF_KEYS.map(({ key }) => [key, brief[key] ?? ""]).filter(([, v]) => v !== "")
+            WEB_BRIEF_FIELDS.map(({ key }) => [key, brief[key] ?? ""]).filter(([, v]) => v !== "")
           )
         : {};
 
@@ -109,7 +108,6 @@ export default function ProyectoNuevoClient() {
       fecha_ingreso: new Date(fechaIngreso + "T12:00:00").toISOString(),
       fecha_prometida: fechaProm ? new Date(fechaProm + "T12:00:00").toISOString() : null,
       monto_vendido: monto.trim() === "" ? null : Number(monto),
-      observaciones_comerciales: obsCom || null,
       brief_data,
     };
     if (estadoId) body.estado_id = estadoId;
@@ -168,21 +166,7 @@ export default function ProyectoNuevoClient() {
               ))}
             </select>
           </label>
-          <label className="block text-sm sm:col-span-2">
-            <span className="font-medium text-slate-700">Cliente</span>
-            <select
-              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-              value={clienteId}
-              onChange={(e) => setClienteId(e.target.value)}
-            >
-              <option value="">Sin cliente / definir luego</option>
-              {clientes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {(c.empresa || "").trim() || (c.nombre_contacto || "").trim() || c.id.slice(0, 8)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <ClienteSearchSelect clientes={clientes} value={clienteId} onChange={setClienteId} />
           <label className="block text-sm">
             <span className="font-medium text-slate-700">Estado inicial (opcional)</span>
             <select
@@ -282,22 +266,12 @@ export default function ProyectoNuevoClient() {
           />
         </label>
 
-        <label className="block text-sm">
-          <span className="font-medium text-slate-700">Observaciones comerciales</span>
-          <textarea
-            className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-            rows={2}
-            value={obsCom}
-            onChange={(e) => setObsCom(e.target.value)}
-          />
-        </label>
-
         {esWeb ? (
           <div className="space-y-3 rounded-lg border border-indigo-100 bg-indigo-50/40 p-4">
             <h2 className="text-sm font-semibold text-indigo-900">Brief web</h2>
             <div className="grid gap-3 sm:grid-cols-2">
-              {WEB_BRIEF_KEYS.map((f) =>
-                f.type === "bool" ? (
+              {WEB_BRIEF_FIELDS.map((f) =>
+                f.kind === "checkbox" ? (
                   <label key={f.key} className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -313,6 +287,7 @@ export default function ProyectoNuevoClient() {
                     <span className="text-slate-700">{f.label}</span>
                     <input
                       className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                      placeholder={f.placeholder}
                       value={brief[f.key] ?? ""}
                       onChange={(e) => setBrief((b) => ({ ...b, [f.key]: e.target.value }))}
                     />

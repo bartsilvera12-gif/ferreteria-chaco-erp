@@ -72,7 +72,6 @@ export default function ProyectosKanbanClient() {
   const [q, setQ] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
-  const [filtroPrioridad, setFiltroPrioridad] = useState("");
   const [filtroRc, setFiltroRc] = useState("");
   const [filtroRt, setFiltroRt] = useState("");
   const [tipoOpts, setTipoOpts] = useState<{ id: string; nombre: string }[]>([]);
@@ -85,7 +84,6 @@ export default function ProyectosKanbanClient() {
     if (q.trim()) sp.set("q", q.trim());
     if (filtroEstado) sp.set("estado_id", filtroEstado);
     if (filtroTipo) sp.set("tipo_id", filtroTipo);
-    if (filtroPrioridad) sp.set("prioridad", filtroPrioridad);
     if (filtroRc) sp.set("responsable_comercial_id", filtroRc);
     if (filtroRt) sp.set("responsable_tecnico_id", filtroRt);
 
@@ -124,7 +122,7 @@ export default function ProyectosKanbanClient() {
     if (jUsers.usuarios) setUserOpts(jUsers.usuarios);
 
     setLoading(false);
-  }, [q, filtroEstado, filtroTipo, filtroPrioridad, filtroRc, filtroRt]);
+  }, [q, filtroEstado, filtroTipo, filtroRc, filtroRt]);
 
   useEffect(() => {
     void load();
@@ -194,7 +192,7 @@ export default function ProyectosKanbanClient() {
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm xl:flex-row xl:flex-wrap xl:items-center">
         <input
           className="min-w-[200px] flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm"
           placeholder="Buscar título o cliente…"
@@ -204,13 +202,13 @@ export default function ProyectosKanbanClient() {
         />
         <button
           type="button"
-          className="rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-200"
+          className="shrink-0 rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-200"
           onClick={() => void load()}
         >
           Buscar
         </button>
         <select
-          className="rounded-md border border-slate-200 px-2 py-2 text-sm"
+          className="min-w-[160px] shrink-0 rounded-md border border-slate-200 px-2 py-2 text-sm"
           value={filtroEstado}
           onChange={(e) => setFiltroEstado(e.target.value)}
         >
@@ -222,7 +220,7 @@ export default function ProyectosKanbanClient() {
           ))}
         </select>
         <select
-          className="rounded-md border border-slate-200 px-2 py-2 text-sm"
+          className="min-w-[140px] shrink-0 rounded-md border border-slate-200 px-2 py-2 text-sm"
           value={filtroTipo}
           onChange={(e) => setFiltroTipo(e.target.value)}
         >
@@ -234,18 +232,7 @@ export default function ProyectosKanbanClient() {
           ))}
         </select>
         <select
-          className="rounded-md border border-slate-200 px-2 py-2 text-sm"
-          value={filtroPrioridad}
-          onChange={(e) => setFiltroPrioridad(e.target.value)}
-        >
-          <option value="">Prioridad</option>
-          <option value="baja">Baja</option>
-          <option value="normal">Normal</option>
-          <option value="alta">Alta</option>
-          <option value="urgente">Urgente</option>
-        </select>
-        <select
-          className="rounded-md border border-slate-200 px-2 py-2 text-sm"
+          className="min-w-[170px] shrink-0 rounded-md border border-slate-200 px-2 py-2 text-sm"
           value={filtroRc}
           onChange={(e) => setFiltroRc(e.target.value)}
         >
@@ -257,7 +244,7 @@ export default function ProyectosKanbanClient() {
           ))}
         </select>
         <select
-          className="rounded-md border border-slate-200 px-2 py-2 text-sm"
+          className="min-w-[170px] shrink-0 rounded-md border border-slate-200 px-2 py-2 text-sm"
           value={filtroRt}
           onChange={(e) => setFiltroRt(e.target.value)}
         >
