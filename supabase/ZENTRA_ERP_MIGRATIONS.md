@@ -67,3 +67,26 @@ Algunos tenants (`erp_*`) reciben **repunte puntual de FK** hacia tablas en **su
 
 - Es un esquema de **micro-migración gradual**, no una migración masiva multi-schema.
 - **No extrapolar** a otros tenants sin diagnóstico equivalente (FKs y datos por schema).
+
+## Micro-correcciones Triple 7 — flujo sorteo, sesiones, comprobantes y ticket PNG
+
+Migración versionada: **`20260607120000_fix_triple7_flow_session_and_ticket_fk_micro_corrections.sql`** (exclusivamente el schema **`erp_triple_7_82f8a15a`**).
+
+Fueron **correcciones acotadas por tenant** aplicadas en producción para alinear FKs con tablas del mismo schema (evitar referencias residuales a `zentra_erp` donde los datos viven en el tenant) y fijar el modo de entrega de ticket del sorteo TRIPLE 7. **No** es una migración masiva multi-schema ni un patrón genérico para todos los `erp_*`.
+
+**Contenido reflejado (micro-pasos 3–8):**
+
+| Paso | Tabla(s) | Cambio |
+|------|----------|--------|
+| 3 | `sorteo_entradas` | FKs hacia `clientes`, `chat_conversations`, `chat_comprobante_validaciones` con `ON DELETE SET NULL` según corresponda |
+| 4 | `sorteo_ticket_deliveries` | FKs hacia `sorteos` y `sorteo_entradas` con `ON DELETE CASCADE` |
+| 5 | `chat_conversations` | `active_flow_session_id` → `chat_flow_sessions` con `ON DELETE SET NULL` |
+| 6 | `chat_flow_events`, `chat_flow_data` | `flow_session_id` → `chat_flow_sessions` (`SET NULL` / `CASCADE` según tabla) |
+| 7 | `chat_comprobante_validaciones` | `flow_session_id` → `chat_flow_sessions` con `ON DELETE CASCADE` |
+| 8 | `sorteos` | Para el sorteo id `d891810e-114c-4276-a2f3-65aab8732fc8` (nombre TRIPLE 7): `ticket_delivery_mode` de `text_only` → `text_and_image` solo si aún estaba en `text_only`; si ya es `text_and_image`, no-op; otros valores → error explícito (no pisar en silencio) |
+
+La migración es **idempotente**: solo **repunta** una FK si sigue apuntando a `zentra_erp`; si ya es local, emite `RAISE NOTICE` y no altera. Usa `NOT VALID` + comprobación de huérfanos + `VALIDATE CONSTRAINT`.
+
+**Operación manual de QA (no repetible en migración):** durante pruebas se alineó una conversación concreta (`conversation_id = 915f0cfd-b371-41c0-8561-539420bb5f50`, `active_flow_session_id = e901af61-a595-4666-ac1a-7dd976819cc5`). Eso fue **reparación operativa puntual**, no parte del DDL versionado obligatorio para nuevas bases.
+
+**Advertencia:** no extrapolar estos cambios a otros tenants sin revisar `pg_get_constraintdef`, huérfanos y datos en cada schema.
