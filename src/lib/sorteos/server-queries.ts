@@ -309,8 +309,10 @@ async function fetchSorteoCuponesOrdenesPgDirect(
       const pf = pfRaw === "promo" || pfRaw === "lista" ? pfRaw : null;
       const promoNom = r.promo_nombre;
 
+      const cupImp = r.cupones_impresos_at;
       return {
         entrada_id: id,
+        sorteo_id: sid,
         numero_orden: typeof r.numero_orden === "number" ? r.numero_orden : 0,
         nombre_participante: String(r.nombre_participante ?? ""),
         documento:
@@ -327,6 +329,8 @@ async function fetchSorteoCuponesOrdenesPgDirect(
           r.chat_conversation_id == null ? null : String(r.chat_conversation_id),
         sorteo_nombre: sorteoNombre ?? "—",
         numeros_cupon: numeros,
+        cupones_impresos_at:
+          cupImp instanceof Date ? cupImp.toISOString() : cupImp != null ? String(cupImp) : null,
       };
     })
     .filter((x): x is SorteoCuponOrdenRow => x !== null);
@@ -590,8 +594,10 @@ async function fetchSorteoCuponesOrdenesPostgrest(
       const pf = pfRaw === "promo" || pfRaw === "lista" ? pfRaw : null;
       const promoNom = r.promo_nombre;
 
+      const cupImp = r.cupones_impresos_at;
       return {
         entrada_id: id,
+        sorteo_id: sid,
         numero_orden: typeof r.numero_orden === "number" ? r.numero_orden : 0,
         nombre_participante: String(r.nombre_participante ?? ""),
         documento:
@@ -608,6 +614,8 @@ async function fetchSorteoCuponesOrdenesPostgrest(
           r.chat_conversation_id == null ? null : String(r.chat_conversation_id),
         sorteo_nombre: sorteoNombre ?? "—",
         numeros_cupon: numeros,
+        cupones_impresos_at:
+          cupImp instanceof Date ? cupImp.toISOString() : cupImp != null ? String(cupImp) : null,
       };
     })
     .filter((x): x is SorteoCuponOrdenRow => x !== null);

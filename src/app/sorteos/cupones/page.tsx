@@ -8,6 +8,7 @@ import type { SorteoEntradaEstadoPago } from "@/lib/sorteos/types";
 import SorteoCuponesEstadoPagoFilter from "@/components/sorteos/SorteoCuponesEstadoPagoFilter";
 import SorteosCuponesManualClient from "@/components/sorteos/SorteosCuponesManualClient";
 import SorteoCuponesPagoCell from "@/components/sorteos/SorteoCuponesPagoCell";
+import SorteoCuponesImpresionCell from "@/components/sorteos/SorteoCuponesImpresionCell";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -186,7 +187,7 @@ export default async function SorteoCuponesPage({
           <div className="py-16 text-center text-gray-400 text-sm">No hay órdenes con cupones</div>
         ) : rows.length === 0 ? null : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1040px]">
+            <table className="w-full min-w-[1140px]">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
                   <th className="text-left text-sm font-semibold text-slate-600 px-5 py-3">Nº orden</th>
@@ -197,6 +198,7 @@ export default async function SorteoCuponesPage({
                   <th className="text-left text-sm font-semibold text-slate-600 px-5 py-3">Cantidad</th>
                   <th className="text-right text-sm font-semibold text-slate-600 px-5 py-3">Monto</th>
                   <th className="text-left text-sm font-semibold text-slate-600 px-5 py-3">Cupones</th>
+                  <th className="text-left text-sm font-semibold text-slate-600 px-5 py-3">Impresión</th>
                   <th className="text-left text-sm font-semibold text-slate-600 px-5 py-3">Pago</th>
                   <th className="text-left text-sm font-semibold text-slate-600 px-5 py-3">Fecha</th>
                   <th className="text-left text-sm font-semibold text-slate-600 px-5 py-3">Chat</th>
@@ -218,6 +220,13 @@ export default async function SorteoCuponesPage({
                       ) : null}
                     </td>
                     <td className="px-5 py-3 text-sm font-mono text-slate-800">{r.numeros_cupon.join(", ")}</td>
+                    <td className="px-5 py-3 text-sm">
+                      <SorteoCuponesImpresionCell
+                        sorteoId={r.sorteo_id}
+                        entradaId={r.entrada_id}
+                        cuponesImpresosAt={r.cupones_impresos_at}
+                      />
+                    </td>
                     <SorteoCuponesPagoCell entradaId={r.entrada_id} estadoPago={r.estado_pago} />
                     <td className="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{formatFecha(r.created_at)}</td>
                     <td className="px-5 py-3 text-sm">

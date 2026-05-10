@@ -229,6 +229,7 @@ export async function getSorteoCuponesOrdenes(): Promise<SorteoCuponOrdenRow[]> 
       const promoNom = r.promo_nombre;
       return {
         entrada_id: r.id,
+        sorteo_id: String((r as { sorteo_id?: string }).sorteo_id ?? ""),
         numero_orden: typeof r.numero_orden === "number" ? r.numero_orden : 0,
         nombre_participante: r.nombre_participante,
         documento: r.documento?.trim() ? r.documento.trim() : null,
@@ -243,6 +244,10 @@ export async function getSorteoCuponesOrdenes(): Promise<SorteoCuponOrdenRow[]> 
         chat_conversation_id: r.chat_conversation_id ?? null,
         sorteo_nombre: sorteoNombre ?? "—",
         numeros_cupon: numeros,
+        cupones_impresos_at:
+          (r as { cupones_impresos_at?: string | null }).cupones_impresos_at != null
+            ? String((r as { cupones_impresos_at?: string | null }).cupones_impresos_at)
+            : null,
       };
     })
     .filter((x): x is SorteoCuponOrdenRow => x !== null);

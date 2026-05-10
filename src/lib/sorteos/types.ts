@@ -105,6 +105,7 @@ export interface SorteoEntrada {
 /** Fila agregada para la vista Cupones (una por orden con cupones listados). */
 export type SorteoCuponOrdenRow = {
   entrada_id: string;
+  sorteo_id: string;
   numero_orden: number;
   nombre_participante: string;
   documento: string | null;
@@ -118,6 +119,8 @@ export type SorteoCuponOrdenRow = {
   chat_conversation_id: string | null;
   sorteo_nombre: string;
   numeros_cupon: string[];
+  /** Impresión física urna (migración cupones_impresos_*). */
+  cupones_impresos_at: string | null;
 };
 
 export interface SorteoCupon {

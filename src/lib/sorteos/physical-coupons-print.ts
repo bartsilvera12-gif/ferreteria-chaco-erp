@@ -20,7 +20,9 @@ export const PHYSICAL_COUPONS_PRINT_MAX = 8000;
 
 export type PhysicalCouponPrintParams = {
   sorteoId: string;
-  /** Si es null/undefined, se usa `confirmado`. */
+  /** Si está definido, solo cupones de esa entrada; no se filtra por estado_pago (solo lectura de esa orden). */
+  entradaId?: string | null;
+  /** Si es null/undefined, se usa `confirmado` (ignorado cuando hay entradaId). */
   estadoPago?: SorteoEntradaEstadoPago | null;
   q?: string | null;
   /** ISO date YYYY-MM-DD inclusive (filtro sobre fecha de referencia). */
@@ -148,9 +150,18 @@ function mapRow(args: {
   };
 }
 
+export type EntradaImpresionContext = {
+  entrada_id: string;
+  numero_orden: number;
+  nombre_participante: string;
+  cantidad_cupones: number;
+  cupones_impresos_at: string | null;
+};
+
 export type PhysicalCouponsPrintResult = {
   data: PhysicalCouponPrintRow[];
   error: string | null;
+  entrada_context?: EntradaImpresionContext | null;
 };
 
 async function fetchPhysicalCouponsPgDirect(
@@ -160,7 +171,8 @@ async function fetchPhysicalCouponsPgDirect(
   estadoPago: SorteoEntradaEstadoPago,
   q: string | null,
   fechaDesde: string | null,
-  fechaHasta: string | null
+  fechaHasta: string | null,
+  entradaId: string | null
 ): Promise<PhysicalCouponsPrintResult> {
   const pool = getChatPostgresPool();
   if (!pool) {
@@ -176,16 +188,26 @@ async function fetchPhysicalCouponsPgDirect(
   const tEnt = quoteSchemaTable(sch, "sorteo_entradas");
   const tSort = quoteSchemaTable(sch, "sorteos");
 
-  const params: unknown[] = [empresaId, sorteoId, estadoPago];
-  let i = 4;
+  const params: unknown[] = [empresaId, sorteoId];
+  let i = 3;
   const conds: string[] = [
     `c.empresa_id = $1::uuid`,
     `c.sorteo_id = $2::uuid`,
-    `se.estado_pago = $3::text`,
     `se.empresa_id = c.empresa_id`,
     `so.id = c.sorteo_id`,
     `so.empresa_id = c.empresa_id`,
   ];
+
+  if (entradaId) {
+    conds.push(`se.id = $${i}::uuid`);
+    conds.push(`c.entrada_id = $${i}::uuid`);
+    params.push(entradaId);
+    i++;
+  } else {
+    conds.push(`se.estado_pago = $${i}::text`);
+    params.push(estadoPago);
+    i++;
+  }
 
   if (q && q.length > 0) {
     const term = `%${q.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
@@ -278,7 +300,8 @@ async function fetchPhysicalCouponsPostgrest(
   q: string | null,
   fechaDesde: string | null,
   fechaHasta: string | null,
-  modo: string
+  modo: string,
+  entradaId: string | null
 ): Promise<PhysicalCouponsPrintResult> {
   const sb = await getChatServiceClientForEmpresa(empresaId);
 
@@ -289,6 +312,7 @@ async function fetchPhysicalCouponsPostgrest(
       id,
       numero_cupon,
       created_at,
+      entrada_id,
       sorteo_entradas!inner (
         nombre_participante,
         documento,
@@ -302,8 +326,13 @@ async function fetchPhysicalCouponsPostgrest(
     `
     )
     .eq("empresa_id", empresaId)
-    .eq("sorteo_id", sorteoId)
-    .eq("sorteo_entradas.estado_pago", estadoPago);
+    .eq("sorteo_id", sorteoId);
+
+  if (entradaId) {
+    qb = qb.eq("entrada_id", entradaId);
+  } else {
+    qb = qb.eq("sorteo_entradas.estado_pago", estadoPago);
+  }
 
   const { data: raw, error: e1 } = await qb
     .order("created_at", { ascending: true })
@@ -370,7 +399,8 @@ async function runFetch(
   estadoPago: SorteoEntradaEstadoPago,
   q: string | null,
   fechaDesde: string | null,
-  fechaHasta: string | null
+  fechaHasta: string | null,
+  entradaId: string | null
 ): Promise<PhysicalCouponsPrintResult> {
   const modo = resolveModoEjecucion(dataSchema);
 
@@ -381,12 +411,30 @@ async function runFetch(
       console.error("[sorteos][physical-print]", "tenant_sin_pool", { empresa_id: empresaId, schema: dataSchema });
       return { data: [], error: err };
     }
-    return fetchPhysicalCouponsPgDirect(empresaId, dataSchema, sorteoId, estadoPago, q, fechaDesde, fechaHasta);
+    return fetchPhysicalCouponsPgDirect(
+      empresaId,
+      dataSchema,
+      sorteoId,
+      estadoPago,
+      q,
+      fechaDesde,
+      fechaHasta,
+      entradaId
+    );
   }
 
-  /** Búsqueda con texto: SQL completo si hay pool (incl. número de orden), sin depender del límite PostgREST. */
-  if (q?.trim() && getChatPostgresPool()) {
-    return fetchPhysicalCouponsPgDirect(empresaId, dataSchema, sorteoId, estadoPago, q, fechaDesde, fechaHasta);
+  /** Una entrada concreta o búsqueda con texto: SQL completo si hay pool. */
+  if ((entradaId || q?.trim()) && getChatPostgresPool()) {
+    return fetchPhysicalCouponsPgDirect(
+      empresaId,
+      dataSchema,
+      sorteoId,
+      estadoPago,
+      q,
+      fechaDesde,
+      fechaHasta,
+      entradaId
+    );
   }
 
   try {
@@ -398,7 +446,8 @@ async function runFetch(
       q,
       fechaDesde,
       fechaHasta,
-      modo
+      modo,
+      entradaId
     );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -415,6 +464,84 @@ async function runFetch(
  * Lista una fila imprimible por cada registro en sorteo_cupones (solo lectura).
  * Por defecto solo entradas con estado_pago confirmado (si no se pasa otro estado explícito).
  */
+async function fetchEntradaImpresionContextForPrintServer(
+  empresaId: string,
+  dataSchema: string,
+  sorteoId: string,
+  entradaId: string
+): Promise<EntradaImpresionContext | null> {
+  if (isLikelyUnexposedTenantChatSchema(dataSchema)) {
+    const pool = getChatPostgresPool();
+    if (!pool) return null;
+    try {
+      const sch = assertAllowedChatDataSchema(dataSchema);
+      const tEnt = quoteSchemaTable(sch, "sorteo_entradas");
+      const tCup = quoteSchemaTable(sch, "sorteo_cupones");
+      const res = await pool.query(
+        `SELECT se.id,
+                se.numero_orden,
+                se.nombre_participante,
+                se.cupones_impresos_at,
+                (SELECT COUNT(*)::int FROM ${tCup} c
+                 WHERE c.entrada_id = se.id AND c.empresa_id = se.empresa_id) AS cantidad_cupones
+         FROM ${tEnt} se
+         WHERE se.id = $1::uuid AND se.empresa_id = $2::uuid AND se.sorteo_id = $3::uuid
+         LIMIT 1`,
+        [entradaId, empresaId, sorteoId]
+      );
+      const r = res.rows?.[0] as Record<string, unknown> | undefined;
+      if (!r) return null;
+      const at = r.cupones_impresos_at;
+      return {
+        entrada_id: String(r.id),
+        numero_orden: typeof r.numero_orden === "number" ? r.numero_orden : Number(r.numero_orden) || 0,
+        nombre_participante: String(r.nombre_participante ?? ""),
+        cantidad_cupones: typeof r.cantidad_cupones === "number" ? r.cantidad_cupones : Number(r.cantidad_cupones) || 0,
+        cupones_impresos_at:
+          at instanceof Date ? at.toISOString() : at != null ? String(at) : null,
+      };
+    } catch (e) {
+      console.error("[sorteos][physical-print]", "entrada_context_pg", e);
+      return null;
+    }
+  }
+
+  try {
+    const sb = await getChatServiceClientForEmpresa(empresaId);
+    const { data: se, error: e1 } = await sb
+      .from("sorteo_entradas")
+      .select("id, numero_orden, nombre_participante, cupones_impresos_at")
+      .eq("id", entradaId)
+      .eq("empresa_id", empresaId)
+      .eq("sorteo_id", sorteoId)
+      .maybeSingle();
+
+    if (e1 || !se || typeof se !== "object") return null;
+
+    const row = se as Record<string, unknown>;
+    const { count, error: e2 } = await sb
+      .from("sorteo_cupones")
+      .select("*", { count: "exact", head: true })
+      .eq("empresa_id", empresaId)
+      .eq("entrada_id", entradaId);
+
+    if (e2) return null;
+
+    const at = row.cupones_impresos_at;
+    return {
+      entrada_id: String(row.id),
+      numero_orden: typeof row.numero_orden === "number" ? row.numero_orden : Number(row.numero_orden) || 0,
+      nombre_participante: String(row.nombre_participante ?? ""),
+      cantidad_cupones: count ?? 0,
+      cupones_impresos_at:
+        at instanceof Date ? at.toISOString() : at != null ? String(at) : null,
+    };
+  } catch (e) {
+    console.error("[sorteos][physical-print]", "entrada_context_sr", e);
+    return null;
+  }
+}
+
 /** Verifica que el sorteo pertenezca a la empresa actual (lectura; mismo patrón multi-schema). */
 export async function fetchSorteoNombreForEmpresaServer(sorteoId: string): Promise<string | null> {
   const empresaId = await getEmpresaIdForCurrentUserServer();
@@ -464,12 +591,12 @@ export async function fetchPhysicalCouponsForPrintServer(
 ): Promise<PhysicalCouponsPrintResult> {
   const empresaId = await getEmpresaIdForCurrentUserServer();
   if (!empresaId) {
-    return { data: [], error: "Sin sesión o empresa." };
+    return { data: [], error: "Sin sesión o empresa.", entrada_context: null };
   }
 
   const sorteoId = params.sorteoId?.trim();
   if (!sorteoId) {
-    return { data: [], error: "Sorteo no especificado." };
+    return { data: [], error: "Sorteo no especificado.", entrada_context: null };
   }
 
   const estadoPago: SorteoEntradaEstadoPago =
@@ -478,7 +605,36 @@ export async function fetchPhysicalCouponsForPrintServer(
   const q = params.q?.trim() || null;
   const fechaDesde = params.fechaDesde?.trim() || null;
   const fechaHasta = params.fechaHasta?.trim() || null;
+  const entradaId = params.entradaId?.trim() || null;
 
   const dataSchema = await fetchDataSchemaForEmpresaId(empresaId);
-  return runFetch(empresaId, dataSchema, sorteoId, estadoPago, q, fechaDesde, fechaHasta);
+
+  let entrada_context: EntradaImpresionContext | null = null;
+  if (entradaId) {
+    entrada_context = await fetchEntradaImpresionContextForPrintServer(
+      empresaId,
+      dataSchema,
+      sorteoId,
+      entradaId
+    );
+    if (!entrada_context) {
+      return {
+        data: [],
+        error: "La orden no existe o no pertenece a este sorteo.",
+        entrada_context: null,
+      };
+    }
+  }
+
+  const out = await runFetch(
+    empresaId,
+    dataSchema,
+    sorteoId,
+    estadoPago,
+    q,
+    fechaDesde,
+    fechaHasta,
+    entradaId
+  );
+  return { ...out, entrada_context };
 }

@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { PhysicalCouponPrintRow } from "@/lib/sorteos/physical-coupons-print";
+import { useState } from "react";
+import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import type {
+  EntradaImpresionContext,
+  PhysicalCouponPrintRow,
+} from "@/lib/sorteos/physical-coupons-print";
 import type { SorteoEntradaEstadoPago } from "@/lib/sorteos/types";
 
 const COLS = 2;
@@ -31,6 +36,8 @@ export default function PhysicalCouponsPrintClient({
   estado,
   fechaDesde,
   fechaHasta,
+  entradaId,
+  entradaContext,
 }: {
   sorteoId: string;
   sorteoNombre: string;
@@ -40,12 +47,49 @@ export default function PhysicalCouponsPrintClient({
   estado: SorteoEntradaEstadoPago;
   fechaDesde: string;
   fechaHasta: string;
+  entradaId: string | null;
+  entradaContext: EntradaImpresionContext | null;
 }) {
   const router = useRouter();
   const pages = chunk(rows, PER_PAGE);
 
+  const [confirmPending, setConfirmPending] = useState(false);
+  const [confirmErr, setConfirmErr] = useState<string | null>(null);
+  const [confirmOk, setConfirmOk] = useState(false);
+
+  const modoEntrada = Boolean(entradaId && entradaContext);
+  const yaImpreso = Boolean(entradaContext?.cupones_impresos_at);
+  const mostrarConfirmar = modoEntrada && Boolean(entradaId) && !yaImpreso && !confirmOk;
+
   function handlePrint() {
     window.print();
+  }
+
+  async function handleConfirmarImpresion() {
+    if (!entradaId) return;
+    setConfirmPending(true);
+    setConfirmErr(null);
+    try {
+      const res = await fetchWithSupabaseSession(
+        `/api/sorteos/entradas/${encodeURIComponent(entradaId)}/confirmar-impresion`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sorteo_id: sorteoId }),
+        }
+      );
+      const raw = await res.text();
+      if (!res.ok) {
+        setConfirmErr(raw || `Error ${res.status}`);
+        return;
+      }
+      setConfirmOk(true);
+      router.refresh();
+    } catch (e) {
+      setConfirmErr(e instanceof Error ? e.message : "Error al confirmar");
+    } finally {
+      setConfirmPending(false);
+    }
   }
 
   return (
@@ -77,67 +121,117 @@ export default function PhysicalCouponsPrintClient({
           <p className="text-slate-600 text-sm">
             Se imprimirá un cupón físico por cada cupón confirmado del sorteo.
           </p>
-          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-            Solo se incluyen cupones de compras confirmadas, salvo que cambies el filtro de estado de pago.
-          </p>
+          {!modoEntrada ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+              Solo se incluyen cupones de compras confirmadas, salvo que cambies el filtro de estado de pago.
+            </p>
+          ) : null}
           <p className="text-xs text-slate-500">
             Fecha en el cupón: se usa la fecha de pago si existe; si no, la fecha de creación de la orden.
           </p>
         </div>
 
-        <form
-          method="get"
-          className="no-print flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4"
-        >
-          <label className="flex flex-col gap-1 text-xs text-slate-600">
-            Buscar
-            <input
-              name="q"
-              type="search"
-              defaultValue={q}
-              placeholder="Nombre, doc., teléfono u orden"
-              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm min-w-[200px]"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-slate-600">
-            Estado de pago
-            <select
-              name="estado"
-              defaultValue={estado}
-              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            >
-              {ESTADOS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-slate-600">
-            Desde
-            <input
-              name="fecha_desde"
-              type="date"
-              defaultValue={fechaDesde}
-              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-slate-600">
-            Hasta
-            <input
-              name="fecha_hasta"
-              type="date"
-              defaultValue={fechaHasta}
-              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            />
-          </label>
-          <button
-            type="submit"
-            className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900"
+        {modoEntrada && entradaContext ? (
+          <div className="no-print rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+            <p className="font-semibold">
+              Imprimiendo cupones de la orden N°{" "}
+              <span className="tabular-nums">{entradaContext.numero_orden}</span>
+            </p>
+            <p>
+              Cliente: <strong>{entradaContext.nombre_participante || "—"}</strong>
+            </p>
+            <p>
+              Cantidad de cupones:{" "}
+              <strong className="tabular-nums">{entradaContext.cantidad_cupones}</strong>
+            </p>
+            {yaImpreso ? (
+              <p className="mt-2 text-xs text-emerald-900">
+                Impresión ya registrada{" "}
+                {entradaContext.cupones_impresos_at
+                  ? new Date(entradaContext.cupones_impresos_at).toLocaleString("es-PY")
+                  : ""}
+                .
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {confirmOk ? (
+          <div className="no-print rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+            Impresión confirmada correctamente.
+          </div>
+        ) : null}
+
+        {confirmErr ? (
+          <div className="no-print rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+            {confirmErr}
+          </div>
+        ) : null}
+
+        {!modoEntrada ? (
+          <form
+            method="get"
+            className="no-print flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4"
           >
-            Aplicar filtros
-          </button>
-        </form>
+            <label className="flex flex-col gap-1 text-xs text-slate-600">
+              Buscar
+              <input
+                name="q"
+                type="search"
+                defaultValue={q}
+                placeholder="Nombre, doc., teléfono u orden"
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm min-w-[200px]"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-slate-600">
+              Estado de pago
+              <select
+                name="estado"
+                defaultValue={estado}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              >
+                {ESTADOS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-slate-600">
+              Desde
+              <input
+                name="fecha_desde"
+                type="date"
+                defaultValue={fechaDesde}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-slate-600">
+              Hasta
+              <input
+                name="fecha_hasta"
+                type="date"
+                defaultValue={fechaHasta}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+            </label>
+            <button
+              type="submit"
+              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900"
+            >
+              Aplicar filtros
+            </button>
+          </form>
+        ) : (
+          <div className="no-print flex flex-wrap gap-2">
+            <Link
+              href={`/sorteos/${encodeURIComponent(sorteoId)}/imprimir-cupones`}
+              className="text-sm font-medium text-[#0EA5E9] hover:underline"
+            >
+              Ver todos los cupones del sorteo (sin filtrar por orden)
+            </Link>
+          </div>
+        )}
 
         <div className="no-print flex flex-wrap items-center gap-3">
           <p className="text-sm font-medium text-slate-800">
@@ -165,12 +259,31 @@ export default function PhysicalCouponsPrintClient({
           >
             Imprimir cupones
           </button>
+
+          {mostrarConfirmar ? (
+            <button
+              type="button"
+              onClick={() => void handleConfirmarImpresion()}
+              disabled={confirmPending || rows.length === 0}
+              className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {confirmPending ? "Confirmando…" : "Confirmar impresión"}
+            </button>
+          ) : null}
+
           <button
             type="button"
             onClick={() => router.push(`/sorteos/${encodeURIComponent(sorteoId)}/editar`)}
             className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50"
           >
             Volver al sorteo
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push("/sorteos/cupones")}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+          >
+            Volver a Cupones
           </button>
         </div>
 
