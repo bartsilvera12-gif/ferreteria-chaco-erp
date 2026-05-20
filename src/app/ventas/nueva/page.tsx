@@ -534,8 +534,10 @@ export default function NuevaVentaPage() {
                   <ul className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg py-1">
                     {comboFiltrados.map((p, idx) => {
                       const enCarro    = items.filter(i => i.producto_id === p.id).reduce((s, i) => s + i.cantidad, 0);
+                      const ctrl       = p.controla_stock !== false;
                       const disponible = p.stock_actual - enCarro;
-                      const sinStock   = disponible <= 0;
+                      const sinStock   = ctrl && disponible <= 0;
+                      const isMenuItem = !ctrl;
                       const isActive   = idx === comboHighlight;
                       return (
                         <li
@@ -554,6 +556,9 @@ export default function NuevaVentaPage() {
                           </span>
                           {sinStock && (
                             <span className="ml-2 text-xs text-red-400 font-medium">SIN STOCK</span>
+                          )}
+                          {isMenuItem && (
+                            <span className={`ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${isActive ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"}`}>Menú</span>
                           )}
                         </li>
                       );
@@ -585,9 +590,13 @@ export default function NuevaVentaPage() {
               {prodSel && (
                 <div className="mt-1.5 flex gap-3 text-xs text-gray-500">
                   <span>Precio: <strong>{formatGs(prodSel.precio_venta)}</strong></span>
-                  <span>Disp: <strong className={stockDisp <= 0 ? "text-red-600" : "text-gray-700"}>
-                    {stockDisp} u.
-                  </strong></span>
+                  {prodSelControlaStock ? (
+                    <span>Disp: <strong className={stockDisp <= 0 ? "text-red-600" : "text-gray-700"}>
+                      {stockDisp} u.
+                    </strong></span>
+                  ) : (
+                    <span><span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 font-medium px-2 py-0.5">Menú</span></span>
+                  )}
                 </div>
               )}
             </div>

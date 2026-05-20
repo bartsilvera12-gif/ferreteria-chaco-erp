@@ -416,14 +416,14 @@ export default function EditarProductoPage() {
                 required={tipoGastro === "reventa"}
               />
             </div>
-            <div>
+            <div className={tipoGastro === "menu" ? "hidden" : ""}>
               <label className={labelClass}>Unidad de medida</label>
               <select
                 name="unidad_medida"
                 value={form.unidad_medida}
                 onChange={handleChange}
                 className={`${inputClass} uppercase`}
-                required
+                required={tipoGastro !== "menu"}
               >
                 {(() => {
                   const cur = (form.unidad_medida ?? "").trim().toUpperCase();
@@ -521,7 +521,7 @@ export default function EditarProductoPage() {
                   </Link>
                 </div>
               </div>
-              <div className="md:col-span-4 min-w-0">
+              <div className={`md:col-span-4 min-w-0 ${tipoGastro === "menu" ? "hidden" : ""}`}>
                 <label className={labelClass}>Proveedor principal</label>
                 <SelectFromList
                   value={proveedorId}

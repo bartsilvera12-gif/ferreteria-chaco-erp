@@ -20,6 +20,8 @@ export interface ProductoPickerItem {
   proveedor_nombre: string | null;
   ubicacion_nombre: string | null;
   ubicacion_tipo: string | null;
+  /** Si false → producto preparado (Menú): no valida stock ni muestra "Sin stock". */
+  controla_stock?: boolean;
 }
 
 /**
@@ -127,11 +129,16 @@ export default function ProductPickerModal({
     if (cantNum <= 0) { setFeedback("Cantidad debe ser > 0"); return; }
     if (precioNum <= 0) { setFeedback("Precio debe ser > 0"); return; }
     if (moneda === "USD" && tipoCambio <= 0) { setFeedback("Falta tipo de cambio en la venta"); return; }
-    const enCarrito = excludeIds.filter((id) => id === sel.id).length;
-    const disp = sel.stock_actual - enCarrito;
-    if (cantNum > disp) {
-      setFeedback(`Stock insuficiente (disponible ${disp})`);
-      return;
+    // Solo validar stock si el producto controla stock (Reventa).
+    // Productos del Menú (controla_stock=false) se agregan sin restricción.
+    const ctrlStock = sel.controla_stock !== false;
+    if (ctrlStock) {
+      const enCarrito = excludeIds.filter((id) => id === sel.id).length;
+      const disp = sel.stock_actual - enCarrito;
+      if (cantNum > disp) {
+        setFeedback(`Stock insuficiente (disponible ${disp})`);
+        return;
+      }
     }
     const ok = onAgregar({ producto: sel, cantidad: cantNum, precio_input: precioNum, iva });
     if (ok !== false) {
@@ -195,7 +202,10 @@ export default function ProductPickerModal({
                 {items.map((p) => {
                   const enCarro = excludeIds.filter((id) => id === p.id).length;
                   const disp = p.stock_actual - enCarro;
-                  const sinStock = disp <= 0;
+                  // Productos del Menú (controla_stock=false) no aplican validación de stock.
+                  const ctrlStock = p.controla_stock !== false;
+                  const sinStock = ctrlStock && disp <= 0;
+                  const isMenu = !ctrlStock;
                   const isSel = sel?.id === p.id;
                   return (
                     <li
@@ -226,9 +236,15 @@ export default function ProductPickerModal({
                       </div>
                       <div className="text-right shrink-0">
                         <div className="text-sm font-semibold text-slate-800 tabular-nums">{formatGs(p.precio_venta)}</div>
-                        <div className={`text-xs tabular-nums ${sinStock ? "text-red-500" : "text-slate-500"}`}>
-                          {sinStock ? "Sin stock" : `${disp} ${p.unidad_medida}`}
-                        </div>
+                        {isMenu ? (
+                          <div className="text-xs">
+                            <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 font-medium px-2 py-0.5">Menú</span>
+                          </div>
+                        ) : (
+                          <div className={`text-xs tabular-nums ${sinStock ? "text-red-500" : "text-slate-500"}`}>
+                            {sinStock ? "Sin stock" : `${disp} ${p.unidad_medida}`}
+                          </div>
+                        )}
                       </div>
                     </li>
                   );
@@ -270,7 +286,11 @@ export default function ProductPickerModal({
                   <DetailItem label="Ubicación" value={sel.ubicacion_nombre ? `${sel.ubicacion_nombre} (${sel.ubicacion_tipo})` : null} />
                   <DetailItem label="Unidad" value={sel.unidad_medida} />
                   <DetailItem label="Precio venta" value={formatGs(sel.precio_venta)} highlight />
-                  <DetailItem label="Stock disp." value={`${dispSel} ${sel.unidad_medida}`} highlight />
+                  {sel.controla_stock !== false ? (
+                    <DetailItem label="Stock disp." value={`${dispSel} ${sel.unidad_medida}`} highlight />
+                  ) : (
+                    <DetailItem label="Tipo" value="Menú (preparado)" highlight />
+                  )}
                 </div>
 
                 {feedback && (

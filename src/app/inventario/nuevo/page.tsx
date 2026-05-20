@@ -544,14 +544,14 @@ export default function NuevoProductoPage() {
               />
             </div>
 
-            <div>
+            <div className={tipoGastro === "menu" ? "hidden" : ""}>
               <label className={labelClass}>Unidad de medida</label>
               <select
                 name="unidad_medida"
                 value={form.unidad_medida}
                 onChange={handleChange}
                 className={`${inputClass} uppercase`}
-                required
+                required={tipoGastro !== "menu"}
               >
                 {UNIDADES_OPCIONES.map((u) => (
                   <option key={u} value={u}>{u}</option>
@@ -773,8 +773,8 @@ export default function NuevoProductoPage() {
                 </div>
               </div>
 
-              {/* Proveedor — 4 cols */}
-              <div className="md:col-span-4 min-w-0">
+              {/* Proveedor — 4 cols. Oculto para Menú (productos preparados no tienen proveedor). */}
+              <div className={`md:col-span-4 min-w-0 ${tipoGastro === "menu" ? "hidden" : ""}`}>
                 <label className={labelClass}>Proveedor principal</label>
                 <SelectFromList
                   value={proveedorId}
