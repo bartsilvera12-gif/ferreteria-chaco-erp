@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
-import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import {
@@ -12,13 +11,31 @@ import {
   pathBelongsToEmpresa,
   signProductoImagen,
 } from "@/lib/inventario/imagen-storage";
-import { getProductoPg, updateProductoPg } from "@/lib/inventario/server/productos-pg";
+import type { AppSupabaseClient } from "@/lib/supabase/schema";
 
 /**
- * GET /api/productos/[id]/imagen — signed URL fresca (TTL 1h).
- * Productos via PG directo (multi-schema), Storage via Supabase Storage
- * (no depende de PostgREST schema).
+ * Imagen de producto — usa Storage de Supabase + PostgREST (no pool PG).
+ * Compatible con Hostinger sin SUPABASE_DB_URL.
  */
+
+async function fetchProducto(
+  sb: AppSupabaseClient,
+  empresaId: string,
+  productoId: string
+): Promise<{ id: string; imagen_path: string | null } | null> {
+  const { data, error } = await sb
+    .from("productos")
+    .select("id, imagen_path")
+    .eq("empresa_id", empresaId)
+    .eq("id", productoId)
+    .maybeSingle();
+  if (error) {
+    console.error("[productos imagen] fetchProducto", error.message);
+    return null;
+  }
+  return (data as { id: string; imagen_path: string | null } | null) ?? null;
+}
+
 export async function GET(
   request: NextRequest,
   ctxParams: { params: Promise<{ id: string }> }
@@ -26,19 +43,13 @@ export async function GET(
   try {
     const { id: productoId } = await ctxParams.params;
     const ctx = await getTenantSupabaseFromAuth(request);
-    if (!ctx) {
-      return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
-    }
-    const { supabase, auth } = ctx;
-    const empresaId = auth.empresa_id;
-    const schema = await fetchDataSchemaForEmpresaId(empresaId);
+    if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
 
-    const prod = await getProductoPg(schema, empresaId, productoId);
-    if (!prod) {
-      return NextResponse.json(errorResponse(API_ERRORS.NOT_FOUND), { status: 404 });
-    }
+    const prod = await fetchProducto(ctx.supabase, ctx.auth.empresa_id, productoId);
+    if (!prod) return NextResponse.json(errorResponse(API_ERRORS.NOT_FOUND), { status: 404 });
+
     const signed = prod.imagen_path
-      ? await signProductoImagen(supabase, prod.imagen_path, 3600)
+      ? await signProductoImagen(ctx.supabase, prod.imagen_path, 3600)
       : null;
     return NextResponse.json(
       successResponse({ imagen_path: prod.imagen_path, imagen_url: signed })
@@ -49,10 +60,6 @@ export async function GET(
   }
 }
 
-/**
- * POST: upload (multipart). Sube al bucket privado y persiste imagen_path
- * via PG directo en la tabla productos del tenant.
- */
 export async function POST(
   request: NextRequest,
   ctxParams: { params: Promise<{ id: string }> }
@@ -60,20 +67,15 @@ export async function POST(
   try {
     const { id: productoId } = await ctxParams.params;
     const ctx = await getTenantSupabaseFromAuth(request);
-    if (!ctx) {
-      return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
-    }
+    if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     const { supabase, auth } = ctx;
     const empresaId = auth.empresa_id;
-    const schema = await fetchDataSchemaForEmpresaId(empresaId);
 
-    // 1) Ownership via PG
-    const prod = await getProductoPg(schema, empresaId, productoId);
-    if (!prod) {
-      return NextResponse.json(errorResponse(API_ERRORS.NOT_FOUND), { status: 404 });
-    }
+    // 1) Ownership via PostgREST
+    const prod = await fetchProducto(supabase, empresaId, productoId);
+    if (!prod) return NextResponse.json(errorResponse(API_ERRORS.NOT_FOUND), { status: 404 });
 
-    // 2) Leer archivo
+    // 2) Archivo
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
@@ -94,7 +96,12 @@ export async function POST(
     }
 
     // 3) Bucket idempotente
-    await ensureProductosImagenesBucket(supabase);
+    try {
+      await ensureProductosImagenesBucket(supabase);
+    } catch (bucketErr) {
+      console.error("[/api/productos/[id]/imagen POST] ensureBucket", bucketErr instanceof Error ? bucketErr.message : bucketErr);
+      // Continuar: si el bucket ya existe en DB pero el ensure falla por permisos, el upload podría andar igual.
+    }
 
     // 4) Borrar imagen anterior si pertenece a la empresa
     if (prod.imagen_path && pathBelongsToEmpresa(prod.imagen_path, empresaId)) {
@@ -108,17 +115,23 @@ export async function POST(
       .from(PRODUCTOS_IMAGENES_BUCKET)
       .upload(path, buf, { contentType: file.type, upsert: true });
     if (up.error) {
-      console.error("[/api/productos/[id]/imagen POST] upload", { schema, empresaId, productoId, message: up.error.message });
-      return NextResponse.json(errorResponse("No se pudo subir la imagen."), { status: 500 });
+      console.error("[/api/productos/[id]/imagen POST] upload", { empresaId, productoId, message: up.error.message });
+      return NextResponse.json(
+        errorResponse(`No se pudo subir la imagen: ${up.error.message}`),
+        { status: 500 }
+      );
     }
 
-    // 6) Persistir imagen_path via PG directo
-    const updated = await updateProductoPg(schema, empresaId, productoId, {
-      imagen_path: path,
-      imagen_url: null,
-    });
-    if (!updated) {
-      // No deberia ocurrir (ya validamos ownership), pero por las dudas.
+    // 6) Persistir imagen_path via PostgREST
+    const upd = await supabase
+      .from("productos")
+      .update({ imagen_path: path, imagen_url: null })
+      .eq("empresa_id", empresaId)
+      .eq("id", productoId)
+      .select("id, imagen_path")
+      .maybeSingle();
+    if (upd.error) {
+      console.error("[/api/productos/[id]/imagen POST] update", upd.error.message);
       return NextResponse.json(errorResponse("No se pudo asociar la imagen al producto."), { status: 500 });
     }
 
@@ -138,26 +151,22 @@ export async function DELETE(
   try {
     const { id: productoId } = await ctxParams.params;
     const ctx = await getTenantSupabaseFromAuth(request);
-    if (!ctx) {
-      return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
-    }
+    if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     const { supabase, auth } = ctx;
     const empresaId = auth.empresa_id;
-    const schema = await fetchDataSchemaForEmpresaId(empresaId);
 
-    const prod = await getProductoPg(schema, empresaId, productoId);
-    if (!prod) {
-      return NextResponse.json(errorResponse(API_ERRORS.NOT_FOUND), { status: 404 });
-    }
+    const prod = await fetchProducto(supabase, empresaId, productoId);
+    if (!prod) return NextResponse.json(errorResponse(API_ERRORS.NOT_FOUND), { status: 404 });
 
     if (prod.imagen_path && pathBelongsToEmpresa(prod.imagen_path, empresaId)) {
       await supabase.storage.from(PRODUCTOS_IMAGENES_BUCKET).remove([prod.imagen_path]);
     }
 
-    await updateProductoPg(schema, empresaId, productoId, {
-      imagen_path: null,
-      imagen_url: null,
-    });
+    await supabase
+      .from("productos")
+      .update({ imagen_path: null, imagen_url: null })
+      .eq("empresa_id", empresaId)
+      .eq("id", productoId);
 
     return NextResponse.json(successResponse({ imagen_path: null, imagen_url: null }));
   } catch (err) {
