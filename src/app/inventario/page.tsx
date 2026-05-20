@@ -163,9 +163,23 @@ export default function InventarioPage() {
   return (
     <div className="space-y-8">
 
-      <div>
-        <h1 className="text-3xl font-bold text-gray-800">Inventario</h1>
-        <p className="text-gray-600">Gestión de productos y control de stock</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800">Inventario</h1>
+          <p className="text-gray-600">Gestión de productos y control de stock</p>
+        </div>
+        <div className="flex items-center gap-2 mt-1">
+          <ExportExcelButton url="/api/inventario/productos/export" />
+          <ImportExcelButton
+            entidad="Productos"
+            previewUrl="/api/inventario/productos/import/preview"
+            commitUrl="/api/inventario/productos/import/commit"
+            templateUrl="/api/inventario/productos/import/template"
+            permiteCrearFaltantes
+            visible={isAdmin}
+            onCompleted={() => setRefreshKey((k) => k + 1)}
+          />
+        </div>
       </div>
 
       {/* Tabs gastronómicos (filtran por tipo de producto) */}
@@ -195,8 +209,8 @@ export default function InventarioPage() {
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
 
-        <div className="flex justify-between items-center mb-5">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap justify-between items-center gap-3 mb-5">
+          <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-xl font-semibold">Productos</h2>
             <Link
               href="/inventario/nuevo"
@@ -204,15 +218,12 @@ export default function InventarioPage() {
             >
               Nuevo producto
             </Link>
-            <ExportExcelButton url="/api/inventario/productos/export" />
-            <ImportExcelButton
-              entidad="Productos"
-              previewUrl="/api/inventario/productos/import/preview"
-              commitUrl="/api/inventario/productos/import/commit"
-              templateUrl="/api/inventario/productos/import/template"
-              permiteCrearFaltantes
-              visible={isAdmin}
-              onCompleted={() => setRefreshKey((k) => k + 1)}
+            <input
+              type="text"
+              placeholder="Buscar por nombre..."
+              value={filtroPorNombre}
+              onChange={(e) => setFiltroPorNombre(e.target.value)}
+              className="w-64 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white"
             />
           </div>
           <p className="text-xs text-gray-400">
@@ -220,8 +231,8 @@ export default function InventarioPage() {
           </p>
         </div>
 
-        {/* Filtros por columna */}
-        <div className="space-y-3 mb-5 pb-5 border-b border-gray-100">
+        {/* Filtros por columna — fila 1 (SKU/Costo/Precio) oculta para UX simplificada */}
+        <div className="hidden space-y-3 mb-5 pb-5 border-b border-gray-100">
 
           {/* Fila 1: filtros de texto por columna */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -348,8 +359,8 @@ export default function InventarioPage() {
                 <th className="py-3 pr-4 font-medium">SKU</th>
                 <th className="py-3 pr-4 font-medium">Costo Prom.</th>
                 <th className="py-3 pr-4 font-medium">Precio Venta</th>
-                <th className="py-3 pr-4 font-medium text-center">Stock</th>
-                <th className="py-3 pr-4 font-medium text-center">Stock Mín.</th>
+                <th className={`py-3 pr-4 font-medium text-center ${tab === "reventa" ? "" : "hidden"}`}>Stock</th>
+                <th className={`py-3 pr-4 font-medium text-center ${tab === "reventa" ? "" : "hidden"}`}>Stock Mín.</th>
                 <th className="py-3 pr-4 font-medium">Unidad</th>
                 <th className="py-3 pr-4 font-medium">Ubicación</th>
                 <th className="py-3 pr-4 font-medium">Valuación</th>
@@ -382,12 +393,12 @@ export default function InventarioPage() {
                     <td className="py-4 pr-4 text-gray-500 font-mono">{p.sku}</td>
                     <td className="py-4 pr-4 text-gray-700">{formatGs(p.costo_promedio)}</td>
                     <td className="py-4 pr-4 text-gray-700">{formatGs(p.precio_venta)}</td>
-                    <td className="py-4 pr-4 text-center">
+                    <td className={`py-4 pr-4 text-center ${tab === "reventa" ? "" : "hidden"}`}>
                       <span className={`font-semibold ${stockBajo ? "text-red-600" : "text-gray-800"}`}>
                         {p.stock_actual}
                       </span>
                     </td>
-                    <td className="py-4 pr-4 text-center text-gray-500">{p.stock_minimo}</td>
+                    <td className={`py-4 pr-4 text-center text-gray-500 ${tab === "reventa" ? "" : "hidden"}`}>{p.stock_minimo}</td>
                     <td className="py-4 pr-4 text-gray-600">{p.unidad_medida}</td>
                     <td className="py-4 pr-4 text-gray-600 text-xs">
                       {p.ubicacion_principal_id
