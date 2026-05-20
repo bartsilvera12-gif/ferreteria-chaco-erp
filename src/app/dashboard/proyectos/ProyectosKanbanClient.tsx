@@ -12,7 +12,6 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
@@ -469,61 +468,14 @@ export default function ProyectosKanbanClient() {
           <h1 className="text-xl font-semibold text-slate-900">Pedidos</h1>
           <p className="text-sm text-slate-500">Tablero de cocina — pedidos por modalidad y estado.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center">
           <input
-            className="w-56 rounded-md border border-slate-200 px-3 py-1.5 text-sm"
+            className="w-72 rounded-md border border-slate-200 px-3 py-1.5 text-sm"
             placeholder="Buscar título o cliente…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && void load()}
           />
-          <button
-            type="button"
-            className="shrink-0 rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-200"
-            onClick={() => void load()}
-          >
-            Buscar
-          </button>
-          <select
-            className="w-40 rounded-md border border-slate-200 px-2 py-1.5 text-sm"
-            value={filtroEstado}
-            onChange={(e) => setFiltroEstado(e.target.value)}
-          >
-            <option value="">Todos los estados</option>
-            {estados.map((e) => (
-              <option key={e.id} value={e.id}>{e.nombre}</option>
-            ))}
-          </select>
-          <select
-            className="w-36 rounded-md border border-slate-200 px-2 py-1.5 text-sm"
-            value={filtroTipo}
-            onChange={(e) => setFiltroTipo(e.target.value)}
-          >
-            <option value="">Todos los tipos</option>
-            {tipoOpts.map((t) => (
-              <option key={t.id} value={t.id}>{t.nombre}</option>
-            ))}
-          </select>
-          <select
-            className="w-40 rounded-md border border-slate-200 px-2 py-1.5 text-sm"
-            value={filtroRc}
-            onChange={(e) => setFiltroRc(e.target.value)}
-          >
-            <option value="">Resp. comercial</option>
-            {userOpts.map((u) => (
-              <option key={u.id} value={u.id}>{u.nombre ?? u.id.slice(0, 8)}</option>
-            ))}
-          </select>
-          <select
-            className="w-40 rounded-md border border-slate-200 px-2 py-1.5 text-sm"
-            value={filtroRt}
-            onChange={(e) => setFiltroRt(e.target.value)}
-          >
-            <option value="">Resp. técnico</option>
-            {userOpts.map((u) => (
-              <option key={`t-${u.id}`} value={u.id}>{u.nombre ?? u.id.slice(0, 8)}</option>
-            ))}
-          </select>
         </div>
       </div>
 
@@ -544,7 +496,7 @@ export default function ProyectosKanbanClient() {
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="max-h-[calc(100vh-260px)] min-h-[520px] overflow-auto rounded-xl pb-4">
-          <div className="flex min-h-full gap-4">
+          <div className="flex min-h-full gap-2">
             {kanbanColumns.map((col) => {
               const items = byColumn.get(col.id) ?? [];
               return (
@@ -622,7 +574,7 @@ function KanbanColumnView({ col, children }: KanbanColumnViewProps) {
   return (
     <div
       ref={setNodeRef}
-      className={`flex w-[300px] shrink-0 flex-col rounded-xl border bg-slate-50/80 transition-colors ${
+      className={`flex w-[240px] shrink-0 flex-col rounded-lg border bg-slate-50/80 transition-colors ${
         isOver && !col.inactiveFallback
           ? "border-indigo-300 bg-indigo-50/70 ring-2 ring-indigo-100"
           : "border-slate-200"
@@ -751,16 +703,7 @@ function ProjectCardView({
       </button>
       {!dragOverlay ? (
         <>
-          <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-3" onClick={(e) => e.stopPropagation()}>
-            <Link
-              href={`/dashboard/proyectos/${p.id}`}
-              className="text-[11px] font-semibold text-sky-700 hover:text-sky-800 hover:underline"
-              onClick={(e) => e.stopPropagation()}
-            >
-              Abrir en página completa
-            </Link>
-          </div>
-          <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2" onClick={(e) => e.stopPropagation()}>
+          <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
             <label className="block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Mover a</label>
             <select
               className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 outline-none transition-colors hover:border-slate-300 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"

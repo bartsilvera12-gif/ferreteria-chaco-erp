@@ -22,7 +22,6 @@ import {
   PanelLeft,
   Search,
   Receipt,
-  Banknote,
   Megaphone,
   Ticket,
   SendHorizontal,
@@ -115,6 +114,13 @@ const MENU_STRUCTURE: MenuItem[] = [
     icon: Activity,
   },
   { key: "ventas", slug: "ventas", label: "Ventas", href: "/ventas", icon: ShoppingCart },
+  {
+    key: "proyectos",
+    slug: "proyectos",
+    label: "Pedidos",
+    href: "/dashboard/proyectos",
+    icon: Utensils,
+  },
   { key: "recetas", slug: "recetas", label: "Recetas", href: "/dashboard/recetas", icon: ChefHat },
   { key: "inventario", slug: "inventario", label: "Inventario", href: "/inventario", icon: Package, children: [
     { label: "Productos", href: "/inventario" },
@@ -135,7 +141,7 @@ const MENU_STRUCTURE: MenuItem[] = [
     ],
   },
   { key: "gastos", slug: "gastos", label: "Gastos", href: "/gastos", icon: Receipt },
-  { key: "pagos", slug: "pagos", label: "Pagos", href: "/pagos", icon: Banknote },
+  // Pagos oculto en instancia En lo de Mari (no usa este módulo).
   { key: "comisiones", slug: "comisiones", label: "Comisiones", href: "/comisiones", icon: Percent },
   {
     key: "notas_credito",
@@ -167,13 +173,6 @@ const MENU_STRUCTURE: MenuItem[] = [
     label: "Campañas",
     href: "/dashboard/campanas",
     icon: SendHorizontal,
-  },
-  {
-    key: "proyectos",
-    slug: "proyectos",
-    label: "Pedidos",
-    href: "/dashboard/proyectos",
-    icon: Utensils,
   },
   {
     key: "sorteos",

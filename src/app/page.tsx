@@ -1961,10 +1961,10 @@ type DashScope =
   | { kind: "scoped"; tabs: TabDash[]; defaultTab: TabDash };
 
 function getInitialTab(): TabDash {
-  if (typeof window === "undefined") return "comercial";
+  if (typeof window === "undefined") return "ventas";
   const params = new URLSearchParams(window.location.search);
   const t = params.get("tab");
-  return t && isDashboardTabSlug(t) ? t : "comercial";
+  return t && isDashboardTabSlug(t) ? t : "ventas";
 }
 
 export default function DashboardPage() {
@@ -2092,8 +2092,21 @@ export default function DashboardPage() {
   const mapNombreTipoServicio = useMapNombreTipoServicioCatalogo(clientes);
   const nivel = usuarioActivo?.nivel ?? "administrador";
 
-  const effectiveTabs: TabDash[] = dashScope.kind === "scoped" ? dashScope.tabs : TAB_VALID;
-  const showTabNav = !(dashScope.kind === "scoped" && effectiveTabs.length === 1);
+  // Instancia En lo de Mari: solo Ventas / Inventario / Financiero (sin Comercial/CRM/Pipeline).
+  const MARI_ALLOWED_TABS: TabDash[] = ["ventas", "inventario", "financiero"];
+  const rawTabs: TabDash[] = dashScope.kind === "scoped" ? dashScope.tabs : TAB_VALID;
+  const effectiveTabs: TabDash[] = rawTabs.filter((t) => MARI_ALLOWED_TABS.includes(t));
+  const showTabNav = effectiveTabs.length > 1;
+
+  // Si el tab actual no está permitido, redirigir al primero permitido.
+  useEffect(() => {
+    if (effectiveTabs.length > 0 && !effectiveTabs.includes(tab)) {
+      setTab(effectiveTabs[0]);
+      if (typeof window !== "undefined") {
+        window.history.replaceState(null, "", `?tab=${effectiveTabs[0]}`);
+      }
+    }
+  }, [tab, effectiveTabs]);
 
   const TAB_META: Record<TabDash, { label: string; icon: string }> = {
     comercial: { label: "Comercial", icon: "📊" },
