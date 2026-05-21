@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import AppLoadingScreen from "@/components/AppLoadingScreen";
 import { getCurrentUser, getSession } from "@/lib/auth";
 import { isBootstrapSuperAdminEmail } from "@/lib/auth/super-admin-bootstrap-email";
 import {
@@ -134,11 +135,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [pathname, access, loading, isPublic, router]);
 
   if (loading && !isPublic) {
-    return (
-      <div className="flex items-center justify-center min-h-screen text-sm text-gray-400">
-        Cargando…
-      </div>
-    );
+    return <AppLoadingScreen />;
   }
 
   if (blockedSlug && access) {

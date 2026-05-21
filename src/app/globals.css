@@ -159,6 +159,41 @@ body {
 /* =============================================================================
    Dashboard — shell oscuro teal estilo Zentra
    ============================================================================= */
+/* =============================================================================
+   Pantalla de carga global — fondo teal con gradiente sutil + pulse del logo
+   ============================================================================= */
+.app-loading-bg {
+  background:
+    radial-gradient(ellipse 90% 60% at 50% 30%, rgba(255, 255, 255, 0.08), transparent 55%),
+    linear-gradient(168deg, #5CB8BC 0%, #4FAEB2 45%, #3E8C90 100%);
+}
+
+.app-loading-z {
+  background: rgba(255, 255, 255, 0.12);
+  animation: app-loading-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes app-loading-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.92; }
+  50%      { transform: scale(1.04); opacity: 1; }
+}
+
+.app-loading-dots {
+  display: inline-block;
+  width: 1.6em;
+  text-align: left;
+  letter-spacing: 0;
+  animation: app-loading-dots 1.4s steps(4, end) infinite;
+}
+
+@keyframes app-loading-dots {
+  0%   { clip-path: inset(0 100% 0 0); }
+  25%  { clip-path: inset(0 66% 0 0); }
+  50%  { clip-path: inset(0 33% 0 0); }
+  75%  { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(0 100% 0 0); }
+}
+
 .zentra-dashboard-shell {
   background:
     radial-gradient(ellipse 100% 70% at 50% 0%, rgba(20, 184, 166, 0.08), transparent 55%),
