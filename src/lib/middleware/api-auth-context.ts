@@ -66,12 +66,42 @@ export type ResolveApiAuthOptions = {
 };
 
 /**
+ * Memoización por-request: cuando dentro de un mismo route handler se llama a
+ * `resolveApiAuthContext()` desde múltiples lugares (helpers de auth, contexts, etc.),
+ * cada call disparaba un nuevo `auth.getUser()` HTTP a Supabase + lookup en `usuarios`.
+ *
+ * Con la cache en WeakMap<Request, Promise>:
+ *  - La primera invocación dispara el trabajo.
+ *  - Llamadas subsiguientes en el mismo request comparten la misma Promise.
+ *  - Cuando el Request termina y queda sin referencias, GC limpia la entrada solo.
+ *
+ * Excluido del cache:
+ *  - Sin `request` (no hay key estable para el WeakMap).
+ *  - Con `forDataSchemaEndpoint` (cambia el comportamiento de retorno; no mezclar resultados).
+ */
+const requestCache = new WeakMap<Request, Promise<ApiAuthResult>>();
+
+/**
  * Auth: `getUser` con anon + URL públicos (sin db.schema en el cliente de Auth).
  * Catálogo `zentra_erp.usuarios`: con `SUPABASE_SERVICE_ROLE_KEY` se lee por service role
  * (misma idea que module-access); sin service key, fallback anon+JWT+RLS.
  * PostgREST usuario: `userScopedSupabase` (anon + JWT + schema) para rutas que consultan con RLS.
  */
 export async function resolveApiAuthContext(
+  request?: Request | null,
+  opts?: ResolveApiAuthOptions
+): Promise<ApiAuthResult> {
+  if (!request || opts?.forDataSchemaEndpoint) {
+    return resolveApiAuthContextUncached(request, opts);
+  }
+  const cached = requestCache.get(request);
+  if (cached) return cached;
+  const promise = resolveApiAuthContextUncached(request, opts);
+  requestCache.set(request, promise);
+  return promise;
+}
+
+async function resolveApiAuthContextUncached(
   request?: Request | null,
   opts?: ResolveApiAuthOptions
 ): Promise<ApiAuthResult> {
