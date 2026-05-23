@@ -102,7 +102,7 @@ export default function UsuariosPage() {
         <span className="font-semibold text-gray-700">{usuarios.length}</span> usuarios
       </p>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm ring-1 ring-[#4FAEB2]/15 overflow-hidden">
         {filtrados.length === 0 ? (
           <div className="py-16 text-center text-sm text-gray-400">No hay usuarios.</div>
         ) : (

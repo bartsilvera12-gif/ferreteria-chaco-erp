@@ -80,7 +80,7 @@ export default function GastosPage() {
         </Link>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm ring-1 ring-[#4FAEB2]/15">
         {cargando ? (
           <div className="py-16 text-center text-gray-400 text-sm animate-pulse">Cargando gastos…</div>
         ) : gastos.length === 0 ? (

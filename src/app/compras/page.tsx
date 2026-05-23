@@ -83,7 +83,7 @@ export default function ComprasPage() {
         <p className="mt-0.5 text-xs text-slate-500">Registro de órdenes de compra a proveedores</p>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm ring-1 ring-[#4FAEB2]/15 p-6">
 
         <div className="flex justify-between items-center mb-5">
           <h2 className="text-xl font-semibold">Órdenes de compra</h2>

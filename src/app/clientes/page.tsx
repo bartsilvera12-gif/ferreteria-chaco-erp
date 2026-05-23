@@ -423,7 +423,7 @@ export default function ClientesPage() {
       </div>
 
       {/* Filtros */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-wrap gap-3 items-center">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm ring-1 ring-[#4FAEB2]/15 p-4 flex flex-wrap gap-3 items-center">
         <input
           type="text"
           placeholder="Buscar por nombre, código, email, RUC..."
@@ -555,7 +555,7 @@ export default function ClientesPage() {
       </div>
 
       {/* Tabla */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm ring-1 ring-[#4FAEB2]/15">
         {cargando ? (
           <div className="py-16 text-center text-gray-400 text-sm animate-pulse">Cargando clientes…</div>
         ) : filtrados.length === 0 ? (

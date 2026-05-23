@@ -240,7 +240,7 @@ export default function VentasPage() {
       </div>
 
       {/* ── Tabla de ventas ───────────────────────────────────────────────────── */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm ring-1 ring-[#4FAEB2]/15 p-6">
 
         <div className="flex justify-between items-center mb-5">
           <h2 className="text-xl font-semibold">Órdenes de venta</h2>

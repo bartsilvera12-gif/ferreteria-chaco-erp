@@ -221,7 +221,7 @@ export default function InventarioPage() {
         </nav>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm ring-1 ring-[#4FAEB2]/15 p-6">
 
         <div className="flex flex-wrap justify-between items-center gap-3 mb-5">
           <div className="flex items-center gap-3 flex-wrap">
