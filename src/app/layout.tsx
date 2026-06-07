@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Neura ERP",
-  description: "Sistema de gestión empresarial de Neura",
+  title: "Reserva Ecológica Caacupé",
+  description: "Sistema de gestión Zentra — Reserva Ecológica Caacupé",
 };
 
 export const viewport: Viewport = {
