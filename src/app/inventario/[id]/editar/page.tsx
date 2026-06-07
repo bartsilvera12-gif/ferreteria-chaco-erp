@@ -44,6 +44,8 @@ export default function EditarProductoPage() {
     costo_promedio: "",
     markup: "",
     precio_venta: "",
+    precio_mayorista: "",
+    cantidad_minima_mayorista: "",
     stock_actual: "",
     stock_minimo: "",
     unidad_medida: "",
@@ -145,6 +147,8 @@ export default function EditarProductoPage() {
         costo_promedio: String(p.costo_promedio),
         markup: markup.toFixed(2),
         precio_venta: String(p.precio_venta),
+        precio_mayorista: p.precio_mayorista != null ? String(p.precio_mayorista) : "",
+        cantidad_minima_mayorista: p.cantidad_minima_mayorista != null ? String(p.cantidad_minima_mayorista) : "",
         stock_actual: String(p.stock_actual),
         stock_minimo: String(p.stock_minimo),
         unidad_medida: p.unidad_medida,
@@ -282,6 +286,8 @@ export default function EditarProductoPage() {
         sku: form.sku.trim().toUpperCase(),
         costo_promedio: parseFloat(form.costo_promedio) || 0,
         precio_venta: parseFloat(form.precio_venta) || 0,
+        precio_mayorista: form.precio_mayorista.trim() !== "" ? parseFloat(form.precio_mayorista) || null : null,
+        cantidad_minima_mayorista: form.cantidad_minima_mayorista.trim() !== "" ? parseFloat(form.cantidad_minima_mayorista) || null : null,
         stock_actual: parseInt(form.stock_actual) || 0,
         stock_minimo: parseInt(form.stock_minimo) || 0,
         unidad_medida: form.unidad_medida.trim().toUpperCase() || "UNIDAD",
@@ -705,6 +711,35 @@ export default function EditarProductoPage() {
                 />
               </div>
             </div>
+            {showPrecioVenta && (
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={labelClass}>Precio mayorista (Gs.) <span className="text-gray-400 font-normal">(opcional)</span></label>
+                  <MontoInput
+                    value={form.precio_mayorista}
+                    onChange={(n) => setForm((prev) => ({ ...prev, precio_mayorista: String(n) }))}
+                    placeholder="Ej: 22000"
+                    className={inputClass}
+                    decimals={false}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Cantidad mínima mayorista <span className="text-gray-400 font-normal">(opcional)</span></label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={form.cantidad_minima_mayorista}
+                    onChange={(e) => setForm((prev) => ({ ...prev, cantidad_minima_mayorista: e.target.value }))}
+                    placeholder="Ej: 10"
+                    className={inputClass}
+                  />
+                </div>
+                <p className="sm:col-span-2 text-xs text-gray-400">
+                  Informativo: el precio mayorista no se aplica automáticamente en ventas (por ahora se vende al precio minorista).
+                </p>
+              </div>
+            )}
             {tieneAmbos && markupCalc !== null && margenVentaCalc !== null && (
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className={`border rounded-lg px-4 py-3 ${esPerdida ? "bg-red-50 border-red-200" : "bg-blue-50 border-blue-100"}`}>

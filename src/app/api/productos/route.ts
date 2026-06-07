@@ -15,10 +15,15 @@ const PRODUCTO_COLS =
   "codigo_barras, codigo_barras_interno, imagen_path, imagen_url, " +
   "categoria_principal_id, ubicacion_principal_id, proveedor_principal_id, " +
   "es_vendible, es_insumo, controla_stock, valorizado, unidad_compra, unidad_receta, " +
-  "factor_compra_receta, tiempo_prep_minutos, descripcion";
+  "factor_compra_receta, tiempo_prep_minutos, descripcion, precio_mayorista, cantidad_minima_mayorista";
 
 function toNumber(v: unknown): unknown {
   return typeof v === "string" ? Number(v) : v;
+}
+function toNumberOrNull(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 function rowToApi(r: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -28,6 +33,8 @@ function rowToApi(r: Record<string, unknown>): Record<string, unknown> {
     stock_actual: toNumber(r.stock_actual),
     stock_minimo: toNumber(r.stock_minimo),
     factor_compra_receta: toNumber(r.factor_compra_receta),
+    precio_mayorista: r.precio_mayorista != null ? toNumber(r.precio_mayorista) : null,
+    cantidad_minima_mayorista: r.cantidad_minima_mayorista != null ? toNumber(r.cantidad_minima_mayorista) : null,
   };
 }
 
@@ -164,6 +171,8 @@ export async function POST(request: NextRequest) {
     if (tiempoPrepMinutos !== undefined) insertPayload.tiempo_prep_minutos = tiempoPrepMinutos;
     const descripcion = typeof body.descripcion === "string" ? body.descripcion.trim() || null : (body.descripcion === null ? null : undefined);
     if (descripcion !== undefined) insertPayload.descripcion = descripcion;
+    insertPayload.precio_mayorista = toNumberOrNull(body.precio_mayorista);
+    insertPayload.cantidad_minima_mayorista = toNumberOrNull(body.cantidad_minima_mayorista);
 
     const ins = await sb.from("productos").insert(insertPayload).select(PRODUCTO_COLS).single();
     if (ins.error) {

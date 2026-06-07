@@ -7,7 +7,11 @@ export interface Producto {
   nombre: string;
   sku: string;
   costo_promedio: number;
-  precio_venta: number;
+  precio_venta: number;            // precio minorista
+  /** Precio mayorista (opcional, informativo — no se aplica automáticamente en ventas). */
+  precio_mayorista?: number | null;
+  /** Cantidad mínima para precio mayorista (opcional, informativo). */
+  cantidad_minima_mayorista?: number | null;
   stock_actual: number;
   stock_minimo: number;
   unidad_medida: string;
