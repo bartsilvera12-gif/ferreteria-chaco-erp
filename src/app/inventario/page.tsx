@@ -7,6 +7,7 @@ import type { Producto, MetodoValuacion } from "@/lib/inventario/types";
 import ExportExcelButton from "@/components/ui/ExportExcelButton";
 import ImportExcelButton from "@/components/ui/ImportExcelButton";
 import EdgeScrollArea from "@/components/ui/EdgeScrollArea";
+import StatCard from "@/components/ui/StatCard";
 import { useIsAdmin } from "@/lib/auth/use-is-admin";
 
 const inputFilterClass =
@@ -20,6 +21,11 @@ const metodoBadge: Record<MetodoValuacion, string> = {
 
 function formatGs(valor: number) {
   return `Gs. ${valor.toLocaleString("es-PY")}`;
+}
+
+/** Cantidad de stock con hasta 3 decimales (los insumos pueden quedar fraccionados). */
+function formatStock(valor: number) {
+  return valor.toLocaleString("es-PY", { maximumFractionDigits: 3 });
 }
 
 function foldText(s: string): string {
@@ -168,6 +174,17 @@ export default function InventarioPage() {
     tab,
   ]);
 
+  // Resumen del listado visible (por pestaña). Solo productos que controlan stock
+  // entran en valorizado / bajo / disponibles; el resto (Menú sin control) se cuenta
+  // únicamente en "Total productos".
+  const resumen = useMemo(() => {
+    const conStock = productos.filter((p) => p.controla_stock !== false);
+    const stockValorizado = conStock.reduce((s, p) => s + p.stock_actual * p.costo_promedio, 0);
+    const bajo = conStock.filter((p) => p.stock_actual <= p.stock_minimo).length;
+    const disponibles = conStock.filter((p) => p.stock_actual > 0).length;
+    return { total: productos.length, stockValorizado, bajo, disponibles, conStock: conStock.length };
+  }, [productos]);
+
   const hayFiltrosActivos =
     filtroPorNombre || filtroPorSku || filtroPorCosto ||
     filtroPorPrecio || filtroValuacion || filtroUbicacion || soloStockBajo ||
@@ -239,6 +256,19 @@ export default function InventarioPage() {
             </button>
           ))}
         </nav>
+      </div>
+
+      {/* Resumen por pestaña */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard compact label="Total productos" value={String(resumen.total)} accent
+          hint={tab === "reventa" ? "Reventa" : tab === "menu" ? "Menú" : "Materia prima"} />
+        <StatCard compact label="Stock valorizado" value={formatGs(Math.round(resumen.stockValorizado))}
+          hint="stock × costo prom." />
+        <StatCard compact label="Stock bajo" value={String(resumen.bajo)}
+          hint="≤ stock mínimo" />
+        <StatCard compact
+          label={tab === "materia" ? "Materias disponibles" : "Con stock disponible"}
+          value={String(resumen.disponibles)} hint="stock > 0" />
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm ring-1 ring-[#4FAEB2]/15 sm:p-5 lg:p-6">
@@ -393,9 +423,8 @@ export default function InventarioPage() {
                 <th className="hidden py-3 pr-4 font-medium lg:table-cell">SKU</th>
                 <th className="py-3 pr-4 font-medium">Costo Prom.</th>
                 <th className="py-3 pr-4 font-medium">Precio Venta</th>
-                <th className={`py-3 pr-4 font-medium text-center ${tab === "reventa" ? "" : "hidden"}`}>Stock</th>
-                <th className={`py-3 pr-4 text-center font-medium ${tab === "reventa" ? "hidden lg:table-cell" : "hidden"}`}>Stock Mín.</th>
-                <th className="py-3 pr-4 font-medium hidden lg:table-cell">Unidad</th>
+                <th className="py-3 pr-4 font-medium text-center">Stock actual</th>
+                <th className="py-3 pr-4 text-center font-medium hidden lg:table-cell">Stock Mín.</th>
                 <th className="py-3 pr-4 font-medium hidden lg:table-cell">Ubicación</th>
                 <th className="py-3 pr-4 font-medium hidden lg:table-cell">Valuación</th>
                 <th className="hidden py-3 pr-6 text-right font-medium lg:table-cell">
@@ -427,13 +456,19 @@ export default function InventarioPage() {
                     <td className="hidden py-4 pr-4 font-mono text-gray-500 lg:table-cell">{p.sku}</td>
                     <td className="py-4 pr-4 text-gray-700">{formatGs(p.costo_promedio)}</td>
                     <td className="py-4 pr-4 text-gray-700">{formatGs(p.precio_venta)}</td>
-                    <td className={`py-4 pr-4 text-center ${tab === "reventa" ? "" : "hidden"}`}>
-                      <span className={`font-semibold ${stockBajo ? "text-red-600" : "text-gray-800"}`}>
-                        {p.stock_actual}
-                      </span>
+                    <td className="py-4 pr-4 text-center">
+                      {p.controla_stock === false ? (
+                        <span className="text-xs text-gray-400">— sin control</span>
+                      ) : (
+                        <span className={`font-semibold tabular-nums ${stockBajo ? "text-red-600" : "text-gray-800"}`}>
+                          {formatStock(p.stock_actual)}{" "}
+                          <span className={`text-xs font-normal ${stockBajo ? "text-red-400" : "text-gray-400"}`}>{p.unidad_medida}</span>
+                        </span>
+                      )}
                     </td>
-                    <td className={`py-4 pr-4 text-center text-gray-500 ${tab === "reventa" ? "hidden lg:table-cell" : "hidden"}`}>{p.stock_minimo}</td>
-                    <td className="py-4 pr-4 text-gray-600 hidden lg:table-cell">{p.unidad_medida}</td>
+                    <td className="py-4 pr-4 text-center text-gray-500 hidden lg:table-cell">
+                      {p.controla_stock === false ? "—" : <span className="tabular-nums">{formatStock(p.stock_minimo)}</span>}
+                    </td>
                     <td className="py-4 pr-4 text-gray-600 text-xs hidden lg:table-cell">
                       {p.ubicacion_principal_id
                         ? (() => {
