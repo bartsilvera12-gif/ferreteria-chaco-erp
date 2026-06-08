@@ -104,19 +104,21 @@ export default function NuevaVentaPage() {
   const [errorLinea, setErrorLinea] = useState<string | null>(null);
   const [errorVenta, setErrorVenta] = useState<string | null>(null);
 
-  // ── Condiciones de la venta (fijas para En lo de Mari) ────────────────────
-  // Instancia dedicada: siempre Guaraníes + Contado.
+  // ── Condiciones de la venta ───────────────────────────────────────────────
+  // Instancia dedicada: siempre Guaraníes.
   const moneda: MonedaVenta = "GS";
-  const tipoVenta: TipoVenta = "CONTADO";
 
-  // Pedidos (gastronomía): modalidad obligatoria en instancia En lo de Mari
-  type Modalidad = "local" | "delivery" | "carry_out";
-  const [modalidad, setModalidad] = useState<Modalidad | "">("");
-  const [pedidoMesa, setPedidoMesa] = useState("");
-  const [pedidoClienteNombre, setPedidoClienteNombre] = useState("");
-  const [pedidoClienteTelefono, setPedidoClienteTelefono] = useState("");
-  const [pedidoDireccion, setPedidoDireccion] = useState("");
-  const [pedidoObservacion, setPedidoObservacion] = useState("");
+  // Contado / Crédito (campos ya existentes en `ventas`: tipo_venta + plazo_dias).
+  const [tipoVenta, setTipoVenta] = useState<TipoVenta>("CONTADO");
+  const [plazoDias, setPlazoDias] = useState("");
+
+  // Cliente (opcional). Si se selecciona, se envía cliente_id al crear la venta.
+  type ClienteLite = { id: string; label: string; ruc: string | null };
+  const [clientes, setClientes] = useState<ClienteLite[]>([]);
+  const [clienteId, setClienteId] = useState("");
+  const [clienteQuery, setClienteQuery] = useState("");
+  const [clienteOpen, setClienteOpen] = useState(false);
+  const clienteContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Cobro (solo CONTADO, no se persiste — solo ayuda al cajero) ───────────
   const [montoRecibido, setMontoRecibido] = useState("");
@@ -236,11 +238,40 @@ export default function NuevaVentaPage() {
     return () => { cancelled = true; };
   }, []);
 
+  // Cargar clientes (buscador opcional de cliente en la venta).
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/clientes", { credentials: "include", cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancelled || !j?.success || !Array.isArray(j.data)) return;
+        const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+        const lite: ClienteLite[] = (j.data as Record<string, unknown>[]).map((r) => ({
+          id: String(r.id),
+          label: s(r.empresa) || s(r.nombre_contacto) || s(r.nombre) || "Cliente",
+          ruc: s(r.ruc) || null,
+        }));
+        setClientes(lite);
+      })
+      .catch(() => { /* el buscador de cliente es opcional, no bloquea la venta */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  // UX rápida: abrir el buscador de productos al entrar (carrito vacío).
+  // Si el usuario lo cierra, sigue usando el formulario normal (no queda atrapado).
+  useEffect(() => {
+    setPickerOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Cerrar dropdown al hacer clic fuera
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (comboContainerRef.current && !comboContainerRef.current.contains(e.target as Node)) {
         setComboOpen(false);
+      }
+      if (clienteContainerRef.current && !clienteContainerRef.current.contains(e.target as Node)) {
+        setClienteOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -281,12 +312,20 @@ export default function NuevaVentaPage() {
   const totalSubtotal = items.reduce((s, i) => s + i.subtotal, 0);
   const totalIva      = items.reduce((s, i) => s + i.monto_iva, 0);
   const totalGeneral  = items.reduce((s, i) => s + i.total_linea, 0);
-  const pedidoValido = (() => {
-    if (modalidad === "") return false;
-    if (modalidad === "delivery") return pedidoClienteTelefono.trim().length > 0 && pedidoDireccion.trim().length > 0;
-    return true; // local + carry_out: todos opcionales
-  })();
-  const ventaValida   = items.length > 0 && pedidoValido;
+  // Condición de venta: si es Crédito, exigir plazo de al menos 1 día.
+  const plazoDiasNum = parseInt(plazoDias) || 0;
+  const creditoValido = tipoVenta === "CONTADO" || plazoDiasNum >= 1;
+  const ventaValida   = items.length > 0 && creditoValido;
+
+  // Cliente (opcional) — selección + filtrado del buscador.
+  const clienteSel = clientes.find((c) => c.id === clienteId) ?? null;
+  const clientesFiltrados = (clienteQuery.trim() === ""
+    ? clientes
+    : clientes.filter((c) => {
+        const q = clienteQuery.toLowerCase();
+        return c.label.toLowerCase().includes(q) || (c.ruc ?? "").toLowerCase().includes(q);
+      })
+  ).slice(0, 50);
 
   // Vuelto (solo informativo, no se persiste)
   const montoRecibidoNum = parseFloat(montoRecibido) || 0;
@@ -416,18 +455,11 @@ export default function NuevaVentaPage() {
         monto_iva:    totalIva,
         total:        totalGeneral,
         tipo_venta:   tipoVenta,
+        plazo_dias:   tipoVenta === "CREDITO" ? plazoDiasNum : undefined,
         metodo_pago:  metodoPago,
+        cliente_id:   clienteId || null,
       },
-      modalidad === ""
-        ? undefined
-        : {
-            modalidad,
-            mesa: modalidad === "local" ? pedidoMesa.trim() || null : null,
-            cliente_nombre: pedidoClienteNombre.trim() || null,
-            cliente_telefono: pedidoClienteTelefono.trim() || null,
-            direccion_entrega: pedidoDireccion.trim() || null,
-            observacion: pedidoObservacion.trim() || null,
-          },
+      undefined,
       {
         entidad_bancaria_id: pagoEntidadId || null,
         entidad_nombre_snapshot: entidades.find((e) => e.id === pagoEntidadId)?.nombre ?? null,
@@ -455,11 +487,96 @@ export default function NuevaVentaPage() {
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Nueva venta</h1>
         <p className="text-gray-600">
-          Agregá productos del menú o reventa. Al confirmar se registra la venta y se genera el pedido.
+          Agregá productos de reventa o del catálogo. Al confirmar se registra la venta.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6 max-w-7xl">
+
+        {/* ── SECCIÓN 0: Datos de la venta (cliente opcional + condición) ────── */}
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 sm:p-6">
+          <SectionTitle>Datos de la venta</SectionTitle>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+
+            {/* Cliente (opcional) */}
+            <div ref={clienteContainerRef} className="relative">
+              <label className={labelClass}>
+                Cliente <span className="text-xs font-normal text-gray-400">(opcional)</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={clienteSel ? clienteSel.label : clienteQuery}
+                  onChange={(e) => { setClienteId(""); setClienteQuery(e.target.value); setClienteOpen(true); }}
+                  onFocus={() => setClienteOpen(true)}
+                  placeholder="Buscar por nombre o RUC…"
+                  className={`${inputClass} ${clienteSel ? "font-medium" : ""}`}
+                />
+                {clienteSel && (
+                  <button
+                    type="button"
+                    onClick={() => { setClienteId(""); setClienteQuery(""); }}
+                    className="shrink-0 rounded-lg border border-slate-200 px-3 text-xs text-slate-500 hover:bg-slate-50"
+                  >
+                    Quitar
+                  </button>
+                )}
+              </div>
+              {clienteOpen && !clienteSel && (
+                <div className="absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                  {clientesFiltrados.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-gray-400">Sin clientes que coincidan.</p>
+                  ) : (
+                    clientesFiltrados.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => { setClienteId(c.id); setClienteQuery(""); setClienteOpen(false); }}
+                        className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50"
+                      >
+                        <span className="font-medium text-gray-800">{c.label}</span>
+                        {c.ruc && <span className="ml-2 text-xs text-gray-400">RUC {c.ruc}</span>}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+              <p className="mt-1 text-[11px] text-gray-400">
+                Si no seleccionás cliente, la venta se registra sin cliente.
+              </p>
+            </div>
+
+            {/* Condición: Contado / Crédito */}
+            <div>
+              <label className={labelClass}>Condición</label>
+              <SegmentedControl<TipoVenta>
+                value={tipoVenta}
+                options={[
+                  { value: "CONTADO", label: "Contado" },
+                  { value: "CREDITO", label: "Crédito" },
+                ]}
+                onChange={(v) => { setTipoVenta(v); if (v === "CONTADO") setPlazoDias(""); }}
+              />
+              {tipoVenta === "CREDITO" && (
+                <div className="mt-3">
+                  <label className={labelClass}>Plazo de crédito (días)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={plazoDias}
+                    onChange={(e) => setPlazoDias(e.target.value)}
+                    placeholder="Ej: 30"
+                    className={`${inputClass} ${plazoDiasNum < 1 ? "border-red-300 bg-red-50" : ""}`}
+                  />
+                  {plazoDiasNum < 1 && (
+                    <p className="mt-1 text-[11px] text-red-600">Ingresá un plazo de al menos 1 día.</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
 
         {/* ── SECCIÓN 1: Agregar producto ───────────────────────────────────── */}
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 sm:p-6">
@@ -884,154 +1001,6 @@ export default function NuevaVentaPage() {
               </div>
             </>
           )}
-
-          {/* Modalidad del pedido (gastronómico) */}
-          <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50/40 px-4 py-4">
-            <p className="text-sm font-semibold text-slate-800 mb-3">
-              Modalidad del pedido <span className="text-red-500">*</span>
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {([
-                { v: "local",     label: "En local" },
-                { v: "delivery",  label: "Delivery" },
-                { v: "carry_out", label: "Retiro / Carry out" },
-              ] as Array<{ v: Modalidad; label: string }>).map((opt) => (
-                <label
-                  key={opt.v}
-                  className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer transition ${
-                    modalidad === opt.v
-                      ? "border-amber-500 bg-white text-amber-700 font-medium"
-                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="modalidad"
-                    value={opt.v}
-                    checked={modalidad === opt.v}
-                    onChange={() => setModalidad(opt.v)}
-                    className="h-4 w-4 text-amber-600 focus:ring-amber-500"
-                  />
-                  {opt.label}
-                </label>
-              ))}
-            </div>
-
-            {modalidad === "local" && (
-              <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Número de mesa</label>
-                  <input
-                    type="text"
-                    value={pedidoMesa}
-                    onChange={(e) => setPedidoMesa(e.target.value)}
-                    placeholder="Opcional — ej: 3"
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Observación</label>
-                  <input
-                    type="text"
-                    value={pedidoObservacion}
-                    onChange={(e) => setPedidoObservacion(e.target.value)}
-                    placeholder='Ej: "sin cebolla"'
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-            )}
-
-            {modalidad === "delivery" && (
-              <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Nombre cliente</label>
-                  <input
-                    type="text"
-                    value={pedidoClienteNombre}
-                    onChange={(e) => setPedidoClienteNombre(e.target.value)}
-                    placeholder="Opcional"
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Teléfono <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={pedidoClienteTelefono}
-                    onChange={(e) => setPedidoClienteTelefono(e.target.value)}
-                    placeholder="09xx xxx xxx"
-                    className={inputClass}
-                  />
-                </div>
-                <div className="lg:col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Dirección de entrega <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={pedidoDireccion}
-                    onChange={(e) => setPedidoDireccion(e.target.value)}
-                    placeholder="Calle, número, referencia"
-                    className={inputClass}
-                  />
-                </div>
-                <div className="lg:col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Observación</label>
-                  <input
-                    type="text"
-                    value={pedidoObservacion}
-                    onChange={(e) => setPedidoObservacion(e.target.value)}
-                    placeholder="Notas para el repartidor o la cocina"
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-            )}
-
-            {modalidad === "carry_out" && (
-              <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Nombre cliente</label>
-                  <input
-                    type="text"
-                    value={pedidoClienteNombre}
-                    onChange={(e) => setPedidoClienteNombre(e.target.value)}
-                    placeholder="Opcional"
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Teléfono</label>
-                  <input
-                    type="text"
-                    value={pedidoClienteTelefono}
-                    onChange={(e) => setPedidoClienteTelefono(e.target.value)}
-                    placeholder="Opcional"
-                    className={inputClass}
-                  />
-                </div>
-                <div className="lg:col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Observación</label>
-                  <input
-                    type="text"
-                    value={pedidoObservacion}
-                    onChange={(e) => setPedidoObservacion(e.target.value)}
-                    placeholder='Ej: "pasa en 20 min"'
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-            )}
-
-            {modalidad === "" && (
-              <p className="mt-2 text-xs text-amber-700">
-                Elegí una modalidad antes de confirmar la venta.
-              </p>
-            )}
-          </div>
 
           {/* Error confirmar */}
           {errorVenta && (

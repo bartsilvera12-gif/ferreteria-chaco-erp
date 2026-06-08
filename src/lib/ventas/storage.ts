@@ -50,7 +50,7 @@ export async function getVentas(): Promise<Venta[]> {
  * Crea una venta en base de datos (transacción servidor: ítems, stock, movimientos).
  */
 export async function saveVenta(
-  datos: Omit<Venta, "id" | "numero_control" | "fecha">,
+  datos: Omit<Venta, "id" | "numero_control" | "fecha"> & { cliente_id?: string | null },
   pedidoCocina?: PedidoCocinaInput,
   pagoDetalle?: PagoDetalleInput | null
 ): Promise<ResultadoGuardarVenta> {
@@ -72,7 +72,7 @@ export async function saveVenta(
         tipo_venta: datos.tipo_venta,
         plazo_dias: datos.plazo_dias,
         metodo_pago: datos.metodo_pago,
-        cliente_id: null,
+        cliente_id: datos.cliente_id ?? null,
         observaciones: null,
         pedido_cocina: pedidoCocina ?? null,
         pago_detalle: pagoDetalle ?? null,
