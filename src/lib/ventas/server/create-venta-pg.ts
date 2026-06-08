@@ -406,7 +406,9 @@ export async function createVentaTransaccionalPg(
       const p = stockMap.get(line.producto_id)!;
       if (recetaByProducto.has(line.producto_id)) continue;
       if (!p.controlaStock) continue;
-      const nuevoStock = p.stock - line.cantidad;
+      // El stock nunca baja de 0: si se vendió sin stock, queda en 0 (la cantidad real
+      // vendida queda registrada en el movimiento SALIDA, así no se pierde trazabilidad).
+      const nuevoStock = Math.max(0, p.stock - line.cantidad);
       const upd = await sb
         .from("productos")
         .update({ stock_actual: nuevoStock })
@@ -434,7 +436,9 @@ export async function createVentaTransaccionalPg(
     // 7b) Descontar materia prima (insumos) por explosión de receta + movimiento SALIDA por insumo.
     for (const [insId, need] of insumoNeed) {
       const m = insumoMeta.get(insId)!;
-      const nuevoStock = m.stock - need;
+      // Igual que productos: el stock de insumos nunca baja de 0 (la salida real
+      // queda registrada en el movimiento SALIDA del insumo).
+      const nuevoStock = Math.max(0, m.stock - need);
       const upd = await sb
         .from("productos")
         .update({ stock_actual: nuevoStock })
