@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
         { header: "Método", value: (v) => metodoLabel(v.metodo_pago), width: 16 },
         { header: "Entidad", value: (v) => v.entidad ?? "", width: 24 },
         { header: "Referencia", value: (v) => v.referencia ?? "", width: 20 },
+        { header: "Titular", value: (v) => v.titular ?? "", width: 22 },
         { header: "Monto", value: (v) => (v.monto ?? ""), width: 16 },
         { header: "Estado", value: (v) => (v.con_detalle ? "Con detalle" : "Sin detalle"), width: 14 },
       ]),

@@ -141,6 +141,7 @@ export default function ConciliacionReportePage() {
                       <th className="py-2.5 pr-4 font-medium">Método</th>
                       <th className="py-2.5 pr-4 font-medium">Entidad</th>
                       <th className="py-2.5 pr-4 font-medium">Referencia</th>
+                      <th className="py-2.5 pr-4 font-medium">Titular</th>
                       <th className="py-2.5 pr-4 font-medium text-right">Monto</th>
                       <th className="py-2.5 font-medium">Estado</th>
                     </tr>
@@ -154,6 +155,7 @@ export default function ConciliacionReportePage() {
                         <td className="py-3 pr-4 text-slate-600">{metodoLabel(v.metodo_pago)}</td>
                         <td className="py-3 pr-4 text-slate-600">{v.entidad ?? "—"}</td>
                         <td className="py-3 pr-4 text-slate-500 text-xs">{v.referencia ?? "—"}</td>
+                        <td className="py-3 pr-4 text-slate-500 text-xs">{v.titular ?? "—"}</td>
                         <td className="py-3 pr-4 text-right tabular-nums font-semibold text-slate-800">{v.monto != null ? formatGs(v.monto) : "—"}</td>
                         <td className="py-3">
                           <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${

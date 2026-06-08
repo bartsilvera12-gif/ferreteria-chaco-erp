@@ -215,6 +215,7 @@ export async function POST(request: NextRequest) {
         entidad_nombre_snapshot: str(pd?.entidad_nombre_snapshot),
         monto: totalDeclarado,
         referencia: str(pd?.referencia),
+        titular: str(pd?.titular),
         fecha_acreditacion: fechaAcred,
         observacion: str(pd?.observacion, 500),
       });

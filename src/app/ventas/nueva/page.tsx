@@ -130,10 +130,14 @@ export default function NuevaVentaPage() {
   const [metodoPago, setMetodoPago] = useState<MetodoPago>("efectivo");
 
   // ── Detalle de cobro (conciliación bancaria) ──────────────────────────────
-  const [entidades, setEntidades] = useState<{ id: string; nombre: string; tipo: string | null }[]>([]);
+  const [entidades, setEntidades] = useState<{ id: string; codigo: string | null; nombre: string; tipo: string | null }[]>([]);
   const [pagoEntidadId, setPagoEntidadId] = useState("");
   const [pagoReferencia, setPagoReferencia] = useState("");
-  const [pagoObservacion, setPagoObservacion] = useState("");
+  const [pagoTitular, setPagoTitular] = useState("");
+  const [pagoObservacion] = useState("");
+  // Modal de cobro (transferencia / tarjeta) + buscador de entidad.
+  const [cobroModalOpen, setCobroModalOpen] = useState(false);
+  const [entidadQuery, setEntidadQuery] = useState("");
 
   // ── Línea en construcción ─────────────────────────────────────────────────
   const [lineaProdId, setLineaProdId] = useState("");
@@ -333,6 +337,16 @@ export default function NuevaVentaPage() {
       })
   ).slice(0, 50);
 
+  // Cobro: entidad seleccionada + filtrado por código/nombre.
+  const entidadSel = entidades.find((e) => e.id === pagoEntidadId) ?? null;
+  const entidadesFiltradas = (entidadQuery.trim() === ""
+    ? entidades
+    : entidades.filter((e) => {
+        const q = entidadQuery.toLowerCase();
+        return e.nombre.toLowerCase().includes(q) || (e.codigo ?? "").toLowerCase().includes(q);
+      })
+  ).slice(0, 50);
+
   // Vuelto (solo informativo, no se persiste)
   const montoRecibidoNum = parseFloat(montoRecibido) || 0;
   const vuelto           = montoRecibidoNum - totalGeneral;
@@ -358,6 +372,21 @@ export default function NuevaVentaPage() {
     setComboOpen(false);
     setComboHighlight(-1);
     setErrorLinea(null);
+  }
+
+  /** Selecciona método de cobro. Efectivo no pide datos; transferencia/tarjeta abren modal. */
+  function handleSelectMetodo(m: MetodoPago) {
+    setMetodoPago(m);
+    if (m === "efectivo") {
+      setCobroModalOpen(false);
+      // "Caja efectivo" por defecto si existe una entidad tipo caja.
+      const caja = entidades.find((e) => e.tipo === "caja");
+      setPagoEntidadId(caja ? caja.id : "");
+      setPagoTitular("");
+    } else {
+      setEntidadQuery("");
+      setCobroModalOpen(true);
+    }
   }
 
   /** Cambia el tipo de precio de la línea en construcción y ajusta el precio unitario. */
@@ -470,6 +499,7 @@ export default function NuevaVentaPage() {
         entidad_bancaria_id: pagoEntidadId || null,
         entidad_nombre_snapshot: entidades.find((e) => e.id === pagoEntidadId)?.nombre ?? null,
         referencia: pagoReferencia.trim() || null,
+        titular: metodoPago === "transferencia" ? pagoTitular.trim() || null : null,
         observacion: pagoObservacion.trim() || null,
       }
     );
@@ -902,106 +932,70 @@ export default function NuevaVentaPage() {
                   </div>
 
                   {tipoVenta === "CONTADO" && (
-                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
-                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                        Cobro
-                      </p>
-                      <div>
-                        <label className="block text-xs text-gray-600 mb-1">Método de pago</label>
-                        <div className="grid grid-cols-3 gap-1">
-                          {(["efectivo", "tarjeta", "transferencia"] as MetodoPago[]).map((m) => (
-                            <button
-                              key={m}
-                              type="button"
-                              onClick={() => setMetodoPago(m)}
-                              className={`text-xs py-1.5 rounded-md border transition-colors ${
-                                metodoPago === m
-                                  ? "border-[#0EA5E9] bg-[#0EA5E9]/10 text-[#0EA5E9] font-medium"
-                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                              }`}
-                            >
-                              {m === "efectivo" ? "Efectivo" : m === "tarjeta" ? "Tarjeta" : "Transfer."}
-                            </button>
-                          ))}
-                        </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2.5">
+                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Cobro</p>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {([
+                          { v: "efectivo", label: "Efectivo" },
+                          { v: "transferencia", label: "Transferencia" },
+                          { v: "tarjeta", label: "Tarjeta/Débito" },
+                        ] as { v: MetodoPago; label: string }[]).map((m) => (
+                          <button
+                            key={m.v}
+                            type="button"
+                            onClick={() => handleSelectMetodo(m.v)}
+                            className={`text-xs py-2 rounded-md border transition-colors ${
+                              metodoPago === m.v
+                                ? "border-[#0EA5E9] bg-[#0EA5E9]/10 text-[#0EA5E9] font-medium"
+                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                            }`}
+                          >
+                            {m.label}
+                          </button>
+                        ))}
                       </div>
-                      <div>
-                        <label className="block text-xs text-gray-600 mb-1">
-                          Monto recibido (Gs.)
-                        </label>
-                        <MontoInput
-                          value={montoRecibido}
-                          onChange={(n) => setMontoRecibido(String(n))}
-                          placeholder="Ej: 100.000"
-                          className={inputClass}
-                          decimals={false}
-                        />
-                      </div>
-                      {montoRecibidoNum > 0 && (
-                        <div className="flex justify-between text-sm pt-2 border-t border-slate-200">
-                          {vuelto >= 0 ? (
-                            <>
-                              <span className="text-gray-600">Vuelto</span>
-                              <span className="font-bold text-emerald-600 tabular-nums">
-                                {formatGs(vuelto)}
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <span className="text-gray-600">Falta</span>
-                              <span className="font-bold text-red-600 tabular-nums">
+
+                      {/* Efectivo: monto recibido + vuelto, sin datos extra */}
+                      {metodoPago === "efectivo" && (
+                        <div className="space-y-1.5">
+                          <MontoInput
+                            value={montoRecibido}
+                            onChange={(n) => setMontoRecibido(String(n))}
+                            placeholder="Monto recibido (Gs.) — opcional"
+                            className={inputClass}
+                            decimals={false}
+                          />
+                          {montoRecibidoNum > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">{vuelto >= 0 ? "Vuelto" : "Falta"}</span>
+                              <span className={`font-bold tabular-nums ${vuelto >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                                 {formatGs(Math.abs(vuelto))}
                               </span>
-                            </>
+                            </div>
                           )}
                         </div>
                       )}
-                      <p className="text-[11px] text-gray-400 leading-snug">
-                        El monto recibido / vuelto es solo informativo — no se guarda.
-                      </p>
 
-                      {/* Detalle de cobro (conciliación bancaria) — opcional */}
-                      <div className="mt-2 border-t border-slate-200 pt-2 space-y-2">
-                        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                          Detalle de cobro <span className="font-normal normal-case tracking-normal text-gray-400">(conciliación · opcional)</span>
-                        </p>
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1">Entidad / caja</label>
-                          <select
-                            value={pagoEntidadId}
-                            onChange={(e) => setPagoEntidadId(e.target.value)}
-                            className={inputClass}
-                          >
-                            <option value="">— Sin especificar —</option>
-                            {entidades.map((en) => (
-                              <option key={en.id} value={en.id}>{en.nombre}</option>
-                            ))}
-                          </select>
+                      {/* Transferencia / Tarjeta: resumen compacto + editar */}
+                      {(metodoPago === "transferencia" || metodoPago === "tarjeta") && (
+                        <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-slate-700">
+                              {metodoPago === "transferencia" ? "Transferencia" : "Tarjeta / Débito"}
+                            </span>
+                            <button type="button" onClick={() => { setEntidadQuery(""); setCobroModalOpen(true); }} className="text-sky-600 font-medium hover:underline">
+                              Editar
+                            </button>
+                          </div>
+                          <p className="text-slate-500">
+                            Entidad: <span className="text-slate-700">{entidadSel ? `${entidadSel.codigo ? entidadSel.codigo + " · " : ""}${entidadSel.nombre}` : "— sin especificar —"}</span>
+                          </p>
+                          {pagoReferencia.trim() && <p className="text-slate-500">Comprobante: <span className="text-slate-700">{pagoReferencia}</span></p>}
+                          {metodoPago === "transferencia" && pagoTitular.trim() && (
+                            <p className="text-slate-500">Titular: <span className="text-slate-700">{pagoTitular}</span></p>
+                          )}
                         </div>
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1">Referencia / comprobante</label>
-                          <input
-                            type="text"
-                            value={pagoReferencia}
-                            onChange={(e) => setPagoReferencia(e.target.value)}
-                            placeholder="Opcional — N° de comprobante / transacción"
-                            className={inputClass}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1">Observación</label>
-                          <input
-                            type="text"
-                            value={pagoObservacion}
-                            onChange={(e) => setPagoObservacion(e.target.value)}
-                            placeholder="Opcional"
-                            className={inputClass}
-                          />
-                        </div>
-                        <p className="text-[11px] text-gray-400 leading-snug">
-                          Se registra para la conciliación; el cobro es por el total de la venta.
-                        </p>
-                      </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1049,6 +1043,68 @@ export default function NuevaVentaPage() {
         tipoCambio={tipoCambioNum}
         ivaDefault={lineaIva}
       />
+
+      {/* Modal de cobro (transferencia / tarjeta-débito) */}
+      {cobroModalOpen && (metodoPago === "transferencia" || metodoPago === "tarjeta") && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setCobroModalOpen(false)}>
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-800">
+                {metodoPago === "transferencia" ? "Datos de transferencia" : "Datos de tarjeta / débito"}
+              </h3>
+              <button type="button" onClick={() => setCobroModalOpen(false)} className="text-slate-400 hover:text-slate-700 text-lg leading-none">✕</button>
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">
+                {metodoPago === "tarjeta" ? "Entidad / banco / POS" : "Entidad / banco"}
+              </label>
+              <input
+                type="text"
+                value={entidadQuery}
+                onChange={(e) => setEntidadQuery(e.target.value)}
+                placeholder="Buscar por código o nombre…"
+                className={inputClass}
+                autoFocus
+              />
+              <div className="mt-1 max-h-40 overflow-auto rounded-lg border border-slate-100">
+                {entidadesFiltradas.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-gray-400">Sin entidades. Cargalas en Configuración → Entidades bancarias.</p>
+                ) : (
+                  entidadesFiltradas.map((en) => (
+                    <button
+                      key={en.id}
+                      type="button"
+                      onClick={() => { setPagoEntidadId(en.id); setEntidadQuery(""); }}
+                      className={`block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 ${pagoEntidadId === en.id ? "bg-sky-50" : ""}`}
+                    >
+                      {en.codigo && <span className="font-mono text-xs text-slate-400 mr-2">{en.codigo}</span>}
+                      {en.nombre}
+                    </button>
+                  ))
+                )}
+              </div>
+              {entidadSel && <p className="mt-1 text-[11px] text-emerald-600">Seleccionada: {entidadSel.nombre}</p>}
+            </div>
+
+            {metodoPago === "transferencia" && (
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Titular que transfirió</label>
+                <input type="text" value={pagoTitular} onChange={(e) => setPagoTitular(e.target.value)} placeholder="Nombre del titular" className={inputClass} />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">N° de comprobante / referencia</label>
+              <input type="text" value={pagoReferencia} onChange={(e) => setPagoReferencia(e.target.value)} placeholder="Comprobante / transacción" className={inputClass} />
+            </div>
+
+            <button type="button" onClick={() => setCobroModalOpen(false)} className="w-full rounded-lg bg-[#0EA5E9] py-2 text-sm font-medium text-white hover:bg-[#0284C7]">
+              Listo
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

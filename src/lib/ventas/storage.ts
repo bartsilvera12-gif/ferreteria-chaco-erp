@@ -20,6 +20,7 @@ export type PagoDetalleInput = {
   entidad_bancaria_id?: string | null;
   entidad_nombre_snapshot?: string | null;
   referencia?: string | null;
+  titular?: string | null;
   observacion?: string | null;
   fecha_acreditacion?: string | null;
 };

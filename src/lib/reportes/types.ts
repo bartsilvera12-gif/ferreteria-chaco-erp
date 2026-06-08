@@ -169,6 +169,7 @@ export interface ConciliacionVentaRow {
   metodo_pago: string | null;
   entidad: string | null;
   referencia: string | null;
+  titular: string | null;
   monto: number | null;       // null si sin detalle
   con_detalle: boolean;
 }

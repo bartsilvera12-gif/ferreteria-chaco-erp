@@ -401,7 +401,7 @@ export async function getReporteConciliacion(
 
   // Un detalle por venta (defensivo: el más reciente si hubiera más de uno).
   const detLateral = `LEFT JOIN LATERAL (
-      SELECT d.metodo_pago, d.entidad_nombre_snapshot, d.referencia, d.monto
+      SELECT d.metodo_pago, d.entidad_nombre_snapshot, d.referencia, d.titular, d.monto
         FROM ${tD} d WHERE d.venta_id=v.id AND d.empresa_id=v.empresa_id
        ORDER BY d.fecha_pago DESC LIMIT 1
     ) d ON true`;
@@ -409,7 +409,7 @@ export async function getReporteConciliacion(
   // Detalle por venta (todas las ventas del mes; con o sin cobro).
   const ventasQ = p.query<ConciliacionVentaRow & { con_detalle: boolean }>(
     `SELECT v.id AS venta_id, v.numero_control, v.fecha, c.nombre AS cliente,
-            d.metodo_pago, d.entidad_nombre_snapshot AS entidad, d.referencia,
+            d.metodo_pago, d.entidad_nombre_snapshot AS entidad, d.referencia, d.titular,
             d.monto::float8 AS monto, (d.metodo_pago IS NOT NULL) AS con_detalle
        FROM ${tV} v
        LEFT JOIN ${tCli} c ON c.id=v.cliente_id AND c.empresa_id=v.empresa_id
@@ -443,6 +443,7 @@ export async function getReporteConciliacion(
     metodo_pago: r.metodo_pago || null,
     entidad: r.entidad || null,
     referencia: r.referencia || null,
+    titular: r.titular || null,
     monto: r.con_detalle ? num(r.monto) : null,
     con_detalle: r.con_detalle === true,
   }));
