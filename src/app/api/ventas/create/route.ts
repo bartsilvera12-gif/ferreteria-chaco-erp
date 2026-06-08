@@ -53,6 +53,8 @@ function toVentaResponse(
     subtotal: number;
     monto_iva: number;
     total: number;
+    genera_nota_remision?: boolean;
+    nota_remision_numero?: string | null;
   }
 ): Venta {
   const lineas: LineaVenta[] = items.map((i) => ({
@@ -80,6 +82,8 @@ function toVentaResponse(
     tipo_venta: meta.tipo_venta,
     plazo_dias: meta.plazo_dias,
     metodo_pago: meta.metodo_pago,
+    genera_nota_remision: meta.genera_nota_remision === true,
+    nota_remision_numero: meta.nota_remision_numero ?? null,
     fecha: meta.fechaIso,
   };
 }
@@ -247,6 +251,8 @@ export async function POST(request: NextRequest) {
       subtotal: sub,
       monto_iva: iv,
       total: tot,
+      genera_nota_remision: !!notaRemisionNumero,
+      nota_remision_numero: notaRemisionNumero,
     });
 
     return NextResponse.json(successResponse({ venta, nota_remision_numero: notaRemisionNumero }));

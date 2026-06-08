@@ -111,6 +111,8 @@ export default function NuevaVentaPage() {
   // Venta sin stock: faltantes devueltos por el backend + modal de confirmación.
   const [faltantes, setFaltantes] = useState<FaltanteStock[]>([]);
   const [confirmSinStockOpen, setConfirmSinStockOpen] = useState(false);
+  // Panel post-venta: tras confirmar, ofrece abrir ticket y (si aplica) nota de remisión.
+  const [postVenta, setPostVenta] = useState<{ id: string; numero: string; generaNota: boolean } | null>(null);
 
   // ── Condiciones de la venta ───────────────────────────────────────────────
   // Instancia dedicada: siempre Guaraníes.
@@ -510,11 +512,18 @@ export default function NuevaVentaPage() {
       setErrorVenta(resultado.error);
       return;
     }
-    // Abrir comandas + ticket cliente en nueva pestaña con autoprint.
-    try {
-      window.open(`/api/ventas/${resultado.venta.id}/ticket?mode=comandas&auto=1`, "_blank", "noopener");
-    } catch {}
-    router.push("/ventas");
+    // Documentos de la venta. La nota de remisión se abre además del ticket
+    // SOLO si la venta la genera (cliente con usa_nota_remision o toggle activo).
+    const v = resultado.venta;
+    const generaNota = v.genera_nota_remision === true || !!v.nota_remision_numero;
+    const ticketUrl = `/api/ventas/${v.id}/ticket?mode=comandas&auto=1`;
+    const remisionUrl = `/api/ventas/${v.id}/ticket?tipo=remision&auto=1`;
+    // Intento de apertura automática (el ticket sale por el gesto de click; la
+    // segunda pestaña puede ser bloqueada por el navegador → fallback con botones).
+    try { window.open(ticketUrl, "_blank", "noopener"); } catch {}
+    if (generaNota) { try { window.open(remisionUrl, "_blank", "noopener"); } catch {} }
+    // Panel post-venta: botones siempre disponibles aunque el popup se bloquee.
+    setPostVenta({ id: v.id, numero: v.numero_control, generaNota });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -983,6 +992,55 @@ export default function NuevaVentaPage() {
               </button>
               <button type="button" onClick={() => void confirmarVentaSinStock()} className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600">
                 Confirmar venta de todos modos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Panel post-venta: abrir ticket y (si aplica) nota de remisión */}
+      {postVenta && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl space-y-4 text-center">
+            <div className="text-3xl">✅</div>
+            <div>
+              <h3 className="text-base font-semibold text-slate-800">Venta {postVenta.numero} registrada</h3>
+              {postVenta.generaNota && (
+                <p className="mt-1 text-sm text-sky-700">Esta venta genera nota de remisión.</p>
+              )}
+              <p className="mt-1 text-xs text-gray-400">
+                Si tu navegador bloqueó las pestañas, abrí los documentos con estos botones.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2">
+              <a
+                href={`/api/ventas/${postVenta.id}/ticket?mode=comandas&auto=1`}
+                target="_blank"
+                rel="noopener"
+                className="rounded-lg bg-[#0EA5E9] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#0284C7]"
+              >
+                Abrir ticket
+              </a>
+              {postVenta.generaNota && (
+                <a
+                  href={`/api/ventas/${postVenta.id}/ticket?tipo=remision&auto=1`}
+                  target="_blank"
+                  rel="noopener"
+                  className="rounded-lg border border-sky-300 bg-sky-50 px-4 py-2.5 text-sm font-medium text-sky-700 hover:bg-sky-100"
+                >
+                  Abrir nota de remisión
+                </a>
+              )}
+            </div>
+
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-center pt-1">
+              <button
+                type="button"
+                onClick={() => { setPostVenta(null); router.push("/ventas"); }}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+              >
+                Ir a ventas
               </button>
             </div>
           </div>
