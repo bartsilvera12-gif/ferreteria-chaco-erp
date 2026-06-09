@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { FileText, Plus, Loader2 } from "lucide-react";
+import { FileText, Plus, Loader2, Lock } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { ESTADO_LABEL, type EstadoPresupuesto } from "@/lib/presupuestos/types";
+
+/** Estados que el usuario puede elegir manualmente desde el listado (nunca 'convertido'). */
+const ESTADOS_EDITABLES: EstadoPresupuesto[] = ["creado", "enviado", "aprobado", "rechazado"];
 
 type PresupuestoRow = {
   id: string;
@@ -22,6 +25,20 @@ const ESTADO_BADGE: Record<EstadoPresupuesto, string> = {
   aprobado: "bg-emerald-100 text-emerald-700",
   rechazado: "bg-red-100 text-red-700",
   convertido: "bg-violet-100 text-violet-700",
+};
+const ESTADO_DOT: Record<EstadoPresupuesto, string> = {
+  creado: "bg-slate-400",
+  enviado: "bg-sky-500",
+  aprobado: "bg-emerald-500",
+  rechazado: "bg-red-500",
+  convertido: "bg-violet-500",
+};
+const ESTADO_TEXT: Record<EstadoPresupuesto, string> = {
+  creado: "text-slate-700",
+  enviado: "text-sky-700",
+  aprobado: "text-emerald-700",
+  rechazado: "text-red-700",
+  convertido: "text-violet-700",
 };
 
 function fmtGs(n: number | string, moneda: string) {
@@ -50,6 +67,51 @@ export default function PresupuestosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<"todos" | EstadoPresupuesto>("todos");
+  const [toast, setToast] = useState<{ tipo: "ok" | "error"; msg: string } | null>(null);
+  const [actualizando, setActualizando] = useState<Set<string>>(new Set());
+
+  const mostrarToast = useCallback((tipo: "ok" | "error", msg: string) => {
+    setToast({ tipo, msg });
+    setTimeout(() => setToast(null), 2800);
+  }, []);
+
+  /**
+   * Cambia el estado de un presupuesto desde el listado con actualización optimista:
+   * actualiza la fila de inmediato; si el PATCH falla, revierte al estado anterior.
+   */
+  const cambiarEstado = useCallback(
+    async (id: string, anterior: EstadoPresupuesto, nuevo: EstadoPresupuesto) => {
+      if (nuevo === anterior) return;
+      // Optimista: aplicar ya.
+      setRows((prev) => prev.map((r) => (r.id === id ? { ...r, estado: nuevo } : r)));
+      setActualizando((prev) => new Set(prev).add(id));
+      try {
+        const res = await fetchWithSupabaseSession(`/api/presupuestos/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ estado: nuevo }),
+        });
+        const body = await res.json();
+        if (!res.ok || body?.success === false) {
+          // Rollback visual.
+          setRows((prev) => prev.map((r) => (r.id === id ? { ...r, estado: anterior } : r)));
+          mostrarToast("error", body?.error ?? "No se pudo cambiar el estado.");
+          return;
+        }
+        mostrarToast("ok", "Estado actualizado");
+      } catch {
+        setRows((prev) => prev.map((r) => (r.id === id ? { ...r, estado: anterior } : r)));
+        mostrarToast("error", "Error de red al cambiar el estado.");
+      } finally {
+        setActualizando((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    },
+    [mostrarToast]
+  );
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -80,6 +142,18 @@ export default function PresupuestosPage() {
 
   return (
     <div className="space-y-6">
+      {toast && (
+        <div
+          className={`fixed top-4 right-4 z-50 rounded-lg px-4 py-2.5 text-sm font-medium shadow-lg ${
+            toast.tipo === "ok" ? "bg-emerald-600 text-white" : "bg-red-600 text-white"
+          }`}
+          role="status"
+        >
+          {toast.tipo === "ok" ? "✓ " : "⚠ "}
+          {toast.msg}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <FileText className="h-7 w-7 text-[#4FAEB2]" />
@@ -144,9 +218,30 @@ export default function PresupuestosPage() {
                     <td className="py-3 px-4 text-gray-600">{fmtFecha(r.fecha)}</td>
                     <td className="py-3 px-4 text-right tabular-nums font-semibold text-gray-800">{fmtGs(r.total, r.moneda)}</td>
                     <td className="py-3 px-4">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ESTADO_BADGE[r.estado]}`}>
-                        {ESTADO_LABEL[r.estado]}
-                      </span>
+                      {r.estado === "convertido" ? (
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${ESTADO_BADGE.convertido}`}
+                          title="Convertido en pedido — no editable"
+                        >
+                          <Lock className="h-3 w-3" /> {ESTADO_LABEL.convertido}
+                        </span>
+                      ) : (
+                        <div className="inline-flex items-center gap-1.5">
+                          <span className={`h-2 w-2 rounded-full ${ESTADO_DOT[r.estado]}`} aria-hidden />
+                          <select
+                            value={r.estado}
+                            disabled={actualizando.has(r.id)}
+                            onChange={(e) => cambiarEstado(r.id, r.estado, e.target.value as EstadoPresupuesto)}
+                            className={`rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/40 disabled:opacity-50 ${ESTADO_TEXT[r.estado]}`}
+                            aria-label={`Estado de ${r.numero_control}`}
+                          >
+                            {ESTADOS_EDITABLES.map((s) => (
+                              <option key={s} value={s}>{ESTADO_LABEL[s]}</option>
+                            ))}
+                          </select>
+                          {actualizando.has(r.id) && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
+                        </div>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-right">
                       <Link href={`/presupuestos/${r.id}`} className="text-sm font-medium text-[#4FAEB2] hover:underline">

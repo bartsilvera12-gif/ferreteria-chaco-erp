@@ -131,7 +131,7 @@ export default function PresupuestoDetallePage() {
 
   async function convertir() {
     if (busy) return;
-    if (!confirm("¿Convertir este presupuesto en un pedido? No se descuenta stock todavía.")) return;
+    if (!confirm("¿Crear un pedido desde este presupuesto? No se descuenta stock ni se genera venta.")) return;
     setBusy(true);
     setError(null);
     setOk(null);
@@ -139,13 +139,13 @@ export default function PresupuestoDetallePage() {
       const res = await fetchWithSupabaseSession(`/api/presupuestos/${id}/convertir`, { method: "POST" });
       const body = await res.json();
       if (!res.ok || body?.success === false) {
-        setError(body?.error ?? "No se pudo convertir el presupuesto.");
+        setError(body?.error ?? "No se pudo crear el pedido.");
         return;
       }
-      setOk("Presupuesto convertido en pedido.");
+      setOk("Pedido creado correctamente.");
       await cargar();
     } catch {
-      setError("Error de red al convertir.");
+      setError("Error de red al crear el pedido.");
     } finally {
       setBusy(false);
     }
@@ -189,7 +189,7 @@ export default function PresupuestoDetallePage() {
           </button>
           {presu.estado === "aprobado" && (
             <button onClick={convertir} disabled={busy} className="inline-flex items-center gap-1.5 rounded-md bg-[#4FAEB2] px-4 py-2 text-sm font-medium text-white hover:bg-[#3F8E91] disabled:opacity-50">
-              <FileCheck2 className="h-4 w-4" /> Convertir en pedido
+              <FileCheck2 className="h-4 w-4" /> Crear pedido
             </button>
           )}
         </div>
@@ -199,9 +199,14 @@ export default function PresupuestoDetallePage() {
       {ok && <div className="rounded-md bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-700">✓ {ok}</div>}
 
       {presu.estado === "convertido" && presu.convertido_pedido_id && (
-        <div className="rounded-md bg-violet-50 border border-violet-200 p-3 text-sm text-violet-800">
-          Este presupuesto fue convertido en pedido.{" "}
-          <Link href="/dashboard/proyectos" className="font-medium underline">Ver pedidos</Link>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-violet-50 border border-violet-200 p-3 text-sm text-violet-800">
+          <span>Este presupuesto ya fue convertido en pedido.</span>
+          <Link
+            href={`/dashboard/proyectos/${presu.convertido_pedido_id}`}
+            className="inline-flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700"
+          >
+            <FileCheck2 className="h-3.5 w-3.5" /> Abrir pedido
+          </Link>
         </div>
       )}
 
