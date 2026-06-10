@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Download } from "lucide-react";
+import { Loader2, Download, ChevronDown, ChevronUp } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { RegistrarCobroModalCxc, type CxcRef } from "@/components/cobros/RegistrarCobroModalCxc";
 
@@ -25,14 +25,6 @@ const ESTADO_BADGE: Record<string, string> = {
   vencido: "bg-red-100 text-red-700",
   anulado: "bg-slate-100 text-slate-500",
 };
-const FILTROS = [
-  { id: "pendientes", label: "Pendientes" },
-  { id: "parciales", label: "Parciales" },
-  { id: "pagadas", label: "Pagadas" },
-  { id: "vencidas", label: "Vencidas" },
-  { id: "todas", label: "Todas" },
-] as const;
-type FiltroId = (typeof FILTROS)[number]["id"];
 
 function fmtGs(n: number) {
   return "Gs. " + Math.round(Number(n) || 0).toLocaleString("es-PY");
@@ -43,10 +35,17 @@ function fmtFecha(iso: string | null) {
   const [y, m, d] = s.split("-");
   return d && m && y ? `${d}/${m}/${y}` : s;
 }
+function diasMora(venc: string | null, vencida: boolean): number {
+  if (!vencida || !venc) return 0;
+  const hoy = new Date(new Date().toISOString().slice(0, 10));
+  const v = new Date(String(venc).slice(0, 10));
+  const diff = Math.floor((hoy.getTime() - v.getTime()) / 86400000);
+  return diff > 0 ? diff : 0;
+}
 
 /**
  * Bloque de Estado de cuenta del cliente basado en cuentas_por_cobrar/cobros_clientes.
- * Reutilizable (Gestión de Clientes, etc.). Registra cobros con el mismo flujo de /pagos.
+ * Muestra todas las cuentas tal cual (sin filtros), con cards de resumen y registro de cobro.
  */
 export function EstadoCuentaClienteBlock({
   clienteId,
@@ -59,7 +58,7 @@ export function EstadoCuentaClienteBlock({
   const [movs, setMovs] = useState<Mov[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filtro, setFiltro] = useState<FiltroId>("pendientes");
+  const [abierto, setAbierto] = useState(true);
   const [cobrando, setCobrando] = useState<CxcRef | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -87,16 +86,24 @@ export function EstadoCuentaClienteBlock({
     void cargar();
   }, [cargar]);
 
-  const visibles = useMemo(() => {
-    switch (filtro) {
-      case "pendientes": return movs.filter((m) => m.estado === "pendiente");
-      case "parciales": return movs.filter((m) => m.estado === "parcial");
-      case "pagadas": return movs.filter((m) => m.estado === "pagado");
-      case "vencidas": return movs.filter((m) => m.vencida && m.estado !== "pagado" && m.estado !== "anulado");
-      case "todas": return movs;
-      default: return movs;
-    }
-  }, [movs, filtro]);
+  // Resumen por cantidades (cada cuenta cae en exactamente un grupo).
+  const m = useMemo(() => {
+    const activas = movs.filter((x) => x.estado !== "anulado");
+    const montoTotal = activas.reduce((a, x) => a + x.total, 0);
+    const saldoPend = activas.reduce((a, x) => a + x.saldo, 0);
+    const esPend = (x: Mov) => (x.estado === "pendiente" || x.estado === "parcial");
+    const vencidas = activas.filter((x) => esPend(x) && x.vencida);
+    const pendientes = activas.filter((x) => esPend(x) && !x.vencida);
+    const pagadas = activas.filter((x) => x.estado === "pagado");
+    return {
+      cuentas: activas.length,
+      montoTotal,
+      saldoPend,
+      vencidas: vencidas.length,
+      pendientes: pendientes.length,
+      pagadas: pagadas.length,
+    };
+  }, [movs]);
 
   const sinCuentas = !loading && movs.length === 0;
 
@@ -105,112 +112,125 @@ export function EstadoCuentaClienteBlock({
       {toast && (
         <div className="fixed top-4 right-4 z-50 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg">✓ {toast}</div>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/90 px-4 py-3">
-        <div>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-[#4FAEB2]">Cobranzas</span>
-          <h3 className="text-sm font-semibold text-slate-700">Estado de cuenta</h3>
-        </div>
+
+      {/* Cabecera tipo "FACTURAS del cliente" */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 bg-slate-50/90 px-3 py-2.5 sm:px-4">
+        <button type="button" onClick={() => setAbierto((v) => !v)} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1.5 text-left">
+          <span className="inline-flex shrink-0 text-slate-500" aria-hidden>
+            {abierto ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </span>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">Estado de cuenta</span>
+          <span className="hidden text-[10px] font-normal text-slate-400 sm:inline">del cliente</span>
+          <span className="hidden h-3 w-px bg-slate-200 sm:inline" />
+          <span className="rounded-md bg-white/90 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-slate-700 ring-1 ring-slate-200/80">{m.cuentas} cuenta{m.cuentas === 1 ? "" : "s"}</span>
+          <span className="rounded-md bg-white/90 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-slate-700 ring-1 ring-slate-200/80">Saldo {fmtGs(m.saldoPend)}</span>
+          {m.vencidas > 0 ? (
+            <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700 ring-1 ring-red-200/80">{m.vencidas} venc.</span>
+          ) : null}
+        </button>
         <a
           href={`/api/clientes/${clienteId}/estado-cuenta/pdf?auto=1`}
           target="_blank"
           rel="noopener"
           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
         >
-          <Download className="h-3.5 w-3.5" /> Descargar estado de cuenta
+          <Download className="h-3.5 w-3.5" /> Descargar
         </a>
       </div>
 
-      {/* Resumen */}
-      {resumen && (
-        <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4">
-          <div className="rounded-lg border border-slate-200 p-3">
-            <div className="text-[10px] uppercase tracking-wide text-gray-400">Vendido a crédito</div>
-            <div className="mt-0.5 text-lg font-bold text-slate-800">{fmtGs(resumen.total_vendido)}</div>
+      {!abierto ? null : (
+        <>
+          {/* Cards de resumen */}
+          <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 sm:p-4 lg:grid-cols-6">
+            <Card label="Cuentas" value={String(m.cuentas)} />
+            <Card label="Monto total" value={fmtGs(m.montoTotal)} />
+            <Card label="Saldo pend." value={fmtGs(m.saldoPend)} valueClass={m.saldoPend > 0 ? "text-amber-600" : "text-emerald-600"} ring="ring-[#4FAEB2]/20" />
+            <Card label="Vencidas" value={String(m.vencidas)} valueClass={m.vencidas > 0 ? "text-red-600" : "text-slate-800"} ring="ring-red-200/70" />
+            <Card label="Pendientes" value={String(m.pendientes)} valueClass="text-amber-600" ring="ring-amber-200/70" />
+            <Card label="Pagadas" value={String(m.pagadas)} valueClass="text-emerald-700" ring="ring-emerald-200/70" />
           </div>
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-            <div className="text-[10px] uppercase tracking-wide text-emerald-600">Cobrado</div>
-            <div className="mt-0.5 text-lg font-bold text-emerald-700">{fmtGs(resumen.total_cobrado)}</div>
-          </div>
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-            <div className="text-[10px] uppercase tracking-wide text-amber-600">Saldo pendiente</div>
-            <div className="mt-0.5 text-lg font-bold text-amber-700">{fmtGs(resumen.saldo_pendiente)}</div>
-          </div>
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-            <div className="text-[10px] uppercase tracking-wide text-red-500">Vencido</div>
-            <div className="mt-0.5 text-lg font-bold text-red-700">{fmtGs(resumen.vencido)}</div>
-          </div>
-        </div>
-      )}
 
-      {/* Filtros */}
-      {!sinCuentas && (
-        <div className="flex flex-wrap gap-2 px-4 pb-2">
-          {FILTROS.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setFiltro(f.id)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${filtro === f.id ? "bg-[#4FAEB2] text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"}`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      )}
+          {error && <div className="mx-3 mb-3 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700 sm:mx-4">{error}</div>}
 
-      {error && <div className="m-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">{error}</div>}
-
-      {loading ? (
-        <div className="p-8 flex items-center gap-2 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>
-      ) : sinCuentas ? (
-        <div className="p-8 text-center text-sm text-gray-500">El cliente no tiene cuentas pendientes.</div>
-      ) : visibles.length === 0 ? (
-        <div className="p-8 text-center text-sm text-gray-500">No hay cuentas en este filtro.</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-gray-500">
-              <tr>
-                <th className="py-2.5 px-4 font-medium">Venta</th>
-                <th className="py-2.5 px-4 font-medium">Emisión</th>
-                <th className="py-2.5 px-4 font-medium">Vencimiento</th>
-                <th className="py-2.5 px-4 font-medium text-right">Total</th>
-                <th className="py-2.5 px-4 font-medium text-right">Cobrado</th>
-                <th className="py-2.5 px-4 font-medium text-right">Saldo</th>
-                <th className="py-2.5 px-4 font-medium">Estado</th>
-                <th className="py-2.5 px-4 font-medium text-right">Acción</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {visibles.map((m) => (
-                <tr key={m.id} className="hover:bg-slate-50">
-                  <td className="py-2.5 px-4 font-mono font-medium text-gray-800">{m.numero_venta ?? "—"}</td>
-                  <td className="py-2.5 px-4 text-gray-600">{fmtFecha(m.fecha_emision)}</td>
-                  <td className={`py-2.5 px-4 ${m.vencida ? "font-semibold text-red-600" : "text-gray-600"}`}>{fmtFecha(m.fecha_vencimiento)}</td>
-                  <td className="py-2.5 px-4 text-right tabular-nums">{fmtGs(m.total)}</td>
-                  <td className="py-2.5 px-4 text-right tabular-nums text-emerald-700">{fmtGs(m.cobrado)}</td>
-                  <td className="py-2.5 px-4 text-right tabular-nums font-semibold text-amber-600">{fmtGs(m.saldo)}</td>
-                  <td className="py-2.5 px-4">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ESTADO_BADGE[m.vencida && m.estado !== "pagado" ? "vencido" : m.estado] ?? ESTADO_BADGE.pendiente}`}>
-                      {m.vencida && m.estado !== "pagado" ? "Vencido" : m.estado.charAt(0).toUpperCase() + m.estado.slice(1)}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-4 text-right">
-                    {m.estado === "pagado" || m.estado === "anulado" ? (
-                      <span className="text-xs text-gray-400">—</span>
-                    ) : (
-                      <button
-                        onClick={() => setCobrando({ id: m.id, numero_venta: m.numero_venta, saldo: m.saldo })}
-                        className="rounded-lg bg-[#4FAEB2] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#3F8E91]"
-                      >
-                        Registrar pago
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          {loading ? (
+            <div className="p-8 flex items-center gap-2 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>
+          ) : sinCuentas ? (
+            <div className="p-8 text-center text-sm text-gray-500">El cliente no tiene cuentas pendientes.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="py-2.5 px-3 font-medium sm:px-4">Tipo</th>
+                    <th className="py-2.5 px-3 font-medium">Venta</th>
+                    <th className="py-2.5 px-3 font-medium">F. emisión</th>
+                    <th className="py-2.5 px-3 font-medium">F. vencimiento</th>
+                    <th className="py-2.5 px-3 font-medium text-right">Monto</th>
+                    <th className="py-2.5 px-3 font-medium text-right">Cobrado</th>
+                    <th className="py-2.5 px-3 font-medium text-right">Saldo</th>
+                    <th className="py-2.5 px-3 font-medium text-center">Días mora</th>
+                    <th className="py-2.5 px-3 font-medium">Estado</th>
+                    <th className="py-2.5 px-3 font-medium text-right">Operación</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {movs.map((x) => {
+                    const mora = diasMora(x.fecha_vencimiento, x.vencida);
+                    const estadoVis = x.vencida && x.estado !== "pagado" && x.estado !== "anulado" ? "vencido" : x.estado;
+                    return (
+                      <tr key={x.id} className="hover:bg-slate-50">
+                        <td className="py-2.5 px-3 sm:px-4">
+                          <span className="inline-flex items-center gap-1.5 text-xs text-slate-600"><span className="h-1.5 w-1.5 rounded-full bg-[#4FAEB2]" /> Crédito</span>
+                        </td>
+                        <td className="py-2.5 px-3 font-mono font-medium text-gray-800">{x.numero_venta ?? "—"}</td>
+                        <td className="py-2.5 px-3 text-gray-600">{fmtFecha(x.fecha_emision)}</td>
+                        <td className={`py-2.5 px-3 ${x.vencida ? "font-semibold text-red-600" : "text-gray-600"}`}>{fmtFecha(x.fecha_vencimiento)}</td>
+                        <td className="py-2.5 px-3 text-right tabular-nums">{fmtGs(x.total)}</td>
+                        <td className="py-2.5 px-3 text-right tabular-nums text-emerald-700">{fmtGs(x.cobrado)}</td>
+                        <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-amber-600">{fmtGs(x.saldo)}</td>
+                        <td className={`py-2.5 px-3 text-center tabular-nums ${mora > 0 ? "font-semibold text-red-600" : "text-slate-400"}`}>{mora > 0 ? mora : "—"}</td>
+                        <td className="py-2.5 px-3">
+                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${ESTADO_BADGE[estadoVis] ?? ESTADO_BADGE.pendiente}`}>
+                            {estadoVis.charAt(0).toUpperCase() + estadoVis.slice(1)}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          {x.estado === "pagado" || x.estado === "anulado" ? (
+                            <span className="text-xs text-gray-400">—</span>
+                          ) : (
+                            <button
+                              onClick={() => setCobrando({ id: x.id, numero_venta: x.numero_venta, saldo: x.saldo })}
+                              className="rounded-lg bg-[#4FAEB2] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#3F8E91]"
+                            >
+                              Cobrar
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-slate-200 bg-slate-50/90">
+                    <td colSpan={4} className="px-3 py-2.5 text-xs text-slate-500 sm:px-4">
+                      <span className="font-semibold text-slate-700">{m.cuentas}</span> cuenta{m.cuentas === 1 ? "" : "s"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total</span>
+                      <p className="text-sm font-bold tabular-nums text-slate-800">{fmtGs(m.montoTotal)}</p>
+                    </td>
+                    <td className="px-3 py-2.5" />
+                    <td className="px-3 py-2.5 text-right">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Saldo</span>
+                      <p className={`text-sm font-bold tabular-nums ${m.saldoPend > 0 ? "text-amber-600" : "text-emerald-700"}`}>{fmtGs(m.saldoPend)}</p>
+                    </td>
+                    <td colSpan={3} className="px-3 py-2.5" />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </>
       )}
 
       <RegistrarCobroModalCxc
@@ -225,5 +245,14 @@ export function EstadoCuentaClienteBlock({
         }}
       />
     </section>
+  );
+}
+
+function Card({ label, value, valueClass = "text-slate-800", ring = "ring-slate-200/70" }: { label: string; value: string; valueClass?: string; ring?: string }) {
+  return (
+    <div className={`rounded-lg border border-slate-200 bg-white px-3 py-2.5 ring-1 ${ring}`}>
+      <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</div>
+      <div className={`mt-0.5 text-sm font-bold tabular-nums ${valueClass}`}>{value}</div>
+    </div>
   );
 }
