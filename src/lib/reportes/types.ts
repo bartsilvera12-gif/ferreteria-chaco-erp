@@ -172,9 +172,11 @@ export interface ConciliacionMovRow {
   cliente: string | null;
   metodo_pago: string | null;
   entidad: string | null;
-  referencia: string | null;
+  entidad_codigo: string | null;
+  referencia: string | null;   // N° de comprobante
   titular: string | null;
   monto: number;
+  estado: "pendiente" | "aprobado" | "rechazado";
 }
 
 export interface ConciliacionReporte {

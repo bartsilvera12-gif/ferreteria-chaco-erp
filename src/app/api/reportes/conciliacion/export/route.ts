@@ -50,9 +50,10 @@ export async function GET(request: NextRequest) {
         { header: "Cliente", value: (m) => m.cliente ?? "", width: 26 },
         { header: "Método", value: (m) => metodoLabel(m.metodo_pago), width: 16 },
         { header: "Entidad", value: (m) => m.entidad ?? "", width: 24 },
-        { header: "Referencia", value: (m) => m.referencia ?? "", width: 20 },
+        { header: "N° Comprobante", value: (m) => m.referencia ?? "", width: 20 },
         { header: "Titular", value: (m) => m.titular ?? "", width: 22 },
         { header: "Monto", value: (m) => m.monto, width: 16 },
+        { header: "Estado", value: (m) => (m.estado === "aprobado" ? "Aprobado" : m.estado === "rechazado" ? "Rechazado" : "Pendiente"), width: 14 },
       ]),
     ]);
     return new Response(new Uint8Array(buf), { status: 200, headers: xlsxResponseHeaders(`conciliacion-${mes}`) });

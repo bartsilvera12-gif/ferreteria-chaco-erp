@@ -397,37 +397,45 @@ export async function getReporteConciliacion(
   const tCob = quoteSchemaTable(schema, "cobros_clientes");
   const tCli = quoteSchemaTable(schema, "clientes");
   const tCxc = quoteSchemaTable(schema, "cuentas_por_cobrar");
+  const tEnt = quoteSchemaTable(schema, "entidades_bancarias");
   const p = pool();
   const args = [empresaId, b.start, b.end];
 
   // Conciliación = SOLO movimientos bancarios (no efectivo): no hay nada que conciliar
   // en efectivo. Incluye el cobro de ventas contado (ventas_pagos_detalle) y los cobros
   // de cuentas por cobrar (cobros_clientes). El efectivo se excluye en todos lados.
+  // Cada movimiento trae su estado de conciliación (pendiente|aprobado|rechazado).
   const movsCTE = `WITH movs AS (
       SELECT d.id::text AS id, 'venta'::text AS tipo, v.fecha AS fecha,
              v.numero_control AS numero, c.nombre AS cliente, d.metodo_pago AS metodo,
              COALESCE(NULLIF(d.entidad_nombre_snapshot,''),'(sin entidad)') AS entidad,
-             d.referencia AS referencia, d.titular AS titular, d.monto::float8 AS monto
+             eb.codigo AS entidad_codigo,
+             d.referencia AS referencia, d.titular AS titular, d.monto::float8 AS monto,
+             d.conciliacion_estado AS estado
         FROM ${tD} d
         JOIN ${tV} v ON v.id=d.venta_id AND v.empresa_id=d.empresa_id
         LEFT JOIN ${tCli} c ON c.id=v.cliente_id AND c.empresa_id=v.empresa_id
+        LEFT JOIN ${tEnt} eb ON eb.id=d.entidad_bancaria_id AND eb.empresa_id=d.empresa_id
        WHERE d.empresa_id=$1::uuid AND v.fecha>=$2::timestamptz AND v.fecha<=$3::timestamptz
          AND d.metodo_pago IS NOT NULL AND d.metodo_pago <> 'efectivo'
       UNION ALL
       SELECT cc.id::text AS id, 'cobro'::text AS tipo, cc.fecha_pago AS fecha,
              COALESCE(vc.numero_control, cta.numero_venta) AS numero, c.nombre AS cliente, cc.metodo_pago AS metodo,
              COALESCE(NULLIF(cc.entidad_nombre_snapshot,''),'(sin entidad)') AS entidad,
-             cc.referencia AS referencia, cc.titular AS titular, cc.monto::float8 AS monto
+             eb.codigo AS entidad_codigo,
+             cc.referencia AS referencia, cc.titular AS titular, cc.monto::float8 AS monto,
+             cc.conciliacion_estado AS estado
         FROM ${tCob} cc
         LEFT JOIN ${tV} vc ON vc.id=cc.venta_id AND vc.empresa_id=cc.empresa_id
         LEFT JOIN ${tCxc} cta ON cta.id=cc.cuenta_por_cobrar_id AND cta.empresa_id=cc.empresa_id
         LEFT JOIN ${tCli} c ON c.id=cc.cliente_id AND c.empresa_id=cc.empresa_id
+        LEFT JOIN ${tEnt} eb ON eb.id=cc.entidad_bancaria_id AND eb.empresa_id=cc.empresa_id
        WHERE cc.empresa_id=$1::uuid AND cc.fecha_pago>=$2::timestamptz AND cc.fecha_pago<=$3::timestamptz
          AND cc.metodo_pago IS NOT NULL AND cc.metodo_pago <> 'efectivo'
     )`;
 
   const movsQ = p.query<ConciliacionMovRow>(
-    `${movsCTE} SELECT id, tipo, fecha, numero, cliente, metodo AS metodo_pago, entidad, referencia, titular, monto FROM movs ORDER BY fecha DESC`, args);
+    `${movsCTE} SELECT id, tipo, fecha, numero, cliente, metodo AS metodo_pago, entidad, entidad_codigo, referencia, titular, monto, estado FROM movs ORDER BY (estado='pendiente') DESC, fecha DESC`, args);
   const totQ = p.query<{ cantidad: number; total: number }>(
     `${movsCTE} SELECT count(*)::int AS cantidad, COALESCE(SUM(monto),0)::float8 AS total FROM movs`, args);
   const porMetodoQ = p.query<ConciliacionAgrupado>(
@@ -439,6 +447,8 @@ export async function getReporteConciliacion(
 
   const [movs, tot, porMetodo, porEntidad] = await Promise.all([movsQ, totQ, porMetodoQ, porEntidadQ]);
 
+  const estadoVal = (e: unknown): "pendiente" | "aprobado" | "rechazado" =>
+    e === "aprobado" || e === "rechazado" ? e : "pendiente";
   const movimientos: ConciliacionMovRow[] = movs.rows.map((r) => ({
     id: r.id,
     tipo: r.tipo === "cobro" ? "cobro" : "venta",
@@ -447,9 +457,11 @@ export async function getReporteConciliacion(
     cliente: r.cliente || null,
     metodo_pago: r.metodo_pago || null,
     entidad: r.entidad || null,
+    entidad_codigo: r.entidad_codigo || null,
     referencia: r.referencia || null,
     titular: r.titular || null,
     monto: num(r.monto),
+    estado: estadoVal(r.estado),
   }));
 
   return {
