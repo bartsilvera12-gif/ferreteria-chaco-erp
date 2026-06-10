@@ -8,6 +8,8 @@ import MesSelector from "@/components/reportes/MesSelector";
 import { getEstadoCuentaReporte } from "@/lib/reportes/storage";
 import { mesActualAsuncion } from "@/lib/fechas/asuncion-bounds";
 import type { EstadoCuentaReporte } from "@/lib/reportes/types";
+import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { EstadoCuentaClienteBlock } from "@/components/cobros/EstadoCuentaClienteBlock";
 
 function formatGs(v: number) {
   return `Gs. ${Math.round(v).toLocaleString("es-PY")}`;
@@ -25,6 +27,24 @@ export default function EstadoCuentaReportePage() {
   const [mes, setMes] = useState(mesActualAsuncion());
   const [data, setData] = useState<EstadoCuentaReporte | null>(null);
   const [cargando, setCargando] = useState(true);
+  const [clientes, setClientes] = useState<{ id: string; nombre: string }[]>([]);
+  const [clienteSel, setClienteSel] = useState("");
+
+  useEffect(() => {
+    fetchWithSupabaseSession("/api/clientes", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.success && Array.isArray(j.data)) {
+          const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+          setClientes(
+            (j.data as Record<string, unknown>[])
+              .map((c) => ({ id: String(c.id), nombre: s(c.empresa) || s(c.nombre_contacto) || s(c.nombre) || "Cliente" }))
+              .sort((a, b) => a.nombre.localeCompare(b.nombre))
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancel = false;
@@ -111,6 +131,31 @@ export default function EstadoCuentaReportePage() {
           </div>
         </>
       )}
+
+      {/* Estado de cuenta por cliente (cuentas por cobrar / cobros) */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 sm:p-6">
+        <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-base font-semibold text-slate-800">Estado de cuenta por cliente</h2>
+            <p className="text-xs text-slate-500">Cuentas por cobrar y cobros de ventas a crédito. Elegí un cliente.</p>
+          </div>
+          <select
+            value={clienteSel}
+            onChange={(e) => setClienteSel(e.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm min-w-[16rem]"
+          >
+            <option value="">— Elegí un cliente —</option>
+            {clientes.map((c) => (
+              <option key={c.id} value={c.id}>{c.nombre}</option>
+            ))}
+          </select>
+        </div>
+        {clienteSel ? (
+          <EstadoCuentaClienteBlock clienteId={clienteSel} />
+        ) : (
+          <p className="text-sm text-slate-400">Seleccioná un cliente para ver su estado de cuenta y registrar cobros.</p>
+        )}
+      </div>
     </div>
   );
 }

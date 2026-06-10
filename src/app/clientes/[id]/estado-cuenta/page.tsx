@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Banknote } from "lucide-react";
+import { ArrowLeft, Loader2, Banknote, Download } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 
 type Mov = {
@@ -144,12 +144,22 @@ export default function EstadoCuentaPage() {
         <ArrowLeft className="h-4 w-4" /> Volver a clientes
       </Link>
 
-      <div className="flex items-center gap-3">
-        <Banknote className="h-7 w-7 text-[#4FAEB2]" />
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Estado de cuenta</h1>
-          <p className="text-gray-600">{cliente.nombre}{cliente.ruc ? ` · ${cliente.ruc}` : ""}</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Banknote className="h-7 w-7 text-[#4FAEB2]" />
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Estado de cuenta</h1>
+            <p className="text-gray-600">{cliente.nombre}{cliente.ruc ? ` · ${cliente.ruc}` : ""}</p>
+          </div>
         </div>
+        <a
+          href={`/api/clientes/${id}/estado-cuenta/pdf?auto=1`}
+          target="_blank"
+          rel="noopener"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          <Download className="h-4 w-4" /> Descargar estado de cuenta
+        </a>
       </div>
 
       {error && <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">{error}</div>}

@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 // MobileDashboard se renderiza solo en mobile (md:hidden). El dashboard desktop
 // que vive en este mismo archivo queda intacto.
 import MobileDashboard from "@/app/_components/MobileDashboard";
+import CobranzasResumenCards from "@/components/cobros/CobranzasResumenCards";
 import { getConfig } from "@/lib/config/storage";
 import { getUsuarios } from "@/lib/usuarios/storage";
 import type { ConfigGlobal } from "@/lib/config/types";
@@ -2293,15 +2294,18 @@ export default function DashboardPage() {
       )}
 
       {tab === "financiero" && (
-        <DashFinanciero
-          facturas={facturas}
-          pagos={pagos}
-          clientes={clientes}
-          ventas={ventas}
-          periodo={periodo}
-          config={config}
-          mapNombreTipoServicio={mapNombreTipoServicio}
-        />
+        <div className="space-y-6">
+          <CobranzasResumenCards />
+          <DashFinanciero
+            facturas={facturas}
+            pagos={pagos}
+            clientes={clientes}
+            ventas={ventas}
+            periodo={periodo}
+            config={config}
+            mapNombreTipoServicio={mapNombreTipoServicio}
+          />
+        </div>
       )}
 
       {tab === "inventario" && (
