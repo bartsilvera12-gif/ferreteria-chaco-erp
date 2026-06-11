@@ -798,10 +798,10 @@ export default function Sidebar() {
                 <button
                   type="button"
                   onClick={() => toggleFamilia(seccion.id)}
-                  className="mb-1 flex w-full items-center justify-between rounded px-3 py-1 text-xs font-semibold uppercase tracking-wider text-slate-500 transition-colors hover:text-slate-300"
+                  className="mb-1.5 flex w-full items-center justify-between rounded px-3 py-1.5 text-sm font-bold uppercase tracking-wide text-slate-100 transition-colors hover:text-white"
                 >
                   <span>{seccion.titulo}</span>
-                  {abierta ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                  {abierta ? <ChevronDown className="h-4 w-4 text-slate-300" /> : <ChevronRight className="h-4 w-4 text-slate-300" />}
                 </button>
                 {abierta && (
                   <div className="space-y-0.5">
