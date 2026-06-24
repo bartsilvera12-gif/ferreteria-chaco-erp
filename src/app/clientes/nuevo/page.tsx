@@ -497,14 +497,42 @@ function NuevoClienteForm() {
                   {form.tipo_cliente === "empresa" ? "RUC" : "CI / Documento"}
                 </label>
                 {form.tipo_cliente === "empresa" ? (
-                  <input
-                    type="text"
-                    name="ruc"
-                    value={form.ruc}
-                    onChange={handleChange}
-                    placeholder="00000000-0"
-                    className={inputClass}
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      name="ruc"
+                      value={form.ruc}
+                      onChange={handleChange}
+                      placeholder="00000000-0"
+                      className={`${inputClass} flex-1`}
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const ruc = form.ruc.trim();
+                        if (!ruc) return;
+                        try {
+                          const r = await fetch(`/api/clientes/consulta-ruc?ruc=${encodeURIComponent(ruc)}`);
+                          const j = await r.json();
+                          if (j?.found && typeof j.nombre === "string") {
+                            setForm((prev) => ({
+                              ...prev,
+                              empresa: j.nombre.toUpperCase(),
+                              nombre_contacto: prev.nombre_contacto || j.nombre.toUpperCase(),
+                            }));
+                          } else {
+                            alert("RUC no encontrado en proveedores públicos. Cargá el nombre manualmente.");
+                          }
+                        } catch {
+                          alert("No se pudo consultar el RUC ahora. Probá de nuevo o cargá manualmente.");
+                        }
+                      }}
+                      className="px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition shrink-0"
+                      title="Consultar nombre por RUC"
+                    >
+                      Consultar
+                    </button>
+                  </div>
                 ) : (
                   <input
                     type="text"
