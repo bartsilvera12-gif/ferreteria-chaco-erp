@@ -10,6 +10,8 @@ import { generarYAbrirRecibo } from "@/lib/recibos/client";
 import type { TipoIvaVenta, TipoVenta, MonedaVenta, LineaVenta, MetodoPago, TipoPrecioVenta } from "@/lib/ventas/types";
 import type { Producto } from "@/lib/inventario/types";
 import { CARD_SURCHARGE_PCT, calcularRecargoTarjeta } from "@/lib/ventas/recargo-tarjeta";
+import { getCajasAbiertas } from "@/lib/caja/storage";
+import type { Caja } from "@/lib/caja/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -128,6 +130,20 @@ export default function NuevaVentaPage() {
   // Facturación de un pedido enviado a Caja (?pedido_id=...). Precarga items + cliente.
   const [pedidoId, setPedidoId] = useState<string | null>(null);
   const [pedidoNumero, setPedidoNumero] = useState<string | null>(null);
+
+  // Selector de caja: el cajero elige sobre cuál de las 3 cajas imputa esta venta.
+  // Si solo hay una abierta se selecciona sola; si no hay ninguna se permite vender sin caja.
+  const [cajasAbiertas, setCajasAbiertas] = useState<Caja[]>([]);
+  const [cajaId, setCajaId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void getCajasAbiertas().then((lista) => {
+      if (cancelled) return;
+      setCajasAbiertas(lista);
+      if (lista.length === 1) setCajaId(lista[0].id);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // ── Condiciones de la venta ───────────────────────────────────────────────
   // Instancia dedicada: siempre Guaraníes.
@@ -607,7 +623,7 @@ export default function NuevaVentaPage() {
           titular: metodoPago === "transferencia" ? pagoTitular.trim() || null : null,
           observacion: pagoObservacion.trim() || null,
         },
-        { permitirSinStock, pedidoId }
+        { permitirSinStock, pedidoId, cajaId }
       );
 
       if (!resultado.success) {
@@ -679,6 +695,41 @@ export default function NuevaVentaPage() {
         <div className="rounded-lg border border-[#4FAEB2]/40 bg-[#4FAEB2]/[0.08] px-4 py-3 text-sm text-slate-700">
           <span className="font-semibold text-[#3F8E91]">Estás facturando un pedido{pedidoNumero ? ` (${pedidoNumero})` : ""}.</span>{" "}
           La venta se generará al confirmar y el pedido quedará marcado como facturado. Podés ajustar items, precios y método de pago.
+        </div>
+      )}
+
+      {cajasAbiertas.length > 0 && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-emerald-700">
+            Imputar a la caja
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {cajasAbiertas.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setCajaId(c.id)}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                  cajaId === c.id
+                    ? "border-emerald-500 bg-emerald-600 text-white shadow-sm"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Caja {c.numero_caja}
+              </button>
+            ))}
+          </div>
+          {!cajaId && (
+            <p className="mt-2 text-[11px] text-amber-700">
+              Elegí la caja en la que estás trabajando antes de confirmar la venta.
+            </p>
+          )}
+        </div>
+      )}
+      {cajasAbiertas.length === 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 text-xs text-amber-800">
+          No hay ninguna caja abierta. Podés vender igual, pero la venta no quedará imputada a ninguna caja
+          (no aparecerá en el arqueo). Abrí una caja desde <span className="font-medium">Ventas</span> primero.
         </div>
       )}
 

@@ -70,6 +70,8 @@ export interface CreateVentaPgParams {
   permitirSinStock?: boolean;
   /** Si true y hay cliente, la venta emite nota de remisión (documento NO fiscal) con número NR-XXXXXX. */
   generaNotaRemision?: boolean;
+  /** Caja (turno) sobre la que se imputa la venta. Opcional: si null, la venta no se asocia a ninguna caja. */
+  cajaId?: string | null;
 }
 
 function recalcTotals(items: CreateVentaItemInput[]) {
@@ -399,6 +401,7 @@ export async function createVentaTransaccionalPg(
       metodo_pago: params.metodoPago,
       genera_nota_remision: generaNota,
       nota_remision_numero: notaRemisionNumero,
+      caja_id: params.cajaId ?? null,
       fecha: fechaIso,
       observaciones: observacionesFinal,
     })

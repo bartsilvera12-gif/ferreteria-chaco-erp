@@ -219,6 +219,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const cajaIdRaw = o.caja_id;
+    const cajaId =
+      typeof cajaIdRaw === "string" && cajaIdRaw.trim().length > 0 ? cajaIdRaw.trim() : null;
+
     const { ventaId, numeroControl, fechaIso, notaRemisionNumero } = await createVentaTransaccionalPg({
       schema,
       empresaId: auth.empresa_id,
@@ -236,6 +240,7 @@ export async function POST(request: NextRequest) {
       pedidoCocina,
       permitirSinStock,
       generaNotaRemision: o.genera_nota_remision === true,
+      cajaId,
     });
 
     // Vincular el pedido facturado con la venta creada (Caja). Trazabilidad:
