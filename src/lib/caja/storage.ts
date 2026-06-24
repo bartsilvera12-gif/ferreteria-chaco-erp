@@ -28,7 +28,7 @@ async function postJson<T>(url: string, body: unknown): Promise<Ok<T> | Err> {
   }
 }
 
-/** Caja abierta actual (o null si no hay). */
+/** Caja abierta actual (o null si no hay). Compat single-caja. */
 export async function getCajaAbierta(): Promise<Caja | null> {
   try {
     const res = await fetchWithSupabaseSession("/api/caja/abierta", { cache: "no-store" });
@@ -40,8 +40,22 @@ export async function getCajaAbierta(): Promise<Caja | null> {
   }
 }
 
-export function abrirCaja(montoApertura: number, observacion: string | null) {
+/** Todas las cajas abiertas (multi-caja: hasta 3 concurrentes). */
+export async function getCajasAbiertas(): Promise<Caja[]> {
+  try {
+    const res = await fetchWithSupabaseSession("/api/caja/abierta", { cache: "no-store" });
+    const json = (await res.json()) as { success?: boolean; data?: { cajas?: Caja[]; caja?: Caja | null }; error?: string };
+    if (!res.ok || !json.success) return [];
+    if (Array.isArray(json.data?.cajas)) return json.data!.cajas;
+    return json.data?.caja ? [json.data.caja] : [];
+  } catch {
+    return [];
+  }
+}
+
+export function abrirCaja(numeroCaja: number, montoApertura: number, observacion: string | null) {
   return postJson<{ caja: Caja }>("/api/caja/abrir", {
+    numero_caja: numeroCaja,
     monto_apertura: montoApertura,
     observacion,
   });
@@ -61,6 +75,7 @@ export function registrarMovimiento(payload: {
   monto: number;
   medio_pago: MedioPagoCaja;
   observacion: string | null;
+  caja_id?: string | null;
 }) {
   return postJson<{ movimiento: unknown }>("/api/caja/movimiento", payload);
 }

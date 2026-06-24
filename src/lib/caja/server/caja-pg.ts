@@ -72,6 +72,19 @@ export async function getCajaAbiertaPg(schema: string, empresaId: string): Promi
   return q.data ? mapCaja(q.data as unknown as CajaRow) : null;
 }
 
+/** Todas las cajas abiertas de la empresa (multi-caja: hasta 3 concurrentes). */
+export async function getCajasAbiertasPg(schema: string, empresaId: string): Promise<Caja[]> {
+  const sb = createServiceRoleClientWithDbSchema(schema);
+  const q = await sb
+    .from("cajas")
+    .select(CAJA_COLS)
+    .eq("empresa_id", empresaId)
+    .eq("estado", "abierta")
+    .order("numero_caja", { ascending: true });
+  if (q.error) throw new Error(q.error.message);
+  return ((q.data ?? []) as unknown as CajaRow[]).map(mapCaja);
+}
+
 /** Historial de cajas (más recientes primero) con sus totales calculados. */
 export async function listarCajasPg(
   schema: string,
@@ -357,37 +370,44 @@ async function computeResumen(sb: Sb, empresaId: string, caja: Caja): Promise<Ca
 
 // ── Escrituras ────────────────────────────────────────────────────────────────
 
-/** Abre una caja. Falla si ya hay una abierta (índice único parcial en DB). */
+/**
+ * Abre una caja en la estación `numeroCaja` (1, 2 o 3).
+ * Falla si esa estación ya tiene una caja abierta (índice único parcial en DB).
+ * Múltiples estaciones pueden estar abiertas a la vez (multi-caja).
+ */
 export async function abrirCajaPg(params: {
   schema: string;
   empresaId: string;
+  numeroCaja: number;
   montoApertura: number;
   observacion: string | null;
   usuarioId: string | null;
 }): Promise<Caja> {
   const sb = createServiceRoleClientWithDbSchema(params.schema);
 
-  const yaAbierta = await getCajaAbiertaPg(params.schema, params.empresaId);
-  if (yaAbierta) {
-    throw new Error("Ya hay una caja abierta. Cerrala antes de abrir una nueva.");
+  const n = Math.trunc(params.numeroCaja);
+  if (!Number.isFinite(n) || n < 1 || n > 3) {
+    throw new Error("Número de caja inválido (debe ser 1, 2 o 3).");
   }
 
-  // numero_caja secuencial por empresa (best-effort; el índice único protege duplicados).
-  const maxQ = await sb
+  const yaAbierta = await sb
     .from("cajas")
-    .select("numero_caja")
+    .select("id")
     .eq("empresa_id", params.empresaId)
-    .order("numero_caja", { ascending: false })
-    .limit(1);
-  if (maxQ.error) throw new Error(maxQ.error.message);
-  const lastNum = num((maxQ.data?.[0] as { numero_caja?: number | string } | undefined)?.numero_caja);
-  const numeroCaja = lastNum + 1;
+    .eq("numero_caja", n)
+    .eq("estado", "abierta")
+    .limit(1)
+    .maybeSingle();
+  if (yaAbierta.error) throw new Error(yaAbierta.error.message);
+  if (yaAbierta.data) {
+    throw new Error(`La Caja ${n} ya está abierta. Cerrala antes de abrir una nueva.`);
+  }
 
   const ins = await sb
     .from("cajas")
     .insert({
       empresa_id: params.empresaId,
-      numero_caja: numeroCaja,
+      numero_caja: n,
       estado: "abierta",
       abierta_por: params.usuarioId,
       monto_apertura: Math.round(params.montoApertura),
@@ -396,9 +416,8 @@ export async function abrirCajaPg(params: {
     .select(CAJA_COLS)
     .single();
   if (ins.error) {
-    // 23505 = unique_violation (otra caja abierta o numero_caja en carrera).
     if (ins.error.code === "23505") {
-      throw new Error("Ya hay una caja abierta. Cerrala antes de abrir una nueva.");
+      throw new Error(`La Caja ${n} ya está abierta. Cerrala antes de abrir una nueva.`);
     }
     throw new Error(ins.error.message);
   }

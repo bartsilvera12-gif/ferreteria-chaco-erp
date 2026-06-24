@@ -5,7 +5,7 @@ import MontoInput from "@/components/ui/MontoInput";
 import {
   abrirCaja,
   cerrarCaja,
-  getCajaAbierta,
+  getCajasAbiertas,
   getResumenCaja,
   registrarMovimiento,
 } from "@/lib/caja/storage";
@@ -31,23 +31,23 @@ const inputClass =
 
 type ModalKind = null | "abrir" | "cerrar" | "mov";
 
+/** Hasta 3 cajas concurrentes — una por estación física (1, 2, 3). */
+const NUMEROS_CAJA = [1, 2, 3] as const;
+
 export default function CajaControlPanel({
   onStateChange,
 }: {
-  /** Notifica al padre si hay (o no) caja abierta, para habilitar/bloquear ventas. */
-  onStateChange?: (abierta: boolean) => void;
+  /** Notifica al padre si HAY ALGUNA caja abierta (cualquier estación). */
+  onStateChange?: (algunaAbierta: boolean) => void;
 }) {
   const [loading, setLoading] = useState(true);
-  const [caja, setCaja] = useState<Caja | null>(null);
-  const [resumen, setResumen] = useState<CajaResumen | null>(null);
-  const [modal, setModal] = useState<ModalKind>(null);
+  const [cajas, setCajas] = useState<Caja[]>([]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const c = await getCajaAbierta();
-    setCaja(c);
-    onStateChange?.(!!c);
-    setResumen(c ? await getResumenCaja(c.id) : null);
+    const lista = await getCajasAbiertas();
+    setCajas(lista);
+    onStateChange?.(lista.length > 0);
     setLoading(false);
   }, [onStateChange]);
 
@@ -55,116 +55,144 @@ export default function CajaControlPanel({
     void refresh();
   }, [refresh]);
 
-  if (loading && !caja) {
+  if (loading && cajas.length === 0) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-400 shadow-sm">
-        Cargando estado de caja…
+        Cargando estado de cajas…
       </div>
     );
   }
 
   return (
-    <>
-      {caja ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm sm:p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
-                  Caja abierta · N° {caja.numero_caja}
-                </span>
-              </div>
-              <p className="mt-1 text-sm text-slate-600">
-                Apertura: <strong>{formatFechaHora(caja.fecha_apertura)}</strong> · Monto inicial{" "}
-                <strong>{formatGs(caja.monto_apertura)}</strong>
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setModal("mov")}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-              >
-                Movimiento de caja
-              </button>
-              <button
-                type="button"
-                onClick={() => setModal("cerrar")}
-                className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-rose-700"
-              >
-                Cerrar caja
-              </button>
-            </div>
-          </div>
-
-          {resumen && (
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Stat label="Total vendido" value={formatGs(resumen.total_vendido)} sub={`${resumen.cantidad_ventas} venta(s)`} />
-              <Stat label="Efectivo" value={formatGs(resumen.total_efectivo)} />
-              <Stat label="Transferencia" value={formatGs(resumen.total_transferencia)} />
-              <Stat label="Tarjeta" value={formatGs(resumen.total_tarjeta)} />
-              <Stat
-                label="Debería haber en caja"
-                value={formatGs(resumen.efectivo_esperado)}
-                sub="apertura + efectivo ± mov."
-                accent
-              />
-              <Stat label="Ingresos efvo." value={formatGs(resumen.ingresos_efectivo)} />
-              <Stat label="Egresos efvo." value={formatGs(resumen.egresos_efectivo)} />
-              <Stat label="Retiros efvo." value={formatGs(resumen.retiros_efectivo)} />
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 shadow-sm sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-amber-700">
-                  Caja cerrada
-                </span>
-              </div>
-              <p className="mt-1 text-sm text-slate-600">
-                Para vender primero tenés que <strong>abrir caja</strong>.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setModal("abrir")}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-emerald-700"
-            >
-              Abrir caja
-            </button>
-          </div>
-        </div>
-      )}
-
-      {modal === "abrir" && (
-        <AbrirCajaModal onClose={() => setModal(null)} onDone={() => { setModal(null); void refresh(); }} />
-      )}
-      {modal === "cerrar" && caja && resumen && (
-        <CerrarCajaModal
-          caja={caja}
-          resumen={resumen}
-          onClose={() => setModal(null)}
-          onDone={() => { setModal(null); void refresh(); }}
+    <div className="grid gap-3 lg:grid-cols-3">
+      {NUMEROS_CAJA.map((n) => (
+        <CajaSlotCard
+          key={n}
+          numeroCaja={n}
+          caja={cajas.find((c) => c.numero_caja === n) ?? null}
+          onRefresh={refresh}
         />
+      ))}
+    </div>
+  );
+}
+
+function CajaSlotCard({
+  numeroCaja,
+  caja,
+  onRefresh,
+}: {
+  numeroCaja: number;
+  caja: Caja | null;
+  onRefresh: () => void | Promise<void>;
+}) {
+  const [resumen, setResumen] = useState<CajaResumen | null>(null);
+  const [modal, setModal] = useState<ModalKind>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (caja) {
+      void getResumenCaja(caja.id).then((r) => { if (!cancelled) setResumen(r); });
+    } else {
+      setResumen(null);
+    }
+    return () => { cancelled = true; };
+  }, [caja]);
+
+  const after = async () => { setModal(null); await onRefresh(); };
+
+  if (!caja) {
+    return (
+      <>
+        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-amber-700">
+              Caja {numeroCaja} · cerrada
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-slate-600">Para vender desde esta estación, abrila.</p>
+          <button
+            type="button"
+            onClick={() => setModal("abrir")}
+            className="mt-3 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-emerald-700"
+          >
+            Abrir Caja {numeroCaja}
+          </button>
+        </div>
+        {modal === "abrir" && (
+          <AbrirCajaModal numeroCaja={numeroCaja} onClose={() => setModal(null)} onDone={after} />
+        )}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
+              Caja {numeroCaja} · abierta
+            </span>
+          </div>
+          <span className="text-[10px] text-slate-500">#{caja.numero_caja}</span>
+        </div>
+        <p className="mt-1 text-xs text-slate-600">
+          Apertura: <strong>{formatFechaHora(caja.fecha_apertura)}</strong>
+        </p>
+        <p className="text-xs text-slate-600">
+          Inicial: <strong>{formatGs(caja.monto_apertura)}</strong>
+        </p>
+
+        {resumen && (
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+            <MiniStat label="Vendido" value={formatGs(resumen.total_vendido)} sub={`${resumen.cantidad_ventas} venta(s)`} />
+            <MiniStat label="Efectivo" value={formatGs(resumen.total_efectivo)} />
+            <MiniStat label="Transf." value={formatGs(resumen.total_transferencia)} />
+            <MiniStat label="Tarjeta" value={formatGs(resumen.total_tarjeta)} />
+            <div className="col-span-2 rounded-lg border border-emerald-300 bg-emerald-100/60 p-2">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Debería haber</p>
+              <p className="text-sm font-bold tabular-nums text-emerald-900">{formatGs(resumen.efectivo_esperado)}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setModal("mov")}
+            className="flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Movimiento
+          </button>
+          <button
+            type="button"
+            onClick={() => setModal("cerrar")}
+            className="flex-1 rounded-lg bg-rose-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-rose-700"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+
+      {modal === "cerrar" && resumen && (
+        <CerrarCajaModal caja={caja} resumen={resumen} onClose={() => setModal(null)} onDone={after} />
       )}
-      {modal === "mov" && caja && (
-        <MovimientoModal onClose={() => setModal(null)} onDone={() => { setModal(null); void refresh(); }} />
+      {modal === "mov" && (
+        <MovimientoModal cajaId={caja.id} numeroCaja={caja.numero_caja} onClose={() => setModal(null)} onDone={after} />
       )}
     </>
   );
 }
 
-function Stat({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
+function MiniStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className={`rounded-lg border p-2.5 ${accent ? "border-emerald-300 bg-emerald-100/60" : "border-slate-200 bg-white"}`}>
-      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-0.5 text-sm font-bold tabular-nums text-slate-900">{value}</p>
-      {sub && <p className="text-[10px] text-slate-400">{sub}</p>}
+    <div className="rounded-md border border-slate-200 bg-white p-2">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-xs font-bold tabular-nums text-slate-900">{value}</p>
+      {sub && <p className="text-[9px] text-slate-400">{sub}</p>}
     </div>
   );
 }
@@ -196,7 +224,9 @@ function ErrorBanner({ msg }: { msg: string | null }) {
 
 // ── Abrir ────────────────────────────────────────────────────────────────────
 
-function AbrirCajaModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+function AbrirCajaModal({
+  numeroCaja, onClose, onDone,
+}: { numeroCaja: number; onClose: () => void; onDone: () => void }) {
   const [monto, setMonto] = useState("");
   const [obs, setObs] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -205,18 +235,18 @@ function AbrirCajaModal({ onClose, onDone }: { onClose: () => void; onDone: () =
   async function submit() {
     setError(null);
     setSaving(true);
-    const r = await abrirCaja(parseFloat(monto) || 0, obs.trim() || null);
+    const r = await abrirCaja(numeroCaja, parseFloat(monto) || 0, obs.trim() || null);
     setSaving(false);
     if (!r.success) { setError(r.error); return; }
     onDone();
   }
 
   return (
-    <ModalShell title="Abrir caja" onClose={onClose}>
+    <ModalShell title={`Abrir Caja ${numeroCaja}`} onClose={onClose}>
       <label className="mb-1.5 block text-sm font-medium text-slate-700">Monto de apertura (Gs.)</label>
       <MontoInput value={monto} onChange={(n) => setMonto(String(n))} placeholder="Ej: 300.000" className={inputClass} decimals={false} />
       <label className="mb-1.5 mt-3 block text-sm font-medium text-slate-700">Observación (opcional)</label>
-      <textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={2} className={inputClass} placeholder="Ej: turno noche" />
+      <textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={2} className={inputClass} placeholder="Ej: turno mañana" />
       <ErrorBanner msg={error} />
       <div className="mt-4 flex justify-end gap-2">
         <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50">Cancelar</button>
@@ -238,30 +268,22 @@ function CerrarCajaModal({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // ── Derivados (NO cambian la fórmula del backend) ──────────────────────────
   const apertura = caja.monto_apertura;
   const transf = resumen.total_transferencia;
   const tarjeta = resumen.total_tarjeta;
   const ajustes = resumen.ajustes_efectivo;
-  // Efectivo FÍSICO esperado (fuente de verdad del backend): apertura + ventas
-  // efectivo + ingresos − egresos − retiros (+ ajustes). Vuelto NO cuenta: las
-  // ventas en efectivo ya son el total real de la venta, no el monto recibido.
   const efectivoEsperado = resumen.efectivo_esperado;
-  // Neto de movimientos manuales de efectivo (para que el cierre total cuadre).
   const manualNet = resumen.ingresos_efectivo - resumen.egresos_efectivo - resumen.retiros_efectivo + ajustes;
-  // Cierre TOTAL esperado del turno = efectivo físico + transferencias + tarjetas
-  //                                  = apertura + total vendido (+ movs. manuales).
   const cierreTotalEsperado = efectivoEsperado + transf + tarjeta;
 
-  const contado = parseFloat(monto) || 0;            // efectivo FÍSICO contado
-  const difEfectivo = contado - efectivoEsperado;    // diferencia de efectivo físico
-  const totalDeclarado = contado + transf + tarjeta; // efectivo contado + medios electrónicos
+  const contado = parseFloat(monto) || 0;
+  const difEfectivo = contado - efectivoEsperado;
+  const totalDeclarado = contado + transf + tarjeta;
   const difTotal = totalDeclarado - cierreTotalEsperado;
 
   async function submit() {
     setError(null);
     setSaving(true);
-    // El backend cierra con el efectivo físico contado (diferencia = contado − esperado).
     const r = await cerrarCaja(contado, obs.trim() || null, caja.id);
     setSaving(false);
     if (!r.success) { setError(r.error); return; }
@@ -269,8 +291,7 @@ function CerrarCajaModal({
   }
 
   return (
-    <ModalShell title={`Cerrar caja N° ${caja.numero_caja}`} onClose={onClose}>
-      {/* 1 · Resumen de ventas del turno */}
+    <ModalShell title={`Cerrar Caja ${caja.numero_caja}`} onClose={onClose}>
       <SectionLabel>Resumen de ventas del turno</SectionLabel>
       <div className="space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
         <Row label="Cantidad de ventas" value={String(resumen.cantidad_ventas)} />
@@ -282,7 +303,6 @@ function CerrarCajaModal({
         </div>
       </div>
 
-      {/* 2 · Cierre total del turno (número protagonista) */}
       <SectionLabel className="mt-4">Cierre total del turno</SectionLabel>
       <div className="rounded-xl border border-sky-200 bg-sky-50 p-3.5">
         <div className="space-y-1.5 text-sm">
@@ -298,7 +318,6 @@ function CerrarCajaModal({
         </div>
       </div>
 
-      {/* 3 · Desglose del cierre (cómo se compone ese total) */}
       <SectionLabel className="mt-4">Desglose del cierre</SectionLabel>
       <div className="space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
         <Row label="Efectivo físico esperado" value={formatGs(efectivoEsperado)} />
@@ -308,20 +327,11 @@ function CerrarCajaModal({
           <span>Total cierre esperado</span><span className="tabular-nums">{formatGs(cierreTotalEsperado)}</span>
         </div>
       </div>
-      <p className="mt-1.5 text-[11px] leading-snug text-slate-400">
-        El <strong>efectivo físico esperado</strong> es apertura + ventas en efectivo + ingresos − egresos − retiros.
-        Transferencias y tarjetas suman al cierre total, pero <strong>no</strong> al efectivo físico.
-      </p>
 
-      {/* 4 · Cierre: solo efectivo físico contado */}
       <SectionLabel className="mt-4">Cierre</SectionLabel>
       <label className="mb-1.5 block text-sm font-medium text-slate-700">Efectivo físico contado en caja (Gs.)</label>
       <MontoInput value={monto} onChange={(n) => setMonto(String(n))} placeholder="Ej: 160.000" className={inputClass} decimals={false} />
-      <p className="mt-1 text-[11px] leading-snug text-slate-400">
-        Ingresá solo el dinero físico disponible en caja. Transferencias y tarjetas ya se toman desde las ventas registradas.
-      </p>
 
-      {/* 5 · Diferencias */}
       {monto !== "" && (
         <div className="mt-3 space-y-2">
           <DiffRow label="Diferencia de efectivo físico" hint={`contado − esperado (${formatGs(efectivoEsperado)})`} value={difEfectivo} />
@@ -360,7 +370,6 @@ function SectionLabel({ children, className = "" }: { children: React.ReactNode;
   );
 }
 
-/** Fila de diferencia con signo y color (verde = cuadra, azul = sobra, rojo = falta). */
 function DiffRow({ label, hint, value }: { label: string; hint: string; value: number }) {
   const tone = value === 0 ? "bg-emerald-50 text-emerald-700" : value > 0 ? "bg-sky-50 text-sky-700" : "bg-red-50 text-red-700";
   const signo = value > 0 ? "+ " : value < 0 ? "− " : "";
@@ -391,7 +400,9 @@ const MEDIOS: { v: MedioPagoCaja; label: string }[] = [
   { v: "otro", label: "Otro" },
 ];
 
-function MovimientoModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+function MovimientoModal({
+  cajaId, numeroCaja, onClose, onDone,
+}: { cajaId: string; numeroCaja: number; onClose: () => void; onDone: () => void }) {
   const [tipo, setTipo] = useState<TipoMovimientoCaja>("ingreso");
   const [concepto, setConcepto] = useState("");
   const [monto, setMonto] = useState("");
@@ -407,6 +418,7 @@ function MovimientoModal({ onClose, onDone }: { onClose: () => void; onDone: () 
     setSaving(true);
     const r = await registrarMovimiento({
       tipo, concepto: concepto.trim(), monto: parseFloat(monto) || 0, medio_pago: medio, observacion: obs.trim() || null,
+      caja_id: cajaId,
     });
     setSaving(false);
     if (!r.success) { setError(r.error); return; }
@@ -414,7 +426,7 @@ function MovimientoModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   }
 
   return (
-    <ModalShell title="Movimiento de caja" onClose={onClose}>
+    <ModalShell title={`Movimiento · Caja ${numeroCaja}`} onClose={onClose}>
       <label className="mb-1.5 block text-sm font-medium text-slate-700">Tipo</label>
       <div className="grid grid-cols-4 gap-1">
         {TIPOS.map((t) => (

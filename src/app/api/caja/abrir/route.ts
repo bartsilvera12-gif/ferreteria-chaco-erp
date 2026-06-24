@@ -22,6 +22,10 @@ export async function POST(request: NextRequest) {
     if (!Number.isFinite(montoApertura) || montoApertura < 0) {
       return NextResponse.json(errorResponse("Monto de apertura inválido."), { status: 400 });
     }
+    const numeroCaja = Number(o.numero_caja);
+    if (!Number.isFinite(numeroCaja) || numeroCaja < 1 || numeroCaja > 3 || !Number.isInteger(numeroCaja)) {
+      return NextResponse.json(errorResponse("Número de caja inválido (1, 2 o 3)."), { status: 400 });
+    }
     const observacion =
       o.observacion == null || o.observacion === "" ? null : String(o.observacion).slice(0, 2000);
 
@@ -29,6 +33,7 @@ export async function POST(request: NextRequest) {
     const caja = await abrirCajaPg({
       schema,
       empresaId: auth.empresa_id,
+      numeroCaja,
       montoApertura,
       observacion,
       usuarioId: auth.usuarioCatalogId ?? null,
@@ -36,7 +41,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(successResponse({ caja }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : "No se pudo abrir la caja.";
-    const status = msg.includes("Ya hay una caja abierta") ? 409 : 500;
+    const status = msg.includes("ya está abierta") || msg.includes("Ya hay una caja abierta") ? 409 : 500;
     return NextResponse.json(errorResponse(msg), { status });
   }
 }

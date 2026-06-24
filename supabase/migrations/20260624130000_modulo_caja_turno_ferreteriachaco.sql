@@ -48,7 +48,16 @@ BEGIN
 
   EXECUTE format('CREATE INDEX IF NOT EXISTS ix_cajas_empresa_estado ON %I.cajas (empresa_id, estado)', sch);
   EXECUTE format('CREATE INDEX IF NOT EXISTS ix_cajas_empresa_apertura ON %I.cajas (empresa_id, fecha_apertura DESC)', sch);
-  EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS uq_cajas_una_abierta ON %I.cajas (empresa_id) WHERE estado = ''abierta''', sch);
+  -- Multi-caja: hasta 3 cajas concurrentes por empresa, una abierta por numero.
+  EXECUTE format('DROP INDEX IF EXISTS %I.uq_cajas_una_abierta', sch);
+  EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS uq_cajas_una_abierta_por_numero ON %I.cajas (empresa_id, numero_caja) WHERE estado = ''abierta''', sch);
+  -- numero_caja restringido a 1..3 (estaciones fisicas).
+  BEGIN
+    EXECUTE format('ALTER TABLE %I.cajas DROP CONSTRAINT IF EXISTS chk_cajas_numero_rango', sch);
+    EXECUTE format('ALTER TABLE %I.cajas ADD CONSTRAINT chk_cajas_numero_rango CHECK (numero_caja BETWEEN 1 AND 3)', sch);
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE '[caja] no se pudo restringir numero_caja a 1..3: %', SQLERRM;
+  END;
 
   EXECUTE format('ALTER TABLE %I.cajas ENABLE ROW LEVEL SECURITY', sch);
   EXECUTE format('DROP POLICY IF EXISTS cajas_select ON %I.cajas', sch);
