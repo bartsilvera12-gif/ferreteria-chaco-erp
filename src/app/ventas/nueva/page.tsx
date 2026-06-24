@@ -431,10 +431,11 @@ export default function NuevaVentaPage() {
   const itemsParaEnviar = recargoTarjeta > 0
     ? items.map((i) => ({
         ...i,
-        precio_unitario: i.precio_unitario * factorRecargo,
-        subtotal:        i.subtotal * factorRecargo,
-        monto_iva:       i.monto_iva * factorRecargo,
-        total_linea:     i.total_linea * factorRecargo,
+        precio_venta:          i.precio_venta * factorRecargo,
+        precio_venta_original: i.precio_venta_original * factorRecargo,
+        subtotal:              i.subtotal * factorRecargo,
+        monto_iva:             i.monto_iva * factorRecargo,
+        total_linea:           i.total_linea * factorRecargo,
       }))
     : items;
   const totalGeneral  = itemsParaEnviar.reduce((s, i) => s + i.total_linea, 0);
