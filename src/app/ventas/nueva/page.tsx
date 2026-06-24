@@ -9,6 +9,7 @@ import { getProductos } from "@/lib/inventario/storage";
 import { generarYAbrirRecibo } from "@/lib/recibos/client";
 import type { TipoIvaVenta, TipoVenta, MonedaVenta, LineaVenta, MetodoPago, TipoPrecioVenta } from "@/lib/ventas/types";
 import type { Producto } from "@/lib/inventario/types";
+import { CARD_SURCHARGE_PCT, calcularRecargoTarjeta } from "@/lib/ventas/recargo-tarjeta";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -403,9 +404,26 @@ export default function NuevaVentaPage() {
   const lineaValida =
     !!prodSel && cantNum > 0 && precioGs > 0;
 
-  const totalSubtotal = items.reduce((s, i) => s + i.subtotal, 0);
-  const totalIva      = items.reduce((s, i) => s + i.monto_iva, 0);
-  const totalGeneral  = items.reduce((s, i) => s + i.total_linea, 0);
+  const totalSubtotalContado = items.reduce((s, i) => s + i.subtotal, 0);
+  const totalIvaContado      = items.reduce((s, i) => s + i.monto_iva, 0);
+  const totalContado         = items.reduce((s, i) => s + i.total_linea, 0);
+  // Recargo automático 4% cuando el cobro es con tarjeta (Ferretería Chaco).
+  // Los ítems en pantalla se muestran a precio contado; al confirmar la venta con
+  // tarjeta, cada línea se escala 1.04 antes de enviarse (ver `itemsParaEnviar`).
+  const recargoTarjeta = calcularRecargoTarjeta(totalContado, metodoPago);
+  const factorRecargo  = totalContado > 0 ? (totalContado + recargoTarjeta) / totalContado : 1;
+  const itemsParaEnviar = recargoTarjeta > 0
+    ? items.map((i) => ({
+        ...i,
+        precio_unitario: i.precio_unitario * factorRecargo,
+        subtotal:        i.subtotal * factorRecargo,
+        monto_iva:       i.monto_iva * factorRecargo,
+        total_linea:     i.total_linea * factorRecargo,
+      }))
+    : items;
+  const totalGeneral  = itemsParaEnviar.reduce((s, i) => s + i.total_linea, 0);
+  const totalSubtotal = itemsParaEnviar.reduce((s, i) => s + i.subtotal, 0);
+  const totalIva      = itemsParaEnviar.reduce((s, i) => s + i.monto_iva, 0);
   // Condición de venta: si es Crédito, exigir plazo de al menos 1 día.
   const plazoDiasNum = parseInt(plazoDias) || 0;
   // Crédito exige cliente seleccionado Y plazo/vencimiento (≥1 día). Genera cuenta por cobrar.
@@ -569,7 +587,7 @@ export default function NuevaVentaPage() {
     try {
       const resultado = await saveVenta(
         {
-          items,
+          items: itemsParaEnviar,
           moneda,
           tipo_cambio:  tipoCambioNum,
           subtotal:     totalSubtotal,
@@ -865,16 +883,26 @@ export default function NuevaVentaPage() {
                   <div className="space-y-1.5">
                     <div className="flex justify-between text-sm text-gray-600">
                       <span>Subtotal</span>
-                      <span className="tabular-nums font-medium">{formatGs(totalSubtotal)}</span>
+                      <span className="tabular-nums font-medium">{formatGs(totalSubtotalContado)}</span>
                     </div>
                     <div className="flex justify-between text-sm text-gray-600">
                       <span>IVA</span>
                       <span className="tabular-nums font-medium">
-                        {totalIva > 0 ? formatGs(totalIva) : "—"}
+                        {totalIvaContado > 0 ? formatGs(totalIvaContado) : "—"}
                       </span>
                     </div>
+                    <div className="flex justify-between text-sm text-gray-700 pt-2 border-t border-gray-200">
+                      <span>Total contado</span>
+                      <span className="tabular-nums font-medium">{formatGs(totalContado)}</span>
+                    </div>
+                    {recargoTarjeta > 0 && (
+                      <div className="flex justify-between text-sm text-amber-700">
+                        <span>Recargo tarjeta ({Math.round(CARD_SURCHARGE_PCT * 100)}%)</span>
+                        <span className="tabular-nums font-medium">+ {formatGs(recargoTarjeta)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-base font-bold text-gray-900 pt-2 border-t border-gray-200">
-                      <span>TOTAL</span>
+                      <span>TOTAL{recargoTarjeta > 0 ? " (tarjeta)" : ""}</span>
                       <span className="tabular-nums">{formatGs(totalGeneral)}</span>
                     </div>
                   </div>

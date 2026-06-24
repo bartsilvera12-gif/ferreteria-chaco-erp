@@ -139,7 +139,9 @@ export async function POST(request: NextRequest) {
       o.observaciones === null || o.observaciones === undefined
         ? null
         : String(o.observaciones).slice(0, 4000);
-    const permitirSinStock = o.permitir_sin_stock === true;
+    // Ferretería Chaco: inventario progresivo (se carga por sectores). La venta
+    // nunca debe bloquearse por falta de stock — se descuenta igual y queda en negativo.
+    const permitirSinStock = true;
     // Pedido (proyecto) que se está facturando desde Caja. Opcional.
     const pedidoId = typeof o.pedido_id === "string" && o.pedido_id.trim() ? o.pedido_id.trim() : null;
 
