@@ -52,39 +52,13 @@ export default function AppLoadingScreen({
       }}
       aria-hidden={!visible}
     >
-      <ZentraLogo />
       <p
-        className="mt-10 text-xs font-semibold text-white/85"
+        className="text-xs font-semibold text-white/85"
         style={{ letterSpacing: "0.5em" }}
       >
         C A R G A N D O
         <span className="app-loading-dots" aria-hidden>...</span>
       </p>
-    </div>
-  );
-}
-
-function ZentraLogo() {
-  // El logo se compone de dos chevrons que se separan ligeramente y vuelven a
-  // unirse en loop (animación en globals.css: .app-loading-z-top / .app-loading-z-bot).
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <svg
-        viewBox="0 0 200 200"
-        className="h-28 w-28 drop-shadow-[0_4px_18px_rgba(0,0,0,0.25)]"
-        aria-label="Zentra"
-      >
-        <g fill="#FFFFFF">
-          <polygon className="app-loading-z-top" points="8,12 192,12 192,52 122,92 8,92" />
-          <polygon className="app-loading-z-bot" points="78,108 192,108 192,188 8,188 8,148" />
-        </g>
-      </svg>
-      <span
-        className="text-xl font-bold text-white"
-        style={{ letterSpacing: "0.55em", paddingLeft: "0.55em" }}
-      >
-        ZENTRA
-      </span>
     </div>
   );
 }
