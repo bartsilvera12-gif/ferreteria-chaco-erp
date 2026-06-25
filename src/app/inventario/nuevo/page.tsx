@@ -8,6 +8,7 @@ import SelectFromList from "@/components/inventario/SelectFromList";
 import { productoExiste, saveProducto } from "@/lib/inventario/storage";
 import type { MetodoValuacion } from "@/lib/inventario/types";
 import { ShoppingBag, Boxes, ClipboardList, type LucideIcon } from "lucide-react";
+import QuickNuevoProveedorModal from "@/components/proveedores/QuickNuevoProveedorModal";
 
 // Opciones estándar de unidad de medida para gastro
 const UNIDADES_OPCIONES = [
@@ -42,9 +43,21 @@ export default function NuevoProductoPage() {
     cantidad_minima_mayorista: "",
     stock_actual: "",
     stock_minimo: "",
-    unidad_medida: "",
+    unidad_medida: "UNIDAD",
     metodo_valuacion: "CPP" as MetodoValuacion,
+    // Autopartes (Fase 2)
+    codigo_oem: "",
+    codigo_alternativo: "",
+    marca_repuesto: "",
+    garantia_meses: "",
+    distribuidor_nombre: "",
+    distribuidor_comision_pct: "",
+    departamento: "",
+    pasillo: "",
+    estante: "",
+    caja: "",
   });
+  const [permitirVentaSinStock, setPermitirVentaSinStock] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [generandoCodigo, setGenerandoCodigo] = useState(false);
   const [generandoSku, setGenerandoSku] = useState(false);
@@ -59,9 +72,11 @@ export default function NuevoProductoPage() {
   const [esVendible, setEsVendible] = useState(true);
   const [esInsumo, setEsInsumo] = useState(false);
 
-  // Selector inicial de tipo gastronómico — aplica presets a los flags
+  // Selector inicial de tipo gastronómico — aplica presets a los flags.
+  // En esta instancia (Autorepuestos Felix Bogado) sólo se cargan productos
+  // de reventa, así que arrancamos directo en ese tipo y omitimos el picker.
   type TipoGastro = "reventa" | "menu" | "materia" | null;
-  const [tipoGastro, setTipoGastro] = useState<TipoGastro>(null);
+  const [tipoGastro, setTipoGastro] = useState<TipoGastro>("reventa");
   function aplicarTipoGastro(tipo: Exclude<TipoGastro, null>) {
     setTipoGastro(tipo);
     if (tipo === "reventa") {
@@ -92,6 +107,7 @@ export default function NuevoProductoPage() {
   const [categorias, setCategorias] = useState<CatRow[]>([]);
   const [ubicaciones, setUbicaciones] = useState<UbiRow[]>([]);
   const [proveedores, setProveedores] = useState<ProvRow[]>([]);
+  const [nuevoProveedorOpen, setNuevoProveedorOpen] = useState(false);
 
   useEffect(() => {
     let cancel = false;
@@ -342,6 +358,19 @@ export default function NuevoProductoPage() {
           unidad_receta: unidadReceta.trim() || null,
           factor_compra_receta: Math.max(parseFloat(factorCompraReceta) || 1, 0.0001),
           tiempo_prep_minutos: Math.max(parseInt(tiempoPrepMinutos) || 0, 0),
+          // Autopartes — opcionales (trim a null si vacíos)
+          codigo_oem: form.codigo_oem.trim() || null,
+          codigo_alternativo: form.codigo_alternativo.trim() || null,
+          marca_repuesto: form.marca_repuesto.trim() || null,
+          garantia_meses: form.garantia_meses.trim() === "" ? null : Math.max(parseInt(form.garantia_meses) || 0, 0),
+          permitir_venta_sin_stock: permitirVentaSinStock,
+          distribuidor_nombre: form.distribuidor_nombre.trim() || null,
+          distribuidor_comision_pct: form.distribuidor_comision_pct.trim() === "" ? null : Math.min(Math.max(parseFloat(form.distribuidor_comision_pct) || 0, 0), 100),
+          // Departamento → se mapea a ubicacion_deposito (columna existente en DB).
+          ubicacion_deposito: form.departamento.trim() || null,
+          ubicacion_pasillo: form.pasillo.trim() || null,
+          ubicacion_estante: form.estante.trim() || null,
+          ubicacion_caja: form.caja.trim() || null,
         });
       } catch (err) {
         console.error("[inventario/nuevo] saveProducto error:", err);
@@ -483,13 +512,7 @@ export default function NuevoProductoPage() {
             <div className="text-base font-semibold text-slate-900">{summary.titulo}</div>
             <div className="text-sm text-slate-600 mt-0.5">{summary.descripcion}</div>
           </div>
-          <button
-            type="button"
-            onClick={() => setTipoGastro(null)}
-            className="text-xs text-amber-700 hover:text-amber-900 underline shrink-0"
-          >
-            Cambiar tipo
-          </button>
+          {/* Botón "Cambiar tipo" oculto: en esta instancia sólo hay reventa. */}
         </div>
       </div>
 
@@ -873,12 +896,13 @@ export default function NuevoProductoPage() {
                   <span className="text-xs text-gray-400 truncate">
                     {proveedores.length === 0 ? "Todavía no cargaste proveedores." : `${proveedores.length} disponibles`}
                   </span>
-                  <Link
-                    href="/proveedores/nuevo"
+                  <button
+                    type="button"
+                    onClick={() => setNuevoProveedorOpen(true)}
                     className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:text-sky-900 border border-sky-200 hover:bg-sky-50 px-2.5 py-1 rounded-md transition-colors"
                   >
                     + Crear
-                  </Link>
+                  </button>
                 </div>
               </div>
 
@@ -1061,6 +1085,147 @@ export default function NuevoProductoPage() {
             </select>
           </div>
 
+          {/* Datos de autopartes (Fase 2 — todos opcionales) */}
+          <details className="rounded-lg border border-slate-200 bg-white p-4 open:shadow-sm">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-700 hover:text-slate-900">
+              Datos de autopartes (opcional)
+            </summary>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Código OEM (original)</label>
+                <input
+                  type="text"
+                  name="codigo_oem"
+                  value={form.codigo_oem}
+                  onChange={handleChange}
+                  placeholder="ej. 90915-YZZE1"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Código alternativo</label>
+                <input
+                  type="text"
+                  name="codigo_alternativo"
+                  value={form.codigo_alternativo}
+                  onChange={handleChange}
+                  placeholder="ej. WIX-57045"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Marca del repuesto</label>
+                <input
+                  type="text"
+                  name="marca_repuesto"
+                  value={form.marca_repuesto}
+                  onChange={handleChange}
+                  placeholder="ej. Bosch, NGK, Mahle"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Garantía (meses)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  name="garantia_meses"
+                  value={form.garantia_meses}
+                  onChange={handleChange}
+                  placeholder="0"
+                  className={inputClass}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={permitirVentaSinStock}
+                    onChange={(e) => setPermitirVentaSinStock(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]"
+                  />
+                  Permitir vender aún sin stock disponible
+                </label>
+              </div>
+              <div className="sm:col-span-2 pt-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ubicación física</p>
+              </div>
+              <div>
+                <label className={labelClass}>Departamento</label>
+                <input
+                  type="text"
+                  name="departamento"
+                  value={form.departamento}
+                  onChange={handleChange}
+                  placeholder="ej. PLAZA Q5"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Pasillo</label>
+                <input
+                  type="text"
+                  name="pasillo"
+                  value={form.pasillo}
+                  onChange={handleChange}
+                  placeholder="ej. A"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Estante</label>
+                <input
+                  type="text"
+                  name="estante"
+                  value={form.estante}
+                  onChange={handleChange}
+                  placeholder="ej. 3"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Caja</label>
+                <input
+                  type="text"
+                  name="caja"
+                  value={form.caja}
+                  onChange={handleChange}
+                  placeholder="ej. 12"
+                  className={inputClass}
+                />
+              </div>
+              <div className="sm:col-span-2 pt-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Proveedor</p>
+              </div>
+              <div>
+                <label className={labelClass}>Nombre del proveedor</label>
+                <input
+                  type="text"
+                  name="distribuidor_nombre"
+                  value={form.distribuidor_nombre}
+                  onChange={handleChange}
+                  placeholder="ej. BOSCH ARGENTINA"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>% comisión al proveedor</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.01}
+                  name="distribuidor_comision_pct"
+                  value={form.distribuidor_comision_pct}
+                  onChange={handleChange}
+                  placeholder="0"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+          </details>
+
           {/* Acciones */}
           <div className="flex gap-4 pt-2">
             <button
@@ -1083,6 +1248,20 @@ export default function NuevoProductoPage() {
         </form>
       </div>
 
+      {/* Modal: crear proveedor sin perder el form actual. */}
+      <QuickNuevoProveedorModal
+        open={nuevoProveedorOpen}
+        onClose={() => setNuevoProveedorOpen(false)}
+        onCreated={(p: { id: string; nombre: string }) => {
+          setProveedores((prev) => {
+            // dedup por id (defensivo) y mantenemos orden alfabético por nombre
+            const map = new Map(prev.map((r) => [r.id, r]));
+            map.set(p.id, { id: p.id, nombre: p.nombre });
+            return Array.from(map.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
+          });
+          setProveedorId(p.id);
+        }}
+      />
     </div>
   );
 }

@@ -45,8 +45,20 @@ export interface Producto {
   descripcion?: string | null;
   /** Modo de receta (productos de Menú): 'preparado_al_vender' | 'produccion_previa'. */
   modo_receta?: string;
+  /** Código OEM (rubro autopartes / referencia cruzada — opcional). */
+  codigo_oem?: string | null;
+  /** Código alternativo (referencia cruzada — opcional). */
+  codigo_alternativo?: string | null;
+  /** Marca del repuesto (opcional). */
+  marca_repuesto?: string | null;
+  /** Garantía en meses (entero ≥ 0). */
+  garantia_meses?: number | null;
+  /** Permitir vender aún si stock_actual = 0 (override por producto). */
+  permitir_venta_sin_stock?: boolean;
   /** Nombre del distribuidor/proveedor (denormalizado, opcional). */
   distribuidor_nombre?: string | null;
+  /** % de comisión del distribuidor sobre la venta (0–100). */
+  distribuidor_comision_pct?: number | null;
   /** Ubicación física (opcional). */
   ubicacion_deposito?: string | null;
   ubicacion_pasillo?: string | null;
