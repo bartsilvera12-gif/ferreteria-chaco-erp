@@ -1,12 +1,5 @@
 "use client";
 
-import Image from "next/image";
-
-/**
- * Pantalla de carga premium con el logo oficial ZENTRA centrado sobre
- * fondo turquesa de marca. La palabra "Cargando" tiene una animación
- * "wave" letra por letra con shimmer overlay, sutil pero llamativa.
- */
 export default function ZentraLoader({
   label = "Cargando",
   fullscreen = true,
@@ -40,16 +33,6 @@ export default function ZentraLoader({
             "radial-gradient(circle at 50% 40%, rgba(255,255,255,0.10), transparent 65%)",
         }}
       />
-      <div className="relative z-10 h-32 w-[15rem] sm:h-40 sm:w-[18rem]">
-        <Image
-          src="/brand/zentra-logo-official.png"
-          alt="ZENTRA"
-          fill
-          sizes="(min-width: 640px) 18rem, 15rem"
-          className="object-contain object-center drop-shadow-[0_8px_30px_rgba(0,0,0,0.15)]"
-          priority
-        />
-      </div>
       {/* "Cargando" con wave + shimmer */}
       <p
         className="zentra-loader-label relative z-10 inline-flex items-end gap-[0.18em] text-sm font-semibold tracking-[0.42em] text-white uppercase"

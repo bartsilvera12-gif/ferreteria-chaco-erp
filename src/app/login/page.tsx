@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { signIn } from "@/lib/auth";
@@ -44,16 +43,9 @@ export default function LoginPage() {
   return (
     <div className="zentra-login-bg flex min-h-dvh w-full flex-col items-center justify-center overflow-x-hidden overflow-y-auto px-4 py-5 md:h-dvh md:overflow-y-hidden md:py-6">
       <div className="flex w-full max-w-[22rem] shrink-0 flex-col items-center gap-3 sm:max-w-sm sm:gap-4">
-        <div className="w-full max-w-[13.5rem] shrink-0 sm:max-w-[15rem]">
-          <Image
-            src="/brand/zentra-logo-official.png"
-            alt="ZENTRA"
-            width={480}
-            height={264}
-            priority
-            className="h-auto w-full max-h-[4.25rem] object-contain object-center sm:max-h-[4.75rem]"
-          />
-        </div>
+        <h1 className="text-center text-2xl font-semibold uppercase tracking-[0.32em] text-white">
+          Ferretería Chaco
+        </h1>
 
         <p className="text-center text-sm text-sky-100/90">Iniciá sesión para continuar</p>
 

@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -713,7 +713,7 @@ export default function Sidebar() {
       >
       {/* Logo oficial ZENTRA (blanco sobre azul marca) */}
       <div className="flex h-[7.25rem] shrink-0 items-center justify-center border-b border-[color:var(--zentra-sidebar-border)] bg-[color:var(--zentra-sidebar-elevated)]/35 px-3 py-2.5">
-        <Link href="/" className={`flex items-center justify-center min-w-0 flex-1 overflow-hidden`}>
+        <Link href="/" className="flex items-center justify-center min-w-0 flex-1 overflow-hidden">
           <div
             className={`relative flex items-center justify-center ${collapsed ? "h-11 w-11" : "h-[4.5rem] w-full max-w-[200px]"}`}
           >
