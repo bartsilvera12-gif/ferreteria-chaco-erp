@@ -7,6 +7,7 @@ import { FancySelect } from "@/components/ui/FancySelect";
 import MobileFab from "@/components/ui/MobileFab";
 import { getVentas } from "@/lib/ventas/storage";
 import PedidosPendientesCaja from "./PedidosPendientesCaja";
+import PedidosCajaPendientes from "./PedidosCajaPendientes";
 import CajaControlPanel from "@/components/caja/CajaControlPanel";
 import { esMismoDiaAsuncion } from "@/lib/fecha/asuncion";
 import type { Venta, TipoVenta, TipoIvaVenta } from "@/lib/ventas/types";
@@ -210,6 +211,8 @@ export default function VentasPage() {
       </div>
 
       <CajaControlPanel />
+
+      <PedidosCajaPendientes />
 
       <PedidosPendientesCaja />
 

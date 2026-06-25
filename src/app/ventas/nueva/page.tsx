@@ -271,14 +271,56 @@ export default function NuevaVentaPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Precarga al facturar un pedido (Caja): lee ?pedido_id=, trae el pedido y carga sus
-  // items + cliente en el carrito. NO crea nada acá; la venta se genera al confirmar.
+  // Precarga al facturar un pedido (Caja): lee ?pedido_caja_id= (nueva tabla pedidos_caja)
+  // ó ?pedido_id= (legacy proyectos). Carga items + cliente en el carrito.
   useEffect(() => {
     let cancelled = false;
     let pid: string | null = null;
+    let pedidoCajaId: string | null = null;
     try {
-      pid = new URLSearchParams(window.location.search).get("pedido_id");
-    } catch { pid = null; }
+      const usp = new URLSearchParams(window.location.search);
+      pedidoCajaId = usp.get("pedido_caja_id");
+      pid = usp.get("pedido_id");
+    } catch { pid = null; pedidoCajaId = null; }
+    if (pedidoCajaId) {
+      setPedidoId(pedidoCajaId);
+      (async () => {
+        try {
+          const res = await fetch(`/api/pedidos-caja/${pedidoCajaId}`, { credentials: "include", cache: "no-store" });
+          const j = await res.json();
+          if (cancelled || !j?.success || !j.data?.pedido) return;
+          const p = j.data.pedido as { titulo?: string; cliente_id?: string | null; items?: Array<Record<string, unknown>>; caja_destino_numero?: number | null };
+          setPedidoNumero(p.titulo ?? null);
+          if (p.caja_destino_numero) setCajaId(null);
+          const lineas: LineaVenta[] = (p.items ?? [])
+            .filter((it) => it.producto_id && (Number(it.cantidad) || 0) > 0)
+            .map((it) => {
+              const cantidad = Number(it.cantidad) || 0;
+              const precio = Number(it.precio_venta) || 0;
+              const iva: TipoIvaVenta = "10%";
+              const totalLinea = cantidad * precio;
+              const montoIva = calcIva(iva, totalLinea);
+              const subtotal = totalLinea - montoIva;
+              return {
+                producto_id: String(it.producto_id),
+                producto_nombre: typeof it.producto_nombre === "string" ? it.producto_nombre : "",
+                sku: typeof it.sku === "string" ? it.sku : "",
+                cantidad,
+                precio_venta_original: precio,
+                precio_venta: precio,
+                tipo_iva: iva,
+                tipo_precio: (it.tipo_precio === "mayorista" ? "mayorista" : "minorista") as TipoPrecioVenta,
+                subtotal,
+                monto_iva: montoIva,
+                total_linea: totalLinea,
+              };
+            });
+          if (!cancelled && lineas.length) setItems(lineas);
+          if (!cancelled && p.cliente_id) setClienteId(String(p.cliente_id));
+        } catch { /* manual fallback */ }
+      })();
+      return () => { cancelled = true; };
+    }
     if (!pid) return;
     setPedidoId(pid);
     (async () => {

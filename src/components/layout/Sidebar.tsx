@@ -117,6 +117,7 @@ const MENU_STRUCTURE: MenuItem[] = [
     icon: Activity,
   },
   { key: "ventas", slug: "ventas", label: "Caja", href: "/ventas", icon: ShoppingCart },
+  { key: "consulta", slug: "consulta", label: "Consulta", href: "/consulta", icon: Search },
   { key: "presupuestos", slug: "presupuestos", label: "Presupuestos", href: "/presupuestos", icon: FileText },
   {
     key: "proyectos",
