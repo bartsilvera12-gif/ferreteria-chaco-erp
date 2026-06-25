@@ -356,7 +356,8 @@ export async function saveMovimiento(
   }
 
   const delta = calcularDelta(mov.tipo, mov.cantidad);
-  const nuevoStock = Math.max(0, producto.stock_actual + delta);
+  // Ferretería Chaco: stock negativo permitido (inventario progresivo cargado por sectores).
+  const nuevoStock = producto.stock_actual + delta;
   const debeActualizarStock = mov.origen !== "inventario_inicial"; // inventario_inicial ya viene del insert
 
   // 2. Insertar movimiento

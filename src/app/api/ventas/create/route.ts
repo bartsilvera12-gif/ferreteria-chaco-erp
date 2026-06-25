@@ -8,6 +8,7 @@ import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import type { Venta, LineaVenta } from "@/lib/ventas/types";
 import { createServiceRoleClientWithDbSchema } from "@/lib/supabase/empresa-data-schema";
+import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { estaFacturado, marcarFacturado } from "@/lib/caja/facturacion";
 
 /** Error tipado: el pedido que se intenta facturar ya tiene venta. */
@@ -139,9 +140,22 @@ export async function POST(request: NextRequest) {
       o.observaciones === null || o.observaciones === undefined
         ? null
         : String(o.observaciones).slice(0, 4000);
-    // Ferretería Chaco: inventario progresivo (se carga por sectores). La venta
-    // nunca debe bloquearse por falta de stock — se descuenta igual y queda en negativo.
-    const permitirSinStock = true;
+    // Regla data-driven: leemos `empresas.permitir_venta_sin_stock_default` (boolean).
+    // Cliente puede sobreescribir vía body (`permitir_sin_stock`); si la empresa lo
+    // tiene en true (Ferretería Chaco), nunca se bloquea por falta de stock.
+    let permitirSinStock = o.permitir_sin_stock === true;
+    {
+      const sb = createServiceRoleClient();
+      const ce = await sb
+        .from("empresas")
+        .select("permitir_venta_sin_stock_default")
+        .eq("id", auth.empresa_id)
+        .limit(1)
+        .maybeSingle();
+      if (!ce.error && ce.data && (ce.data as { permitir_venta_sin_stock_default?: boolean }).permitir_venta_sin_stock_default === true) {
+        permitirSinStock = true;
+      }
+    }
     // Pedido (proyecto) que se está facturando desde Caja. Opcional.
     const pedidoId = typeof o.pedido_id === "string" && o.pedido_id.trim() ? o.pedido_id.trim() : null;
 

@@ -512,25 +512,26 @@ function NuevoClienteForm() {
                         const ruc = form.ruc.trim();
                         if (!ruc) return;
                         try {
-                          const r = await fetch(`/api/clientes/consulta-ruc?ruc=${encodeURIComponent(ruc)}`);
+                          const r = await fetch(`/api/dnit/consulta-ruc?ruc=${encodeURIComponent(ruc)}`);
                           const j = await r.json();
-                          if (j?.found && typeof j.nombre === "string") {
+                          if (j?.found && typeof j.razon_social === "string") {
                             setForm((prev) => ({
                               ...prev,
-                              empresa: j.nombre.toUpperCase(),
-                              nombre_contacto: prev.nombre_contacto || j.nombre.toUpperCase(),
+                              empresa: j.razon_social,
+                              nombre_contacto: prev.nombre_contacto || j.razon_social,
+                              ruc: j.ruc_completo ?? prev.ruc,
                             }));
                           } else {
-                            alert("RUC no encontrado en proveedores públicos. Cargá el nombre manualmente.");
+                            alert(j?.mensaje || "RUC no encontrado. Cargá los datos manualmente.");
                           }
                         } catch {
-                          alert("No se pudo consultar el RUC ahora. Probá de nuevo o cargá manualmente.");
+                          alert("No se pudo consultar el RUC ahora. Cargá los datos manualmente.");
                         }
                       }}
                       className="px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition shrink-0"
-                      title="Consultar nombre por RUC"
+                      title="Consultar nombre por RUC (DNIT)"
                     >
-                      Consultar
+                      Buscar RUC
                     </button>
                   </div>
                 ) : (

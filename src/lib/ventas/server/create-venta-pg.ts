@@ -452,9 +452,10 @@ export async function createVentaTransaccionalPg(
       if (recetaByProducto.has(line.producto_id)) continue;
       // produccion_previa: descuenta su propio stock del terminado aunque controla_stock=false.
       if (!p.controlaStock && p.modo !== "produccion_previa") continue;
-      // El stock nunca baja de 0: si se vendió sin stock, queda en 0 (la cantidad real
-      // vendida queda registrada en el movimiento SALIDA, así no se pierde trazabilidad).
-      const nuevoStock = Math.max(0, p.stock - line.cantidad);
+      // Ferretería Chaco: inventario progresivo. El stock puede quedar negativo
+      // (se carga por sectores y se vende mientras tanto). La cantidad real vendida
+      // se descuenta tal cual, sin clamp a 0.
+      const nuevoStock = p.stock - line.cantidad;
       const upd = await sb
         .from("productos")
         .update({ stock_actual: nuevoStock })
@@ -482,9 +483,8 @@ export async function createVentaTransaccionalPg(
     // 7b) Descontar materia prima (insumos) por explosión de receta + movimiento SALIDA por insumo.
     for (const [insId, need] of insumoNeed) {
       const m = insumoMeta.get(insId)!;
-      // Igual que productos: el stock de insumos nunca baja de 0 (la salida real
-      // queda registrada en el movimiento SALIDA del insumo).
-      const nuevoStock = Math.max(0, m.stock - need);
+      // Mismo criterio que productos: stock negativo permitido (inventario progresivo).
+      const nuevoStock = m.stock - need;
       const upd = await sb
         .from("productos")
         .update({ stock_actual: nuevoStock })

@@ -966,7 +966,7 @@ export default function NuevaVentaPage() {
                         {([
                           { v: "efectivo", label: "Efectivo" },
                           { v: "transferencia", label: "Transferencia" },
-                          { v: "tarjeta", label: "Tarjeta/Débito" },
+                          { v: "tarjeta", label: `Tarjeta de crédito (+${Math.round(CARD_SURCHARGE_PCT * 100)}%)` },
                         ] as { v: MetodoPago; label: string }[]).map((m) => (
                           <button
                             key={m.v}
@@ -1009,7 +1009,7 @@ export default function NuevaVentaPage() {
                         <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs space-y-1">
                           <div className="flex items-center justify-between">
                             <span className="font-medium text-slate-700">
-                              {metodoPago === "transferencia" ? "Transferencia" : "Tarjeta / Débito"}
+                              {metodoPago === "transferencia" ? "Transferencia" : "Tarjeta de crédito"}
                             </span>
                             <button type="button" onClick={() => { setEntidadQuery(""); setCobroModalOpen(true); }} className="text-sky-600 font-medium hover:underline">
                               Editar
@@ -1079,7 +1079,7 @@ export default function NuevaVentaPage() {
           <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl space-y-3" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-800">
-                {metodoPago === "transferencia" ? "Datos de transferencia" : "Datos de tarjeta / débito"}
+                {metodoPago === "transferencia" ? "Datos de transferencia" : "Datos de tarjeta de crédito"}
               </h3>
               <button type="button" onClick={() => setCobroModalOpen(false)} className="text-slate-400 hover:text-slate-700 text-lg leading-none">✕</button>
             </div>
