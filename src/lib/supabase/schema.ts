@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * Instancia dedicada monocliente (Reserva Ecológica Caacupé).
+ * Instancia dedicada monocliente (Ferretería Chaco).
  * Schema único Postgres para catálogo + datos operativos.
  * Override opcional vía NEURA_CLIENT_SCHEMA si se reusa el repo para otro cliente.
  */

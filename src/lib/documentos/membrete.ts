@@ -4,19 +4,15 @@
  * (evita duplicar el markup del encabezado en cada documento).
  *
  * SOLO presentación: no toca datos de negocio. Los datos comerciales son fijos
- * de la empresa (Reserva Ecológica Caacupé S.A.).
+ * de la empresa (Ferretería Chaco).
  */
 
 export const EMPRESA_DOC = {
-  nombre: "Reserva Ecológica Caacupé S.A.",
-  actividad: [
-    "Comercio al por menor de otros productos en comercios no especializados",
-    "Venta de plantas, bancos, jardinería, otros",
-  ],
-  telefono: "(0971) 861 676",
-  direccion: ["200 mts. en Sur Club Costa Ñu", "Ruta Pyca - Caacupé", "Cordillera - Paraguay"],
-  /** Logo del cliente (alta calidad, sin fondo). Servido desde /public. */
-  logoUrl: "/brand/reservacaacupe-doc-logo.png",
+  nombre: "Ferretería Chaco",
+  actividad: [] as string[],
+  telefono: "",
+  direccion: [] as string[],
+  logoUrl: "",
 };
 
 function esc(v: unknown): string {
