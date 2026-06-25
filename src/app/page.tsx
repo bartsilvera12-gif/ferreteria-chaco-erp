@@ -7,6 +7,8 @@ import { motion } from "framer-motion";
 // que vive en este mismo archivo queda intacto.
 import MobileDashboard from "@/app/_components/MobileDashboard";
 import CobranzasResumenCards from "@/components/cobros/CobranzasResumenCards";
+import StockMuertoCard from "@/components/dashboard/StockMuertoCard";
+import CuentasPorPagarCard from "@/components/dashboard/CuentasPorPagarCard";
 import { getConfig } from "@/lib/config/storage";
 import { getUsuarios } from "@/lib/usuarios/storage";
 import type { ConfigGlobal } from "@/lib/config/types";
@@ -500,8 +502,7 @@ function KpiCard({
   label,
   value,
   sub,
-  color = "text-[#0F172A]",
-  icon,
+  color = "text-[#4FAEB2]",
   variation,
   variant = "light",
 }: {
@@ -509,7 +510,8 @@ function KpiCard({
   value: string;
   sub?: string;
   color?: string;
-  icon: string;
+  /** Mantenido por compat; ya no se renderiza para evitar el look de emoji. */
+  icon?: string;
   variation?: number;
   variant?: "light" | "zentra";
 }) {
@@ -520,8 +522,7 @@ function KpiCard({
         className="rounded-2xl border border-slate-200 p-6 shadow-lg shadow-black/10"
         style={{ backgroundColor: Z.card }}
       >
-        <div className="flex items-start justify-between gap-2">
-          <div className="text-2xl opacity-90">{icon}</div>
+        <div className="flex items-start justify-end gap-2">
           {variation !== undefined && (
             <span
               className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold"
@@ -552,8 +553,7 @@ function KpiCard({
       whileHover={{ y: -2 }}
       className="rounded-2xl border border-[#4FAEB2]/30 bg-white p-6 shadow-sm ring-1 ring-[#4FAEB2]/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-2xl">{icon}</div>
+      <div className="flex items-start justify-end gap-2">
         {variation !== undefined && (
           <span
             className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -565,7 +565,7 @@ function KpiCard({
           </span>
         )}
       </div>
-      <p className={`mt-3 text-2xl xl:text-3xl font-bold tabular-nums leading-tight tracking-tight ${color}`}>{value}</p>
+      <p className={`mt-3 text-3xl font-bold tabular-nums leading-tight tracking-tight ${color}`}>{value}</p>
       <p className="mt-1 text-xs font-medium text-[#475569]">{label}</p>
       {sub && <p className="mt-1 text-xs text-[#475569]">{sub}</p>}
     </motion.div>
@@ -991,7 +991,7 @@ const DashComercial = memo(function DashComercial({
  */
 function FinMontoGs({
   monto,
-  className = "text-slate-900",
+  className = "text-[#4FAEB2]",
   negativo,
   dense,
   kpi,
@@ -1009,7 +1009,7 @@ function FinMontoGs({
   if (kpi) {
     return (
       <p
-        className={`min-w-0 w-full text-left font-bold leading-none tabular-nums whitespace-nowrap [font-size:clamp(0.65rem,5.5cqi+0.15rem,1.45rem)] ${className}`}
+        className={`min-w-0 w-full text-left text-3xl font-bold leading-none tabular-nums whitespace-nowrap ${className}`}
         title={texto}
       >
         {texto}
@@ -1315,7 +1315,7 @@ const DashFinanciero = memo(function DashFinanciero({
         <motion.div whileHover={{ y: -2 }} className={finKpiCard}>
           <p className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Cobrado del período</p>
           <div className={finKpiValueWrap}>
-            <FinMontoGs kpi monto={recaudadoCohortPeriodo} className="text-[#2563EB]" />
+            <FinMontoGs kpi monto={recaudadoCohortPeriodo} />
           </div>
         </motion.div>
         <motion.div whileHover={{ y: -2 }} className={finKpiCard}>
@@ -1325,13 +1325,6 @@ const DashFinanciero = memo(function DashFinanciero({
               kpi
               monto={carteraPendienteCohort}
               negativo={carteraPendienteCohort < 0}
-              className={
-                carteraPendienteCohort > 0
-                  ? "text-amber-600"
-                  : carteraPendienteCohort < 0
-                    ? "text-emerald-600"
-                    : "text-slate-900"
-              }
             />
           </div>
         </motion.div>
@@ -1339,7 +1332,7 @@ const DashFinanciero = memo(function DashFinanciero({
           <p className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-500">% de cobranza</p>
           <div className={finKpiValueWrap}>
             <p
-              className="min-w-0 w-full text-left font-bold tabular-nums leading-none text-slate-900 whitespace-nowrap [font-size:clamp(0.7rem,5.5cqi+0.15rem,1.5rem)]"
+              className="min-w-0 w-full text-left text-3xl font-bold tabular-nums leading-none text-[#4FAEB2] whitespace-nowrap"
               title={pctCobranzaCohort == null ? "—" : `${pctCobranzaCohort.toFixed(1)}%`}
             >
               {pctCobranzaCohort == null ? "—" : `${pctCobranzaCohort.toFixed(1)}%`}
@@ -1620,14 +1613,17 @@ const DashInventario = memo(function DashInventario({
 
       {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard icon="📦" label="Productos totales"      value={String(totalProductos)} color="text-[#0EA5E9]" variation={4} />
-        <KpiCard icon="🔢" label="Stock total (unidades)" value={formatGs(totalUnidades)} color="text-[#0EA5E9]" />
-        <KpiCard icon="⚠️" label="Bajo stock mínimo"      value={String(bajosStock)}
+        <KpiCard label="Productos totales"      value={String(totalProductos)} variation={4} />
+        <KpiCard label="Stock total (unidades)" value={formatGs(totalUnidades)} />
+        <KpiCard label="Bajo stock mínimo"      value={String(bajosStock)}
           sub={bajosStock > 0 ? "requieren reposición" : "todo en orden"}
-          color={bajosStock > 0 ? "text-red-600" : "text-[#0EA5E9]"}
           variation={bajosStock > 0 ? -2 : undefined} />
-        <KpiCard icon="💎" label="Valor del inventario"   value={`Gs. ${formatGsFull(valorTotal)}`} color="text-[#0EA5E9]" variation={12} />
+        <KpiCard label="Valor del inventario"   value={`Gs. ${formatGsFull(valorTotal)}`} variation={12} />
       </div>
+
+      {/* Stock muerto — auto-fetch desde /api/reportes/sin-movimiento. Si no hay
+          productos sin movimiento, no se renderiza nada (cero clutter). */}
+      <StockMuertoCard dias={90} />
 
       {/* Donut + Críticos */}
       <div className="grid grid-cols-3 gap-4">
@@ -1656,23 +1652,23 @@ const DashInventario = memo(function DashInventario({
                       <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
                     </th>
                     {["Producto", "Stock actual", "Stock mín.", "Estado", "Proveedor"].map(h => (
-                      <th key={h} className="text-left text-xs font-semibold text-slate-500 px-3 py-3 uppercase tracking-wide">{h}</th>
+                      <th key={h} className="text-left text-xs font-semibold text-slate-700 px-3 py-3 uppercase tracking-wide">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {criticos.map(p => (
-                    <tr key={p.id} className={`${p.stock_actual <= 0 ? "bg-red-50/40 dark:bg-red-900/10" : "bg-amber-50/30 dark:bg-amber-900/10"} hover:bg-opacity-80 transition-colors`}>
+                    <tr key={p.id} className={`${p.stock_actual <= 0 ? "bg-red-50" : "bg-amber-50"} hover:brightness-95 transition-all`}>
                       <td className="px-3 py-2.5">
                         <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
                       </td>
-                      <td className="px-3 py-2.5 text-xs font-medium text-slate-800 dark:text-slate-200">{p.nombre}</td>
+                      <td className="px-3 py-2.5 text-sm font-semibold text-black">{p.nombre}</td>
                       <td className="px-3 py-2.5">
-                        <span className={`text-xs font-bold tabular-nums ${p.stock_actual <= 0 ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}>
+                        <span className={`text-sm font-bold tabular-nums ${p.stock_actual <= 0 ? "text-red-700" : "text-amber-700"}`}>
                           {p.stock_actual} {p.unidad_medida}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400 tabular-nums">{p.stock_minimo} {p.unidad_medida}</td>
+                      <td className="px-3 py-2.5 text-sm text-black tabular-nums">{p.stock_minimo} {p.unidad_medida}</td>
                       <td className="px-3 py-2.5">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
                           p.stock_actual <= 0 ? "bg-[var(--badge-error-bg)] text-[var(--badge-error-text)]" : "bg-[var(--badge-warning-bg)] text-[var(--badge-warning-text)]"
@@ -1680,7 +1676,7 @@ const DashInventario = memo(function DashInventario({
                           {p.stock_actual <= 0 ? "Crítico" : "Bajo"}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400">{proveedorMap[String(p.id)] ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-sm text-black">{proveedorMap[String(p.id)] ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1706,21 +1702,21 @@ const DashInventario = memo(function DashInventario({
                     <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
                   </th>
                   {["Producto", "SKU", "Stock", "Costo promedio", "Valor inventario"].map(h => (
-                    <th key={h} className="text-left text-xs font-semibold text-slate-500 px-3 py-3 uppercase tracking-wide">{h}</th>
+                    <th key={h} className="text-left text-xs font-semibold text-slate-700 px-3 py-3 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {topPorValor.map(p => (
-                  <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-3 py-2.5">
                       <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
                     </td>
-                    <td className="px-3 py-2.5 text-xs font-medium text-slate-800 dark:text-slate-200">{p.nombre}</td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-slate-500 dark:text-slate-400">{p.sku}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-slate-700 dark:text-slate-300">{p.stock_actual}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">Gs. {formatGs(p.costo_promedio)}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums font-semibold text-slate-800 dark:text-slate-200">Gs. {formatGs(p.valor)}</td>
+                    <td className="px-3 py-2.5 text-sm font-semibold text-black">{p.nombre}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-black">{p.sku}</td>
+                    <td className="px-3 py-2.5 text-sm tabular-nums font-medium text-black">{p.stock_actual}</td>
+                    <td className="px-3 py-2.5 text-sm tabular-nums text-black">Gs. {formatGs(p.costo_promedio)}</td>
+                    <td className="px-3 py-2.5 text-sm tabular-nums font-bold text-black">Gs. {formatGs(p.valor)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1826,37 +1822,31 @@ const DashVentas = memo(function DashVentas({
 
       {/* KPIs principales */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard icon="📅" label="Ventas del día"    value={`Gs. ${formatGsFull(totalHoy)}`}
-          sub={`${ventasHoy.length} transacciones`} color="text-blue-600" />
-        <KpiCard icon="📆" label="Ventas del mes"    value={`Gs. ${formatGsFull(totalMes)}`}
-          sub={`${ventasMes.length} transacciones`} color="text-indigo-600" />
-        <KpiCard icon="🎫" label="Ticket promedio"   value={`Gs. ${formatGsFull(ticketProm)}`}
+        <KpiCard label="Ventas del día"    value={`Gs. ${formatGsFull(totalHoy)}`}
+          sub={`${ventasHoy.length} transacciones`} />
+        <KpiCard label="Ventas del mes"    value={`Gs. ${formatGsFull(totalMes)}`}
+          sub={`${ventasMes.length} transacciones`} />
+        <KpiCard label="Ticket promedio"   value={`Gs. ${formatGsFull(ticketProm)}`}
           sub={`periodo: ${periodo}`} />
-        <KpiCard icon="📦" label="Unidades vendidas" value={formatGs(unidades)}
+        <KpiCard label="Unidades vendidas" value={formatGs(unidades)}
           sub={`en el periodo`} />
       </div>
 
       {/* KPIs rentabilidad */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex items-start gap-3">
-          <span className="text-2xl">💰</span>
-          <div>
-            <p className={`text-2xl font-bold tabular-nums ${gananciaHoy >= 0 ? "text-green-600" : "text-red-600"}`}>
-              Gs. {formatGsFull(gananciaHoy)}
-            </p>
-            <p className="text-xs font-semibold text-gray-700 mt-0.5">Ganancia del día</p>
-            <p className="text-xs text-gray-400">precio venta − costo promedio × cant.</p>
-          </div>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <p className="text-3xl font-bold tabular-nums text-[#4FAEB2]">
+            Gs. {formatGsFull(gananciaHoy)}
+          </p>
+          <p className="text-xs font-semibold text-gray-700 mt-0.5">Ganancia del día</p>
+          <p className="text-xs text-gray-400">precio venta − costo promedio × cant.</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex items-start gap-3">
-          <span className="text-2xl">📊</span>
-          <div>
-            <p className={`text-2xl font-bold tabular-nums ${margenProm >= 20 ? "text-green-600" : margenProm >= 10 ? "text-amber-600" : "text-red-600"}`}>
-              {margenProm.toFixed(1)}%
-            </p>
-            <p className="text-xs font-semibold text-gray-700 mt-0.5">Margen promedio (hoy)</p>
-            <p className="text-xs text-gray-400">ganancia / precio venta</p>
-          </div>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <p className="text-3xl font-bold tabular-nums text-[#4FAEB2]">
+            {margenProm.toFixed(1)}%
+          </p>
+          <p className="text-xs font-semibold text-gray-700 mt-0.5">Margen promedio (hoy)</p>
+          <p className="text-xs text-gray-400">ganancia / precio venta</p>
         </div>
       </div>
 
@@ -2087,11 +2077,11 @@ export default function DashboardPage() {
     }
   }, [tab, effectiveTabs]);
 
-  const TAB_META: Record<TabDash, { label: string; icon: string }> = {
-    comercial: { label: "Comercial", icon: "📊" },
-    financiero: { label: "Financiero", icon: "💰" },
-    inventario: { label: "Inventario", icon: "📦" },
-    ventas: { label: "Ventas", icon: "🛒" },
+  const TAB_META: Record<TabDash, { label: string }> = {
+    comercial: { label: "Comercial" },
+    financiero: { label: "Financiero" },
+    inventario: { label: "Inventario" },
+    ventas: { label: "Ventas" },
   };
 
   if (!config) {
@@ -2200,7 +2190,7 @@ export default function DashboardPage() {
               Dashboard
             </h1>
             <p className="mt-1 max-w-md text-sm leading-relaxed" style={{ color: Z.muted }}>
-              Neura ERP · Vista {nivel === "supervisor" ? "de tu área" : "global"} · período alineado al filtro
+              Autorepuestos Felix Bogado · Vista {nivel === "supervisor" ? "de tu área" : "global"} · período alineado al filtro
             </p>
           </div>
         </div>
@@ -2269,7 +2259,6 @@ export default function DashboardPage() {
                     : { color: Z.muted }
                 }
               >
-                <span aria-hidden>{meta.icon}</span>
                 {meta.label}
               </button>
             );
@@ -2296,6 +2285,7 @@ export default function DashboardPage() {
       {tab === "financiero" && (
         <div className="space-y-6">
           <CobranzasResumenCards />
+          <CuentasPorPagarCard />
           <DashFinanciero
             facturas={facturas}
             pagos={pagos}
