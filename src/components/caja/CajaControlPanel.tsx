@@ -11,6 +11,7 @@ import {
 } from "@/lib/caja/storage";
 import type { Caja, CajaResumen, MedioPagoCaja, TipoMovimientoCaja } from "@/lib/caja/types";
 import { getCurrentUser } from "@/lib/auth";
+import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 
 function formatGs(v: number) {
   return `Gs. ${Math.round(v).toLocaleString("es-PY")}`;
@@ -56,15 +57,28 @@ export default function CajaControlPanel({
   useEffect(() => {
     void refresh();
     let cancelled = false;
-    void getCurrentUser()
-      .then((cu) => {
+    // Resolver caja asignada — preferimos /api/usuarios/me porque tiene fallback
+    // server-side cuando PostgREST aún no conoce la columna. Si ese endpoint no
+    // la trae, intentamos getCurrentUser como backup.
+    (async () => {
+      try {
+        const r = await fetchWithSupabaseSession("/api/usuarios/me", { cache: "no-store" });
+        const j = await r.json();
+        const nca = j?.usuario?.numero_caja_asignada;
+        if (!cancelled && typeof nca === "number" && nca >= 1 && nca <= 3) {
+          setCajaAsignada(nca);
+          return;
+        }
+      } catch { /* fallback */ }
+      try {
+        const cu = await getCurrentUser();
         if (cancelled) return;
         if (cu?.numero_caja_asignada != null) {
           const n = Number(cu.numero_caja_asignada);
           if (Number.isInteger(n) && n >= 1 && n <= 3) setCajaAsignada(n);
         }
-      })
-      .catch(() => {});
+      } catch {}
+    })();
     return () => { cancelled = true; };
   }, [refresh]);
 

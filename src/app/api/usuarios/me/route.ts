@@ -5,6 +5,7 @@ type UsuarioMeRow = {
   nombre: string | null;
   email: string | null;
   rol: string | null;
+  numero_caja_asignada: number | null;
 };
 
 function pickAuthMetadataName(authUser: { user_metadata?: Record<string, unknown> | null }): string | null {
@@ -33,12 +34,23 @@ export async function GET(request: Request) {
     let row: UsuarioMeRow | null = null;
 
     if (catalogUsuario?.id) {
-      const { data, error } = await supabaseSr
+      // Intento primario con la columna nueva. Si PostgREST no la conoce todavía
+      // (schema cache desactualizado), reintentamos sin ella para que el endpoint
+      // siga sirviendo nombre/email/rol — la asignación de caja quedará null.
+      let { data, error } = await supabaseSr
         .from("usuarios")
-        .select("nombre, email, rol")
+        .select("nombre, email, rol, numero_caja_asignada")
         .eq("id", catalogUsuario.id)
         .maybeSingle();
-
+      if (error && /column|numero_caja_asignada/i.test(error.message)) {
+        const retry = await supabaseSr
+          .from("usuarios")
+          .select("nombre, email, rol")
+          .eq("id", catalogUsuario.id)
+          .maybeSingle();
+        data = retry.data as typeof data;
+        error = retry.error;
+      }
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
@@ -48,8 +60,13 @@ export async function GET(request: Request) {
     const nombre = (row?.nombre ?? pickAuthMetadataName(authUser) ?? "").trim() || null;
     const email = (row?.email ?? authUser.email ?? "").trim() || null;
     const rol = (row?.rol ?? catalogUsuario?.rol ?? "").trim() || null;
+    const ncaRaw = row?.numero_caja_asignada;
+    const numero_caja_asignada =
+      ncaRaw != null && Number.isInteger(Number(ncaRaw)) && Number(ncaRaw) >= 1 && Number(ncaRaw) <= 3
+        ? Number(ncaRaw)
+        : null;
 
-    return NextResponse.json({ usuario: { nombre, rol, email } });
+    return NextResponse.json({ usuario: { nombre, rol, email, numero_caja_asignada } });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error al obtener el usuario actual";
     return NextResponse.json({ error: message }, { status: 500 });

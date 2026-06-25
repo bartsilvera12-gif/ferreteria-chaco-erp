@@ -37,17 +37,21 @@ export default function PedidosCajaPendientes() {
     let cancel = false;
     (async () => {
       try {
-        const [cajas, cu] = await Promise.all([
+        const [cajas, me] = await Promise.all([
           getCajasAbiertas(),
-          getCurrentUser().catch(() => null),
+          fetchWithSupabaseSession("/api/usuarios/me", { cache: "no-store" })
+            .then((r) => r.json())
+            .catch(() => null),
         ]);
         if (cancel) return;
         const nums = cajas.map((c) => c.numero_caja).sort();
         setCajasAbiertas(nums);
-        if (cu?.numero_caja_asignada != null) {
-          const n = Number(cu.numero_caja_asignada);
-          if (Number.isInteger(n) && n >= 1 && n <= 3) setCajaAsignada(n);
+        let nca = me?.usuario?.numero_caja_asignada;
+        if (typeof nca !== "number") {
+          const cu = await getCurrentUser().catch(() => null);
+          nca = cu?.numero_caja_asignada;
         }
+        if (typeof nca === "number" && nca >= 1 && nca <= 3) setCajaAsignada(nca);
 
         const r = await fetchWithSupabaseSession("/api/pedidos-caja?estado=pendiente", { cache: "no-store" });
         const j = await r.json();

@@ -92,16 +92,29 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
 
       let rol = "";
       let cajaAsignada: number | null = null;
+      // Preferimos /api/usuarios/me (server-side, robusto a cache de PostgREST).
       try {
-        const cu = await getCurrentUser();
-        rol = (cu?.rol ?? "").trim().toLowerCase();
+        const r = await fetch("/api/usuarios/me", { credentials: "include", cache: "no-store" });
+        const j = await r.json();
+        rol = (j?.usuario?.rol ?? "").trim().toLowerCase();
         if (rol === "super_admin") superAdmin = true;
-        if (cu?.numero_caja_asignada != null) {
-          const n = Number(cu.numero_caja_asignada);
-          if (Number.isInteger(n) && n >= 1 && n <= 3) cajaAsignada = n;
-        }
+        const nca = j?.usuario?.numero_caja_asignada;
+        if (typeof nca === "number" && nca >= 1 && nca <= 3) cajaAsignada = nca;
       } catch {
-        /* sin fila usuarios en cliente */
+        /* fallback */
+      }
+      if (!rol || cajaAsignada == null) {
+        try {
+          const cu = await getCurrentUser();
+          if (!rol) rol = (cu?.rol ?? "").trim().toLowerCase();
+          if (rol === "super_admin") superAdmin = true;
+          if (cajaAsignada == null && cu?.numero_caja_asignada != null) {
+            const n = Number(cu.numero_caja_asignada);
+            if (Number.isInteger(n) && n >= 1 && n <= 3) cajaAsignada = n;
+          }
+        } catch {
+          /* sin fila usuarios en cliente */
+        }
       }
 
       setAccess({

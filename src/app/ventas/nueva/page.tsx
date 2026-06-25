@@ -141,17 +141,21 @@ export default function NuevaVentaPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [lista, cu] = await Promise.all([
+      const [lista, meJson] = await Promise.all([
         getCajasAbiertas(),
-        getCurrentUser().catch(() => null),
+        fetch("/api/usuarios/me", { credentials: "include", cache: "no-store" })
+          .then((r) => r.json())
+          .catch(() => null),
       ]);
       if (cancelled) return;
       setCajasAbiertas(lista);
       let asignada: number | null = null;
-      if (cu?.numero_caja_asignada != null) {
-        const n = Number(cu.numero_caja_asignada);
-        if (Number.isInteger(n) && n >= 1 && n <= 3) asignada = n;
+      let nca = meJson?.usuario?.numero_caja_asignada;
+      if (typeof nca !== "number") {
+        const cu = await getCurrentUser().catch(() => null);
+        nca = cu?.numero_caja_asignada;
       }
+      if (typeof nca === "number" && nca >= 1 && nca <= 3) asignada = nca;
       setCajaAsignadaNumero(asignada);
       // Preselección: por asignación primero, luego por única caja abierta.
       if (asignada) {
