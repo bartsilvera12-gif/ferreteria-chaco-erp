@@ -565,7 +565,6 @@ export default function InventarioPage() {
                 {tab !== "materia" && <th className="py-3 pr-4 font-medium">Precio Venta</th>}
                 <th className="py-3 pr-4 font-medium text-center">Stock actual</th>
                 <th className="py-3 pr-4 text-center font-medium hidden lg:table-cell">Stock Mín.</th>
-                <th className="py-3 pr-4 font-medium hidden lg:table-cell">Departamento</th>
                 <th className="py-3 pr-4 font-medium hidden lg:table-cell">Proveedor</th>
                 {tab !== "materia" && (
                   <th className="hidden py-3 pr-6 text-right font-medium lg:table-cell">
@@ -636,26 +635,6 @@ export default function InventarioPage() {
                     </td>
                     <td className="py-4 pr-4 text-center text-gray-500 hidden lg:table-cell">
                       {sinControl ? "—" : <span className="tabular-nums">{formatStock(p.stock_minimo)}</span>}
-                    </td>
-                    <td className="py-4 pr-4 text-gray-600 text-xs hidden lg:table-cell">
-                      {/* Prioriza la ubicación legacy (FK a inventario_ubicaciones)
-                          si está cargada; si no, cae al "Departamento" del Excel
-                          (productos.ubicacion_deposito). */}
-                      {p.ubicacion_principal_id
-                        ? (() => {
-                            const u = ubicacionById.get(p.ubicacion_principal_id);
-                            return u ? (
-                              <span>
-                                <span className="font-medium text-gray-700">{u.nombre}</span>
-                                <span className="text-gray-400"> — {u.tipo}</span>
-                              </span>
-                            ) : (
-                              <span className="font-medium text-gray-700">{p.ubicacion_deposito ?? "—"}</span>
-                            );
-                          })()
-                        : p.ubicacion_deposito
-                          ? <span className="font-medium text-gray-700">{p.ubicacion_deposito}</span>
-                          : <span className="text-gray-300">—</span>}
                     </td>
                     <td className="py-4 pr-4 text-gray-600 text-xs hidden lg:table-cell">
                       {p.distribuidor_nombre
