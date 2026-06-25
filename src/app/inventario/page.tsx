@@ -62,6 +62,17 @@ export default function InventarioPage() {
   const [tab,              setTab]               = useState<"reventa" | "menu" | "materia">("reventa");
   const [cargandoLista,    setCargandoLista]     = useState(true);
   const [soloStockBajo,    setSoloStockBajo]    = useState(false);
+  // Filtros nuevos auto-parts (visibles arriba del listado).
+  type FiltroStock = "todos" | "sin_stock" | "bajo" | "con_stock";
+  const [filtroStock,       setFiltroStock]       = useState<FiltroStock>("todos");
+  const [filtroDistribuidor, setFiltroDistribuidor] = useState<string>("");
+
+  // Paginación client-side. Default 50 (chico, legible, no fríe al browser
+  // con 6000 filas). El usuario puede subir a 100 o "todos" si quiere ver
+  // todo en una sola vista.
+  type PageSize = 10 | 50 | 100 | "todos";
+  const [pageSize, setPageSize] = useState<PageSize>(50);
+  const [paginaActual, setPaginaActual] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,8 +144,20 @@ export default function InventarioPage() {
       if (p.ubicacion_principal_id !== filtroUbicacion) return false;
     }
 
-    // Solo stock bajo
+    // Solo stock bajo (checkbox legacy)
     if (soloStockBajo && p.stock_actual > p.stock_minimo) return false;
+
+    // Filtro nuevo "Estado de stock" (autopartes)
+    if (filtroStock === "sin_stock" && p.stock_actual > 0) return false;
+    if (filtroStock === "con_stock" && p.stock_actual <= 0) return false;
+    if (filtroStock === "bajo" && p.stock_actual > p.stock_minimo) return false;
+
+    // Filtro nuevo "Distribuidor" — match exacto case-insensitive contra
+    // productos.distribuidor_nombre.
+    if (filtroDistribuidor) {
+      const d = (p.distribuidor_nombre ?? "").trim().toUpperCase();
+      if (d !== filtroDistribuidor.trim().toUpperCase()) return false;
+    }
 
     // Tipo gastronómico (vendible/insumo/mixto)
     if (filtroTipo !== "todos") {
@@ -170,9 +193,38 @@ export default function InventarioPage() {
     filtroValuacion,
     filtroUbicacion,
     soloStockBajo,
+    filtroStock,
+    filtroDistribuidor,
     filtroTipo,
     tab,
   ]);
+
+  // Lista única de distribuidores cargados en algún producto (para el dropdown).
+  const distribuidoresDisponibles = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of todos) {
+      const d = (p.distribuidor_nombre ?? "").trim();
+      if (d) set.add(d);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [todos]);
+
+  // Resetear la página actual cuando cambian filtros o tamaño de página.
+  useEffect(() => { setPaginaActual(0); }, [
+    filtroPorNombre, filtroPorSku, filtroPorCosto, filtroPorPrecio,
+    filtroValuacion, filtroUbicacion, soloStockBajo, filtroStock,
+    filtroDistribuidor, filtroTipo, tab, pageSize,
+  ]);
+
+  // Slice paginado para renderizar sólo la página actual (la lista filtrada
+  // puede tener miles de filas; renderizar todas fríe al browser).
+  const totalPaginas = pageSize === "todos" ? 1 : Math.max(1, Math.ceil(productos.length / pageSize));
+  const paginaSegura = Math.min(paginaActual, totalPaginas - 1);
+  const productosPagina = useMemo(() => {
+    if (pageSize === "todos") return productos;
+    const start = paginaSegura * pageSize;
+    return productos.slice(start, start + pageSize);
+  }, [productos, paginaSegura, pageSize]);
 
   // Resumen del listado visible (por pestaña). Solo productos que controlan stock
   // entran en valorizado / bajo / disponibles; el resto (Menú sin control) se cuenta
@@ -193,6 +245,7 @@ export default function InventarioPage() {
   const hayFiltrosActivos =
     filtroPorNombre || filtroPorSku || filtroPorCosto ||
     filtroPorPrecio || filtroValuacion || filtroUbicacion || soloStockBajo ||
+    filtroStock !== "todos" || filtroDistribuidor ||
     filtroTipo !== "todos";
 
   function limpiarFiltros() {
@@ -200,6 +253,8 @@ export default function InventarioPage() {
     setFiltroPorSku("");
     setFiltroPorCosto("");
     setFiltroPorPrecio("");
+    setFiltroStock("todos");
+    setFiltroDistribuidor("");
     setFiltroValuacion("");
     setFiltroUbicacion("");
     setSoloStockBajo(false);
@@ -238,30 +293,11 @@ export default function InventarioPage() {
         </div>
       </div>
 
-      {/* Tabs gastronómicos (filtran por tipo de producto) */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex gap-6 overflow-x-auto" aria-label="Tabs">
-          {([
-            { id: "reventa", label: "Reventa", subtitle: "Productos comprados y revendidos" },
-            { id: "menu",    label: "Menú",    subtitle: "Productos preparados por el local" },
-            { id: "materia", label: "Materia prima", subtitle: "Insumos para costeo/recetas" },
-          ] as const).map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={`whitespace-nowrap border-b-2 py-2 px-1 text-sm font-medium transition-colors ${
-                tab === t.id
-                  ? "border-amber-500 text-amber-600"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-              }`}
-              title={t.subtitle}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
-      </div>
+      {/* Tabs gastronómicos ocultos en esta instancia: en Autorepuestos
+          Felix Bogado todos los productos son de reventa, por lo que el
+          tab fijo en "reventa" (state init) muestra todo lo relevante.
+          Mantengo el state para no romper los useMemo / filtros aguas
+          abajo que dependen de `tab`. */}
 
       {/* Resumen por pestaña */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -294,6 +330,43 @@ export default function InventarioPage() {
               onChange={(e) => setFiltroPorNombre(e.target.value)}
               className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none sm:w-64 sm:flex-none"
             />
+            {/* Filtros auto-parts: estado de stock + distribuidor */}
+            <select
+              value={filtroStock}
+              onChange={(e) => setFiltroStock(e.target.value as FiltroStock)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-[#4FAEB2]/30"
+              title="Estado de stock"
+            >
+              <option value="todos">Stock: todos</option>
+              <option value="con_stock">Con stock (&gt;0)</option>
+              <option value="sin_stock">Sin stock (=0)</option>
+              <option value="bajo">Stock bajo (≤ mín.)</option>
+            </select>
+            <select
+              value={filtroDistribuidor}
+              onChange={(e) => setFiltroDistribuidor(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-[#4FAEB2]/30 max-w-[14rem] truncate"
+              title="Proveedor"
+              disabled={distribuidoresDisponibles.length === 0}
+            >
+              <option value="">
+                {distribuidoresDisponibles.length === 0
+                  ? "Sin proveedores cargados"
+                  : "Proveedor: todos"}
+              </option>
+              {distribuidoresDisponibles.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+            {(filtroStock !== "todos" || filtroDistribuidor) && (
+              <button
+                type="button"
+                onClick={() => { setFiltroStock("todos"); setFiltroDistribuidor(""); }}
+                className="text-xs text-slate-500 hover:text-slate-800 underline"
+              >
+                Limpiar filtros
+              </button>
+            )}
           </div>
         </div>
 
@@ -416,6 +489,68 @@ export default function InventarioPage() {
 
         </div>
 
+        {/* Controles de paginación — versión TOP (mismo bloque que el de abajo) */}
+        {productos.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-1 pb-3 text-sm">
+            <div className="flex items-center gap-2 text-slate-600">
+              <label htmlFor="page-size-top" className="text-xs text-slate-500">Mostrar</label>
+              <select
+                id="page-size-top"
+                value={String(pageSize)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setPageSize(v === "todos" ? "todos" : (parseInt(v) as 10 | 50 | 100));
+                }}
+                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/30"
+              >
+                <option value="10">10</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="todos">Todos</option>
+              </select>
+              <span className="text-xs text-slate-400">
+                {pageSize === "todos"
+                  ? `${productos.length} producto(s)`
+                  : `${paginaSegura * pageSize + 1}–${Math.min((paginaSegura + 1) * pageSize, productos.length)} de ${productos.length}`}
+              </span>
+            </div>
+
+            {pageSize !== "todos" && totalPaginas > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPaginaActual(0)}
+                  disabled={paginaSegura === 0}
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Primera página"
+                >«</button>
+                <button
+                  type="button"
+                  onClick={() => setPaginaActual((p) => Math.max(0, p - 1))}
+                  disabled={paginaSegura === 0}
+                  className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >‹ Anterior</button>
+                <span className="px-3 text-xs text-slate-600 tabular-nums">
+                  Página <span className="font-semibold">{paginaSegura + 1}</span> de {totalPaginas}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPaginaActual((p) => Math.min(totalPaginas - 1, p + 1))}
+                  disabled={paginaSegura >= totalPaginas - 1}
+                  className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >Siguiente ›</button>
+                <button
+                  type="button"
+                  onClick={() => setPaginaActual(totalPaginas - 1)}
+                  disabled={paginaSegura >= totalPaginas - 1}
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Última página"
+                >»</button>
+              </div>
+            )}
+          </div>
+        )}
+
         <EdgeScrollArea>
           {/* min-w-[1100px] fuerza scroll horizontal real en mobile; en >=lg
               vuelve a comportarse natural. Columnas no críticas (SKU, Unidad,
@@ -430,8 +565,8 @@ export default function InventarioPage() {
                 {tab !== "materia" && <th className="py-3 pr-4 font-medium">Precio Venta</th>}
                 <th className="py-3 pr-4 font-medium text-center">Stock actual</th>
                 <th className="py-3 pr-4 text-center font-medium hidden lg:table-cell">Stock Mín.</th>
-                <th className="py-3 pr-4 font-medium hidden lg:table-cell">Ubicación</th>
-                <th className="py-3 pr-4 font-medium hidden lg:table-cell">Valuación</th>
+                <th className="py-3 pr-4 font-medium hidden lg:table-cell">Departamento</th>
+                <th className="py-3 pr-4 font-medium hidden lg:table-cell">Proveedor</th>
                 {tab !== "materia" && (
                   <th className="hidden py-3 pr-6 text-right font-medium lg:table-cell">
                     <span title="(precio - costo) / precio × 100">Margen s/venta</span>
@@ -442,7 +577,29 @@ export default function InventarioPage() {
             </thead>
 
             <tbody>
-              {productos.map((p) => {
+              {cargandoLista && (
+                <tr>
+                  <td colSpan={10} className="py-16 text-center text-sm text-slate-400">
+                    <div className="inline-flex items-center gap-2">
+                      <svg className="h-4 w-4 animate-spin text-[#4FAEB2]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+                        <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                      </svg>
+                      Cargando productos…
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {!cargandoLista && productosPagina.length === 0 && (
+                <tr>
+                  <td colSpan={10} className="py-16 text-center text-sm text-slate-400">
+                    {todos.length === 0
+                      ? "Todavía no cargaste productos. Probá con \"+ Nuevo producto\" o \"Importar Excel\"."
+                      : "No hay productos que coincidan con los filtros aplicados."}
+                  </td>
+                </tr>
+              )}
+              {productosPagina.map((p) => {
                 const stockBajo = p.stock_actual <= p.stock_minimo;
                 const margen = calcularMargenVenta(p.costo_promedio, p.precio_venta);
                 // "Sin control" SOLO para Menú (vendible sin stock). Los insumos
@@ -481,6 +638,9 @@ export default function InventarioPage() {
                       {sinControl ? "—" : <span className="tabular-nums">{formatStock(p.stock_minimo)}</span>}
                     </td>
                     <td className="py-4 pr-4 text-gray-600 text-xs hidden lg:table-cell">
+                      {/* Prioriza la ubicación legacy (FK a inventario_ubicaciones)
+                          si está cargada; si no, cae al "Departamento" del Excel
+                          (productos.ubicacion_deposito). */}
                       {p.ubicacion_principal_id
                         ? (() => {
                             const u = ubicacionById.get(p.ubicacion_principal_id);
@@ -490,15 +650,17 @@ export default function InventarioPage() {
                                 <span className="text-gray-400"> — {u.tipo}</span>
                               </span>
                             ) : (
-                              <span className="text-gray-300">—</span>
+                              <span className="font-medium text-gray-700">{p.ubicacion_deposito ?? "—"}</span>
                             );
                           })()
-                        : <span className="text-gray-300">—</span>}
+                        : p.ubicacion_deposito
+                          ? <span className="font-medium text-gray-700">{p.ubicacion_deposito}</span>
+                          : <span className="text-gray-300">—</span>}
                     </td>
-                    <td className="py-4 pr-4 hidden lg:table-cell">
-                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${metodoBadge[p.metodo_valuacion]}`}>
-                        {p.metodo_valuacion}
-                      </span>
+                    <td className="py-4 pr-4 text-gray-600 text-xs hidden lg:table-cell">
+                      {p.distribuidor_nombre
+                        ? <span className="font-medium text-gray-700">{p.distribuidor_nombre}</span>
+                        : <span className="text-gray-300">—</span>}
                     </td>
                     {tab !== "materia" && (
                       <td className={`hidden py-4 pr-6 text-right font-semibold tabular-nums lg:table-cell ${margenColor(margen)}`}>
@@ -520,6 +682,68 @@ export default function InventarioPage() {
 
           </table>
         </EdgeScrollArea>
+
+        {/* Controles de paginación */}
+        {productos.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-1 pt-4 text-sm">
+            <div className="flex items-center gap-2 text-slate-600">
+              <label htmlFor="page-size" className="text-xs text-slate-500">Mostrar</label>
+              <select
+                id="page-size"
+                value={String(pageSize)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setPageSize(v === "todos" ? "todos" : (parseInt(v) as 10 | 50 | 100));
+                }}
+                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/30"
+              >
+                <option value="10">10</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="todos">Todos</option>
+              </select>
+              <span className="text-xs text-slate-400">
+                {pageSize === "todos"
+                  ? `${productos.length} producto(s)`
+                  : `${paginaSegura * pageSize + 1}–${Math.min((paginaSegura + 1) * pageSize, productos.length)} de ${productos.length}`}
+              </span>
+            </div>
+
+            {pageSize !== "todos" && totalPaginas > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPaginaActual(0)}
+                  disabled={paginaSegura === 0}
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Primera página"
+                >«</button>
+                <button
+                  type="button"
+                  onClick={() => setPaginaActual((p) => Math.max(0, p - 1))}
+                  disabled={paginaSegura === 0}
+                  className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >‹ Anterior</button>
+                <span className="px-3 text-xs text-slate-600 tabular-nums">
+                  Página <span className="font-semibold">{paginaSegura + 1}</span> de {totalPaginas}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPaginaActual((p) => Math.min(totalPaginas - 1, p + 1))}
+                  disabled={paginaSegura >= totalPaginas - 1}
+                  className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >Siguiente ›</button>
+                <button
+                  type="button"
+                  onClick={() => setPaginaActual(totalPaginas - 1)}
+                  disabled={paginaSegura >= totalPaginas - 1}
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Última página"
+                >»</button>
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
 

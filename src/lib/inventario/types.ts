@@ -45,6 +45,13 @@ export interface Producto {
   descripcion?: string | null;
   /** Modo de receta (productos de Menú): 'preparado_al_vender' | 'produccion_previa'. */
   modo_receta?: string;
+  /** Nombre del distribuidor/proveedor (denormalizado, opcional). */
+  distribuidor_nombre?: string | null;
+  /** Ubicación física (opcional). */
+  ubicacion_deposito?: string | null;
+  ubicacion_pasillo?: string | null;
+  ubicacion_estante?: string | null;
+  ubicacion_caja?: string | null;
 }
 
 export interface MovimientoInventario {
