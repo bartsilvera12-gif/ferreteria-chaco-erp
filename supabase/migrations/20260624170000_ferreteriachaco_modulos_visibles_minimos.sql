@@ -30,6 +30,42 @@ BEGIN
     RETURN;
   END IF;
 
+  -- 0) Asegurar UNIQUE (empresa_id, modulo_id) en empresa_modulos.
+  --    El schema clonado puede haberlo dejado sin el constraint, lo agregamos
+  --    antes de hacer ON CONFLICT.
+  IF to_regclass(format('%I.empresa_modulos', sch)) IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint con
+      JOIN pg_class c ON c.oid = con.conrelid
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = sch
+        AND c.relname = 'empresa_modulos'
+        AND con.contype = 'u'
+        AND pg_get_constraintdef(con.oid) ILIKE '%(empresa_id, modulo_id)%'
+    ) THEN
+      BEGIN
+        EXECUTE format(
+          'ALTER TABLE %I.empresa_modulos ADD CONSTRAINT uq_empresa_modulos_empresa_modulo UNIQUE (empresa_id, modulo_id)',
+          sch
+        );
+      EXCEPTION WHEN unique_violation THEN
+        -- Duplicados existentes: limpiar antes
+        EXECUTE format(
+          'DELETE FROM %I.empresa_modulos a
+            USING %I.empresa_modulos b
+            WHERE a.ctid < b.ctid
+              AND a.empresa_id = b.empresa_id
+              AND a.modulo_id = b.modulo_id',
+          sch, sch
+        );
+        EXECUTE format(
+          'ALTER TABLE %I.empresa_modulos ADD CONSTRAINT uq_empresa_modulos_empresa_modulo UNIQUE (empresa_id, modulo_id)',
+          sch
+        );
+      END;
+    END IF;
+  END IF;
+
   -- 1) Sembrar `reportes` en el catálogo de módulos si no existe.
   EXECUTE format(
     'INSERT INTO %I.modulos (id, nombre, slug)
