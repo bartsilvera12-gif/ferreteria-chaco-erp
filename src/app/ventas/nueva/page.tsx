@@ -130,6 +130,7 @@ export default function NuevaVentaPage() {
 
   // Facturación de un pedido enviado a Caja (?pedido_id=...). Precarga items + cliente.
   const [pedidoId, setPedidoId] = useState<string | null>(null);
+  const [pedidoCajaIdLoaded, setPedidoCajaIdLoaded] = useState<string | null>(null);
   const [pedidoNumero, setPedidoNumero] = useState<string | null>(null);
 
   // Selector de caja: el cajero elige sobre cuál de las 3 cajas imputa esta venta.
@@ -306,7 +307,7 @@ export default function NuevaVentaPage() {
       pid = usp.get("pedido_id");
     } catch { pid = null; pedidoCajaId = null; }
     if (pedidoCajaId) {
-      setPedidoId(pedidoCajaId);
+      setPedidoCajaIdLoaded(pedidoCajaId);
       (async () => {
         try {
           const res = await fetch(`/api/pedidos-caja/${pedidoCajaId}`, { credentials: "include", cache: "no-store" });
@@ -690,7 +691,7 @@ export default function NuevaVentaPage() {
           titular: metodoPago === "transferencia" ? pagoTitular.trim() || null : null,
           observacion: pagoObservacion.trim() || null,
         },
-        { permitirSinStock, pedidoId, cajaId }
+        { permitirSinStock, pedidoId, pedidoCajaId: pedidoCajaIdLoaded, cajaId }
       );
 
       if (!resultado.success) {
@@ -1002,22 +1003,18 @@ export default function NuevaVentaPage() {
               <div className="mt-5 flex justify-end">
                 <div className="w-full space-y-3 lg:w-80">
                   <div className="space-y-1.5">
-                    <div className="flex justify-between text-sm text-gray-600">
-                      <span>Subtotal</span>
-                      <span className="tabular-nums font-medium">{formatGs(totalSubtotalContado)}</span>
+                    <div className="flex justify-between text-sm text-gray-700">
+                      <span>Total</span>
+                      <span className="tabular-nums font-medium">{formatGs(totalContado)}</span>
                     </div>
-                    <div className="flex justify-between text-sm text-gray-600">
-                      <span>IVA</span>
-                      <span className="tabular-nums font-medium">
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>IVA incluido</span>
+                      <span className="tabular-nums">
                         {totalIvaContado > 0 ? formatGs(totalIvaContado) : "—"}
                       </span>
                     </div>
-                    <div className="flex justify-between text-sm text-gray-700 pt-2 border-t border-gray-200">
-                      <span>Total contado</span>
-                      <span className="tabular-nums font-medium">{formatGs(totalContado)}</span>
-                    </div>
                     {recargoTarjeta > 0 && (
-                      <div className="flex justify-between text-sm text-amber-700">
+                      <div className="flex justify-between text-sm text-amber-700 pt-2 border-t border-gray-200">
                         <span>Recargo tarjeta ({Math.round(CARD_SURCHARGE_PCT * 100)}%)</span>
                         <span className="tabular-nums font-medium">+ {formatGs(recargoTarjeta)}</span>
                       </div>

@@ -233,6 +233,33 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Nuevo flujo Consulta → Caja: pedido_caja_id apunta a pedidos_caja (no a proyectos).
+    const pedidoCajaIdRaw = o.pedido_caja_id;
+    const pedidoCajaId =
+      typeof pedidoCajaIdRaw === "string" && pedidoCajaIdRaw.trim().length > 0
+        ? pedidoCajaIdRaw.trim()
+        : null;
+    if (pedidoCajaId) {
+      const sbPc = createServiceRoleClientWithDbSchema(schema);
+      const pq = await sbPc
+        .from("pedidos_caja")
+        .select("id, estado")
+        .eq("empresa_id", auth.empresa_id)
+        .eq("id", pedidoCajaId)
+        .maybeSingle();
+      if (pq.error) throw new Error(pq.error.message);
+      if (!pq.data) {
+        return NextResponse.json(errorResponse("El pedido a facturar no existe."), { status: 404 });
+      }
+      const estado = String((pq.data as { estado?: string }).estado ?? "pendiente");
+      if (estado === "facturado") {
+        return NextResponse.json(errorResponse("El pedido ya fue facturado."), { status: 409 });
+      }
+      if (estado === "cancelado") {
+        return NextResponse.json(errorResponse("El pedido está cancelado."), { status: 409 });
+      }
+    }
+
     const cajaIdRaw = o.caja_id;
     const cajaId =
       typeof cajaIdRaw === "string" && cajaIdRaw.trim().length > 0 ? cajaIdRaw.trim() : null;
@@ -280,6 +307,29 @@ export async function POST(request: NextRequest) {
         }
       } catch (e) {
         console.error("[ventas/create] link pedido->venta fallo (venta OK):", e instanceof Error ? e.message : e);
+      }
+    }
+
+    // Mismo flujo para pedidos_caja (Consulta → Caja). Best-effort.
+    if (pedidoCajaId) {
+      try {
+        const sbPc = createServiceRoleClientWithDbSchema(schema);
+        const upd = await sbPc
+          .from("pedidos_caja")
+          .update({
+            estado: "facturado",
+            venta_id: ventaId,
+            venta_numero: numeroControl,
+            facturado_at: fechaIso,
+          })
+          .eq("empresa_id", auth.empresa_id)
+          .eq("id", pedidoCajaId)
+          .eq("estado", "pendiente");
+        if (upd.error) {
+          console.error("[ventas/create] no se pudo marcar pedido_caja facturado:", upd.error.message);
+        }
+      } catch (e) {
+        console.error("[ventas/create] link pedido_caja->venta fallo (venta OK):", e instanceof Error ? e.message : e);
       }
     }
 
