@@ -18,8 +18,7 @@ import {
   ChevronRight,
   Star,
   Sparkles,
-  PanelLeftClose,
-  PanelLeft,
+  ChevronLeft,
   Search,
   Receipt,
   Megaphone,
@@ -244,13 +243,19 @@ function NavItem({
   const childActive = item.children?.some((c) => menuChildPathActive(p, c.href, c.exactMatch));
 
   if (item.children) {
-    const rowTone =
-      isActive || childActive
-        ? "bg-[color:var(--zentra-sidebar-active)] text-white shadow-[inset_3px_0_0_var(--zentra-sidebar-accent)]"
-        : "text-slate-200 hover:bg-[color:var(--zentra-sidebar-hover)]";
+    const activo = isActive || childActive;
+    const rowTone = activo
+      ? "bg-[color:var(--zentra-sidebar-active)] text-white"
+      : "text-slate-200 hover:bg-[color:var(--zentra-sidebar-hover)]";
     return (
       <div className="space-y-0.5">
-        <div className={`flex items-center gap-0.5 rounded-lg text-sm font-medium transition-colors ${rowTone}`}>
+        <div className={`relative flex items-center gap-0.5 rounded-lg text-sm font-medium transition-colors ${rowTone}`}>
+          {activo && (
+            <span
+              aria-hidden
+              className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-[#7DCFD2] shadow-[0_0_12px_rgba(125,207,210,0.7)]"
+            />
+          )}
           <Link
             href={item.href}
             prefetch={false}
@@ -289,23 +294,36 @@ function NavItem({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden pl-4 space-y-0.5"
+              className="overflow-hidden"
             >
-              {item.children.map((c) => (
-                <Link
-                  key={c.href}
-                  href={c.href}
-                  prefetch={false}
-                  onMouseEnter={() => router.prefetch(c.href)}
-                  className={`block rounded-lg px-3 py-2 text-sm transition-all ${
-                    menuChildPathActive(p, c.href, c.exactMatch)
-                      ? "bg-[color:var(--zentra-sidebar-active)] text-white font-medium shadow-[inset_3px_0_0_var(--zentra-sidebar-accent)]"
-                      : "text-slate-300 hover:bg-[color:var(--zentra-sidebar-hover)]"
-                  }`}
-                >
-                  {c.label}
-                </Link>
-              ))}
+              {/* Línea vertical guía + padding para que el dot del item
+                  activo (-left-[13px]) caiga sobre la línea. */}
+              <div className="relative ml-6 mt-1 space-y-0.5 border-l border-white/[0.08] pl-3">
+                {item.children.map((c) => {
+                  const childActive2 = menuChildPathActive(p, c.href, c.exactMatch);
+                  return (
+                    <Link
+                      key={c.href}
+                      href={c.href}
+                      prefetch={false}
+                      onMouseEnter={() => router.prefetch(c.href)}
+                      className={`relative block rounded-lg px-3 py-1.5 text-[13px] transition-all ${
+                        childActive2
+                          ? "bg-[#7DCFD2]/14 font-medium text-white"
+                          : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
+                      }`}
+                    >
+                      {childActive2 && (
+                        <span
+                          aria-hidden
+                          className="absolute -left-[13px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-[#7DCFD2] shadow-[0_0_10px_rgba(125,207,210,0.8)]"
+                        />
+                      )}
+                      {c.label}
+                    </Link>
+                  );
+                })}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -318,12 +336,18 @@ function NavItem({
       href={item.href}
       prefetch={false}
       onMouseEnter={() => router.prefetch(item.href)}
-      className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
+      className={`group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
         isActive
-          ? "bg-[color:var(--zentra-sidebar-active)] text-white shadow-[inset_3px_0_0_var(--zentra-sidebar-accent)]"
+          ? "bg-[color:var(--zentra-sidebar-active)] text-white"
           : "text-slate-200 hover:bg-[color:var(--zentra-sidebar-hover)]"
       }`}
     >
+      {isActive && (
+        <span
+          aria-hidden
+          className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-[#7DCFD2] shadow-[0_0_12px_rgba(125,207,210,0.7)]"
+        />
+      )}
       <Icon className={`h-5 w-5 shrink-0 ${isActive ? "text-white" : "text-slate-400"}`} />
       {!collapsed && (
         <>
@@ -688,7 +712,7 @@ export default function Sidebar() {
         }`}
       >
       {/* Logo oficial ZENTRA (blanco sobre azul marca) */}
-      <div className="flex h-[7.25rem] shrink-0 items-center justify-between gap-2 border-b border-[color:var(--zentra-sidebar-border)] bg-[color:var(--zentra-sidebar-elevated)]/35 px-3 py-2.5">
+      <div className="flex h-[7.25rem] shrink-0 items-center justify-center border-b border-[color:var(--zentra-sidebar-border)] bg-[color:var(--zentra-sidebar-elevated)]/35 px-3 py-2.5">
         <Link href="/" className={`flex items-center justify-center min-w-0 flex-1 overflow-hidden`}>
           <div
             className={`relative flex items-center justify-center ${collapsed ? "h-11 w-11" : "h-[4.5rem] w-full max-w-[200px]"}`}
@@ -704,15 +728,21 @@ export default function Sidebar() {
             />
           </div>
         </Link>
-        <button
-          type="button"
-          onClick={() => setCollapsed(!collapsed)}
-          className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-[color:var(--zentra-sidebar-hover)] hover:text-white"
-          aria-label={collapsed ? "Expandir sidebar" : "Colapsar sidebar"}
-        >
-          {collapsed ? <PanelLeft className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
-        </button>
       </div>
+
+      {/* Toggle flotante estilo Coolify: pestaña en el borde derecho del
+          sidebar. Posicionado debajo del header global para que no quede
+          tapado por la barra superior. */}
+      <button
+        type="button"
+        onClick={() => setCollapsed(!collapsed)}
+        aria-label={collapsed ? "Expandir sidebar" : "Colapsar sidebar"}
+        title={collapsed ? "Expandir" : "Colapsar"}
+        style={{ backgroundColor: "#104A4E" }}
+        className="absolute top-[8rem] -right-3 z-50 flex h-7 w-7 items-center justify-center rounded-full border border-[color:var(--zentra-sidebar-border)] text-white shadow-[0_4px_10px_rgba(0,0,0,0.35)] transition-transform hover:scale-105"
+      >
+        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+      </button>
 
       {!collapsed && (
         <div className="shrink-0 border-b border-[color:var(--zentra-sidebar-border)] px-3 py-2.5">
