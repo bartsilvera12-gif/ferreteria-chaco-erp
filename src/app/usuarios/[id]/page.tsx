@@ -34,6 +34,7 @@ type Usuario = {
   rol: string | null;
   estado: string | null;
   created_at: string;
+  numero_caja_asignada?: number | null;
   modulo_ids?: string[];
   modulos_empresa?: ModuloOpt[];
   dashboard_views_empresa?: { id: string; nombre: string; slug: string; orden: number }[];
@@ -126,6 +127,7 @@ function usuarioToForm(u: Usuario): UsuarioFormValues {
     modulo_ids: u.modulo_ids ?? [],
     dashboard_view_ids: u.dashboard_view_ids ?? [],
     default_dashboard_view_id: u.default_dashboard_view_id ?? "",
+    numero_caja_asignada: u.numero_caja_asignada == null ? "" : String(u.numero_caja_asignada),
   };
 }
 
@@ -246,6 +248,9 @@ function UsuarioDetailContent() {
       }
       if (usuario.puede_editar_modulos && !usuario.es_admin_empresa) {
         body.modulo_ids = form.modulo_ids;
+      }
+      if (usuario.puede_editar_rol) {
+        body.numero_caja_asignada = form.numero_caja_asignada.trim() === "" ? null : Number(form.numero_caja_asignada);
       }
 
       if (

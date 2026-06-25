@@ -10,6 +10,7 @@ import {
   registrarMovimiento,
 } from "@/lib/caja/storage";
 import type { Caja, CajaResumen, MedioPagoCaja, TipoMovimientoCaja } from "@/lib/caja/types";
+import { getCurrentUser } from "@/lib/auth";
 
 function formatGs(v: number) {
   return `Gs. ${Math.round(v).toLocaleString("es-PY")}`;
@@ -42,6 +43,7 @@ export default function CajaControlPanel({
 }) {
   const [loading, setLoading] = useState(true);
   const [cajas, setCajas] = useState<Caja[]>([]);
+  const [cajaAsignada, setCajaAsignada] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -53,6 +55,17 @@ export default function CajaControlPanel({
 
   useEffect(() => {
     void refresh();
+    let cancelled = false;
+    void getCurrentUser()
+      .then((cu) => {
+        if (cancelled) return;
+        if (cu?.numero_caja_asignada != null) {
+          const n = Number(cu.numero_caja_asignada);
+          if (Number.isInteger(n) && n >= 1 && n <= 3) setCajaAsignada(n);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, [refresh]);
 
   if (loading && cajas.length === 0) {
@@ -63,9 +76,13 @@ export default function CajaControlPanel({
     );
   }
 
+  // Si el cajero tiene caja asignada, solo mostrar SU caja (no las 3).
+  const numerosVisibles = cajaAsignada != null ? [cajaAsignada] : NUMEROS_CAJA;
+  const gridCols = numerosVisibles.length === 1 ? "" : "lg:grid-cols-3";
+
   return (
-    <div className="grid gap-3 lg:grid-cols-3">
-      {NUMEROS_CAJA.map((n) => (
+    <div className={`grid gap-3 ${gridCols}`}>
+      {numerosVisibles.map((n) => (
         <CajaSlotCard
           key={n}
           numeroCaja={n}

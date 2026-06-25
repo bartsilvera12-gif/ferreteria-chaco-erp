@@ -11,6 +11,7 @@ import Link from "next/link";
 import { Send, Clock } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { getCajasAbiertas } from "@/lib/caja/storage";
+import { getCurrentUser } from "@/lib/auth";
 
 type Pedido = {
   id: string;
@@ -29,16 +30,24 @@ function fmtGs(v: number) {
 export default function PedidosCajaPendientes() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [cajasAbiertas, setCajasAbiertas] = useState<number[]>([]);
+  const [cajaAsignada, setCajaAsignada] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancel = false;
     (async () => {
       try {
-        const cajas = await getCajasAbiertas();
+        const [cajas, cu] = await Promise.all([
+          getCajasAbiertas(),
+          getCurrentUser().catch(() => null),
+        ]);
         if (cancel) return;
         const nums = cajas.map((c) => c.numero_caja).sort();
         setCajasAbiertas(nums);
+        if (cu?.numero_caja_asignada != null) {
+          const n = Number(cu.numero_caja_asignada);
+          if (Number.isInteger(n) && n >= 1 && n <= 3) setCajaAsignada(n);
+        }
 
         const r = await fetchWithSupabaseSession("/api/pedidos-caja?estado=pendiente", { cache: "no-store" });
         const j = await r.json();
@@ -63,9 +72,13 @@ export default function PedidosCajaPendientes() {
 
   if (loading || pedidos.length === 0) return null;
 
-  const pedidosVisibles = cajasAbiertas.length > 0
-    ? pedidos.filter((p) => p.caja_destino_numero == null || cajasAbiertas.includes(p.caja_destino_numero))
-    : pedidos;
+  // 1) Si el cajero tiene caja asignada, ver SOLO los pedidos para su caja.
+  // 2) Sino, ver los de cualquier caja abierta (admin viendo todo).
+  const pedidosVisibles = cajaAsignada != null
+    ? pedidos.filter((p) => p.caja_destino_numero === cajaAsignada)
+    : cajasAbiertas.length > 0
+      ? pedidos.filter((p) => p.caja_destino_numero == null || cajasAbiertas.includes(p.caja_destino_numero))
+      : pedidos;
 
   if (pedidosVisibles.length === 0) return null;
 

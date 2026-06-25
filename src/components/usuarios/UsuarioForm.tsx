@@ -53,6 +53,8 @@ export type UsuarioFormValues = {
   dashboard_view_ids: string[];
   /** Vista por defecto al abrir el tablero (id de catálogo). */
   default_dashboard_view_id: string;
+  /** Caja asignada al cajero (1/2/3) o "" para ninguna. */
+  numero_caja_asignada: string;
 };
 
 export function emptyUsuarioForm(): UsuarioFormValues {
@@ -74,6 +76,7 @@ export function emptyUsuarioForm(): UsuarioFormValues {
     modulo_ids: [],
     dashboard_view_ids: [],
     default_dashboard_view_id: "",
+    numero_caja_asignada: "",
   };
 }
 
@@ -282,6 +285,24 @@ export function UsuarioFormFields({
               <option value="activo">Activo</option>
               <option value="inactivo">Inactivo</option>
             </select>
+          </div>
+
+          <div>
+            <label className={fLabel}>Caja asignada</label>
+            <select
+              name="numero_caja_asignada"
+              value={form.numero_caja_asignada}
+              onChange={onChange}
+              className={fSelect}
+            >
+              <option value="">— Sin asignar (ve todas) —</option>
+              <option value="1">Caja 1</option>
+              <option value="2">Caja 2</option>
+              <option value="3">Caja 3</option>
+            </select>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Si elegís una caja, el cajero ve solo esa estación al entrar a /ventas y al armar consultas.
+            </p>
           </div>
         </div>
       </SectionCard>

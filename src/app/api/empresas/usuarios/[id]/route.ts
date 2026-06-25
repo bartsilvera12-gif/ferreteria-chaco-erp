@@ -166,7 +166,7 @@ export async function GET(
     const { data: usuario, error } = await supabase
       .from("usuarios")
       .select(
-        "id, nombre, email, telefono, fecha_nacimiento, fecha_ingreso, tipo_contrato, salario_base, porcentaje_comision, ips, area, rol, estado, created_at, empresa_id"
+        "id, nombre, email, telefono, fecha_nacimiento, fecha_ingreso, tipo_contrato, salario_base, porcentaje_comision, ips, area, rol, estado, created_at, empresa_id, numero_caja_asignada"
       )
       .eq("id", id)
       .single();
@@ -333,6 +333,7 @@ export async function PATCH(
       dashboard_view_ids,
       default_dashboard_view_id,
       rol: rolBody,
+      numero_caja_asignada,
     } = body;
 
     const { data: usuario, error: errGet } = await supabase
@@ -407,6 +408,18 @@ export async function PATCH(
     if (ips !== undefined) updates.ips = Boolean(ips);
 
     if (rolNormalizado !== undefined) updates.rol = rolNormalizado;
+
+    if (numero_caja_asignada !== undefined) {
+      if (numero_caja_asignada === null || numero_caja_asignada === "") {
+        updates.numero_caja_asignada = null;
+      } else {
+        const nca = Number(numero_caja_asignada);
+        if (!Number.isInteger(nca) || nca < 1 || nca > 3) {
+          return NextResponse.json({ error: "numero_caja_asignada debe ser 1, 2 o 3 (o null)." }, { status: 400 });
+        }
+        updates.numero_caja_asignada = nca;
+      }
+    }
 
     if (estado !== undefined && authUserId) {
       const banDuration = estado === "inactivo" ? "876000h" : "none";

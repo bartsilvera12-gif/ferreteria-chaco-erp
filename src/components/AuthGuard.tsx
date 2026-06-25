@@ -21,6 +21,10 @@ type ModuleAccess = {
   slugs: Set<string>;
   inactiveSlugs: Set<string>;
   strict: boolean;
+  /** Rol normalizado (lower-case) del usuario logueado. */
+  rol: string;
+  /** Caja asignada al cajero (1/2/3) o null si no aplica. */
+  cajaAsignada: number | null;
 };
 
 /**
@@ -86,13 +90,18 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
         superAdmin = bootstrapSuper;
       }
 
-      if (!superAdmin) {
-        try {
-          const cu = await getCurrentUser();
-          if ((cu?.rol ?? "").trim() === "super_admin") superAdmin = true;
-        } catch {
-          /* sin fila usuarios en cliente */
+      let rol = "";
+      let cajaAsignada: number | null = null;
+      try {
+        const cu = await getCurrentUser();
+        rol = (cu?.rol ?? "").trim().toLowerCase();
+        if (rol === "super_admin") superAdmin = true;
+        if (cu?.numero_caja_asignada != null) {
+          const n = Number(cu.numero_caja_asignada);
+          if (Number.isInteger(n) && n >= 1 && n <= 3) cajaAsignada = n;
         }
+      } catch {
+        /* sin fila usuarios en cliente */
       }
 
       setAccess({
@@ -100,6 +109,8 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
         slugs: new Set(slugs),
         inactiveSlugs: new Set(inactiveSlugs),
         strict,
+        rol,
+        cajaAsignada,
       });
       setLoading(false);
     }
@@ -128,12 +139,39 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // Landing por rol: cajeros (vendedor/cajero/usuario o con caja asignada)
+    // entrando a `/` van directo a /ventas — su Caja es su home.
+    const rolesCajero = new Set(["vendedor", "cajero", "usuario"]);
+    const esCajero = !access.superAdmin && (rolesCajero.has(access.rol) || access.cajaAsignada != null);
+    if (pathname === "/" && esCajero && access.slugs.has("ventas")) {
+      router.replace("/ventas");
+      setBlockedSlug(null);
+      return;
+    }
+
     const slug = pathRequiresModuleSlug(pathname);
     if (
       slug &&
       !access.superAdmin &&
       !isModuleSlugGranted(slug, access.slugs, access.inactiveSlugs, { strict: access.strict })
     ) {
+      // Caso especial: al entrar a `/` (que requiere dashboard), si el usuario
+      // no tiene dashboard pero sí tiene otros módulos accesibles, lo mandamos
+      // automáticamente a su landing en lugar de mostrar el cartel
+      // "Módulo no habilitado". Solo aplica a la raíz para no ocultar bloqueos
+      // en clicks intencionales del menú.
+      if (pathname === "/" && slug === "dashboard") {
+        const fallback = firstAccessibleHref(access.slugs, {
+          superAdmin: false,
+          inactiveSlugs: access.inactiveSlugs,
+          strict: access.strict,
+        });
+        if (fallback && fallback !== "/" && fallback !== "/login") {
+          router.replace(fallback);
+          setBlockedSlug(null);
+          return;
+        }
+      }
       setBlockedSlug(slug);
       return;
     }

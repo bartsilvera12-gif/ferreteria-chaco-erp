@@ -12,6 +12,7 @@ import type { Producto } from "@/lib/inventario/types";
 import { CARD_SURCHARGE_PCT, calcularRecargoTarjeta } from "@/lib/ventas/recargo-tarjeta";
 import { getCajasAbiertas } from "@/lib/caja/storage";
 import type { Caja } from "@/lib/caja/types";
+import { getCurrentUser } from "@/lib/auth";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -132,16 +133,34 @@ export default function NuevaVentaPage() {
   const [pedidoNumero, setPedidoNumero] = useState<string | null>(null);
 
   // Selector de caja: el cajero elige sobre cuál de las 3 cajas imputa esta venta.
-  // Si solo hay una abierta se selecciona sola; si no hay ninguna se permite vender sin caja.
+  // Si tiene caja asignada (cajero1→Caja1 etc), se preselecciona automáticamente.
+  // Si solo hay una abierta también se autoselecciona.
   const [cajasAbiertas, setCajasAbiertas] = useState<Caja[]>([]);
   const [cajaId, setCajaId] = useState<string | null>(null);
+  const [cajaAsignadaNumero, setCajaAsignadaNumero] = useState<number | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void getCajasAbiertas().then((lista) => {
+    (async () => {
+      const [lista, cu] = await Promise.all([
+        getCajasAbiertas(),
+        getCurrentUser().catch(() => null),
+      ]);
       if (cancelled) return;
       setCajasAbiertas(lista);
-      if (lista.length === 1) setCajaId(lista[0].id);
-    });
+      let asignada: number | null = null;
+      if (cu?.numero_caja_asignada != null) {
+        const n = Number(cu.numero_caja_asignada);
+        if (Number.isInteger(n) && n >= 1 && n <= 3) asignada = n;
+      }
+      setCajaAsignadaNumero(asignada);
+      // Preselección: por asignación primero, luego por única caja abierta.
+      if (asignada) {
+        const c = lista.find((x) => x.numero_caja === asignada);
+        if (c) setCajaId(c.id);
+      } else if (lista.length === 1) {
+        setCajaId(lista[0].id);
+      }
+    })();
     return () => { cancelled = true; };
   }, []);
 
@@ -747,7 +766,10 @@ export default function NuevaVentaPage() {
             Imputar a la caja
           </div>
           <div className="flex flex-wrap gap-2">
-            {cajasAbiertas.map((c) => (
+            {(cajaAsignadaNumero != null
+              ? cajasAbiertas.filter((c) => c.numero_caja === cajaAsignadaNumero)
+              : cajasAbiertas
+            ).map((c) => (
               <button
                 key={c.id}
                 type="button"

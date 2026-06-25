@@ -17,6 +17,8 @@ export type CurrentUsuario = {
   fecha_nacimiento?: string | null;
   auth_user_id?: string | null;
   created_at?: string | null;
+  /** Cajero asignado a una caja específica (1/2/3). Null = sin asignación, ve todas. */
+  numero_caja_asignada?: number | null;
 };
 
 export async function signIn(email: string, password: string) {
