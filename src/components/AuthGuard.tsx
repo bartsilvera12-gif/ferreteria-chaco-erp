@@ -196,6 +196,18 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
   // Esperamos a que termine la auth Y a que el Sidebar reporte que cargó sus módulos.
   const showLoader = !isPublic && (loading || !sidebarReady);
 
+  // Si estamos en "/" y el usuario es cajero (va a ser redirigido a /ventas),
+  // NO renderizamos el dashboard en background — solo el loader. Esto evita el
+  // "flash" de la home del admin antes del replace.
+  const rolesCajeroSet = new Set(["vendedor", "cajero", "usuario"]);
+  const vaARedirigirseDeRaiz =
+    !isPublic &&
+    pathname === "/" &&
+    !!access &&
+    !access.superAdmin &&
+    (rolesCajeroSet.has(access.rol) || access.cajaAsignada != null) &&
+    access.slugs.has("ventas");
+
   if (blockedSlug && access) {
     const fallback = firstAccessibleHref(access.slugs, {
       superAdmin: access.superAdmin,
@@ -224,6 +236,13 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     );
+  }
+
+  // Mientras se procesa el redirect de cajero /, mostramos solo el loader y
+  // NO montamos el dashboard. Cuando router.replace lleve a /ventas, este flag
+  // se vuelve false (pathname cambió) y children renderiza el destino correcto.
+  if (vaARedirigirseDeRaiz) {
+    return <ZentraLoader overlay />;
   }
 
   return (
