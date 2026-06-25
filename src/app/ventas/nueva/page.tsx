@@ -702,6 +702,12 @@ export default function NuevaVentaPage() {
         setErrorVenta(resultado.error);
         return;
       }
+      // Abrir ticket en otra ventana (como si imprimieran) y volver al listado.
+      try {
+        if (resultado.venta?.id) {
+          window.open(`/api/ventas/${resultado.venta.id}/ticket`, "_blank", "noopener,noreferrer");
+        }
+      } catch { /* si el popup queda bloqueado, no rompe la venta */ }
       router.push("/ventas");
     } finally {
       // Liberar el guard SIEMPRE: éxito, error o flujo de "confirmar sin stock".
