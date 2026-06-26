@@ -497,43 +497,14 @@ function NuevoClienteForm() {
                   {form.tipo_cliente === "empresa" ? "RUC" : "CI / Documento"}
                 </label>
                 {form.tipo_cliente === "empresa" ? (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      name="ruc"
-                      value={form.ruc}
-                      onChange={handleChange}
-                      placeholder="00000000-0"
-                      className={`${inputClass} flex-1`}
-                    />
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const ruc = form.ruc.trim();
-                        if (!ruc) return;
-                        try {
-                          const r = await fetch(`/api/dnit/consulta-ruc?ruc=${encodeURIComponent(ruc)}`);
-                          const j = await r.json();
-                          if (j?.found && typeof j.razon_social === "string") {
-                            setForm((prev) => ({
-                              ...prev,
-                              empresa: j.razon_social,
-                              nombre_contacto: prev.nombre_contacto || j.razon_social,
-                              ruc: j.ruc_completo ?? prev.ruc,
-                            }));
-                          } else {
-                            alert(j?.mensaje || "RUC no encontrado. Cargá los datos manualmente.");
-                          }
-                        } catch {
-                          alert("No se pudo consultar el RUC ahora. Cargá los datos manualmente.");
-                        }
-                      }}
-                      className="px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition shrink-0"
-                      title="Consultar nombre por RUC (DNIT)"
-                    >
-                      Buscar RUC
-                    </button>
-                  </div>
+                  <input
+                    type="text"
+                    name="ruc"
+                    value={form.ruc}
+                    onChange={handleChange}
+                    placeholder="00000000-0"
+                    className={inputClass}
+                  />
                 ) : (
                   <input
                     type="text"
