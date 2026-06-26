@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getCompras } from "@/lib/compras/storage";
 import ExportExcelButton from "@/components/ui/ExportExcelButton";
 import EdgeScrollArea from "@/components/ui/EdgeScrollArea";
@@ -30,6 +30,12 @@ function formatFecha(iso: string) {
   }
 }
 
+function formatFechaCorta(yyyymmdd: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(yyyymmdd);
+  if (!m) return yyyymmdd;
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+
 const tipoPagoBadge: Record<TipoPago, string> = {
   contado: "bg-blue-50 text-blue-700",
   credito: "bg-orange-50 text-orange-700",
@@ -46,6 +52,18 @@ type GrupoCompra = {
   total: number;
   comprobante: boolean;
 };
+
+interface CompraPago {
+  id: string;
+  numero_control: string;
+  monto: number;
+  fecha_pago: string;
+  metodo: string | null;
+  nota: string | null;
+  created_at: string;
+}
+
+type PagosState = "loading" | { items: CompraPago[]; error?: string };
 
 function agrupar(rows: Compra[]): GrupoCompra[] {
   const map = new Map<string, GrupoCompra>();
@@ -85,6 +103,7 @@ export default function ComprasPage() {
   const [busqueda, setBusqueda] = useState("");
   const [filtroTipoPago, setFiltroTipoPago] = useState<TipoPago | "">("");
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
+  const [pagosByCompra, setPagosByCompra] = useState<Record<string, PagosState>>({});
 
   useEffect(() => {
     let cancel = false;
@@ -112,11 +131,34 @@ export default function ComprasPage() {
 
   const hayFiltros = busqueda || filtroTipoPago;
 
-  function toggle(numero: string) {
+  const fetchPagos = useCallback(async (numero: string) => {
+    setPagosByCompra((prev) => ({ ...prev, [numero]: "loading" }));
+    try {
+      const r = await fetch(`/api/compras/pagos?numero_control=${encodeURIComponent(numero)}`, { cache: "no-store" });
+      const json = await r.json();
+      if (!r.ok || !json?.success) {
+        setPagosByCompra((prev) => ({ ...prev, [numero]: { items: [], error: json?.error || "No se pudieron cargar los pagos." } }));
+        return;
+      }
+      const items = (json.data ?? []).map((p: CompraPago) => ({ ...p, monto: Number(p.monto) }));
+      setPagosByCompra((prev) => ({ ...prev, [numero]: { items } }));
+    } catch {
+      setPagosByCompra((prev) => ({ ...prev, [numero]: { items: [], error: "No se pudieron cargar los pagos." } }));
+    }
+  }, []);
+
+  function toggle(g: GrupoCompra) {
+    const numero = g.numero_control;
     setExpandidos((prev) => {
       const next = new Set(prev);
-      if (next.has(numero)) next.delete(numero);
-      else next.add(numero);
+      if (next.has(numero)) {
+        next.delete(numero);
+      } else {
+        next.add(numero);
+        if (g.tipo_pago === "credito" && !(numero in pagosByCompra)) {
+          void fetchPagos(numero);
+        }
+      }
       return next;
     });
   }
@@ -195,14 +237,16 @@ export default function ComprasPage() {
                 filtrados.map((g) => {
                   const abierto = expandidos.has(g.numero_control);
                   const multi = g.items.length > 1;
+                  const esCredito = g.tipo_pago === "credito";
+                  const clickable = multi || esCredito;
                   return (
                     <FragmentRow key={g.numero_control}>
                       <tr
-                        className={`border-b border-slate-200 transition-colors hover:bg-[#4FAEB2]/[0.04] ${multi ? "cursor-pointer" : ""}`}
-                        onClick={() => multi && toggle(g.numero_control)}
+                        className={`border-b border-slate-200 transition-colors hover:bg-[#4FAEB2]/[0.04] ${clickable ? "cursor-pointer" : ""}`}
+                        onClick={() => clickable && toggle(g)}
                       >
                         <td className="py-4 pr-4 font-mono text-xs text-gray-500">
-                          {multi && <span className="mr-1 inline-block text-gray-400">{abierto ? "▾" : "▸"}</span>}
+                          {clickable && <span className="mr-1 inline-block text-gray-400">{abierto ? "▾" : "▸"}</span>}
                           {g.numero_control}
                         </td>
                         <td className="py-4 pr-4 font-medium text-gray-800">{g.proveedor_nombre}</td>
@@ -244,6 +288,19 @@ export default function ComprasPage() {
                           <td />
                         </tr>
                       ))}
+
+                      {abierto && esCredito && (
+                        <tr className="border-b border-slate-200 bg-orange-50/40">
+                          <td colSpan={7} className="px-3 py-3">
+                            <PagosPanel
+                              grupo={g}
+                              state={pagosByCompra[g.numero_control]}
+                              onRegistrado={() => fetchPagos(g.numero_control)}
+                              onReintentar={() => fetchPagos(g.numero_control)}
+                            />
+                          </td>
+                        </tr>
+                      )}
                     </FragmentRow>
                   );
                 })
@@ -262,4 +319,184 @@ export default function ComprasPage() {
 /** Wrapper para agrupar fila principal + filas de detalle sin <div> en <tbody>. */
 function FragmentRow({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
+}
+
+// ── Panel de cuotas/pagos para compras a crédito ───────────────────────────────
+function PagosPanel({
+  grupo,
+  state,
+  onRegistrado,
+  onReintentar,
+}: {
+  grupo: GrupoCompra;
+  state: PagosState | undefined;
+  onRegistrado: () => void;
+  onReintentar: () => void;
+}) {
+  const [mostrarForm, setMostrarForm] = useState(false);
+  const [monto, setMonto] = useState("");
+  const [fechaPago, setFechaPago] = useState(() => new Date().toISOString().slice(0, 10));
+  const [metodo, setMetodo] = useState("");
+  const [nota, setNota] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [errorForm, setErrorForm] = useState<string | null>(null);
+
+  if (state === undefined || state === "loading") {
+    return <p className="text-xs text-gray-500">Cargando cuotas…</p>;
+  }
+
+  const pagos = state.items;
+  const pagado = pagos.reduce((s, p) => s + Number(p.monto || 0), 0);
+  const saldo = Math.max(grupo.total - pagado, 0);
+  const cancelada = saldo <= 0.5;
+
+  async function registrar() {
+    setErrorForm(null);
+    const m = Number(monto.replace(/[^\d.-]/g, ""));
+    if (!Number.isFinite(m) || m <= 0) {
+      setErrorForm("Ingresá un monto válido.");
+      return;
+    }
+    setEnviando(true);
+    try {
+      const r = await fetch("/api/compras/pagos", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          numero_control: grupo.numero_control,
+          monto: m,
+          fecha_pago: fechaPago || undefined,
+          metodo: metodo.trim() || undefined,
+          nota: nota.trim() || undefined,
+        }),
+      });
+      const json = await r.json();
+      if (!r.ok || !json?.success) {
+        setErrorForm(json?.error || "No se pudo registrar el pago.");
+        setEnviando(false);
+        return;
+      }
+      setMonto("");
+      setMetodo("");
+      setNota("");
+      setMostrarForm(false);
+      setEnviando(false);
+      onRegistrado();
+    } catch {
+      setErrorForm("Error de red al registrar el pago.");
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-4 text-xs">
+        <span className="font-semibold uppercase tracking-wide text-orange-700">Cuotas pagadas</span>
+        <span className="text-gray-600">
+          Total: <span className="font-semibold tabular-nums text-gray-800">{formatGs(grupo.total)}</span>
+        </span>
+        <span className="text-gray-600">
+          Pagado: <span className="font-semibold tabular-nums text-emerald-700">{formatGs(pagado)}</span>
+        </span>
+        <span className="text-gray-600">
+          Saldo: <span className={`font-semibold tabular-nums ${cancelada ? "text-emerald-700" : "text-orange-700"}`}>{formatGs(saldo)}</span>
+        </span>
+        {cancelada && (
+          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+            Cancelada
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setMostrarForm((v) => !v); }}
+          disabled={cancelada}
+          className="ml-auto rounded-md border border-orange-300 bg-white px-3 py-1 text-xs font-semibold text-orange-700 transition-colors hover:bg-orange-50 disabled:opacity-50 disabled:hover:bg-white"
+        >
+          {mostrarForm ? "Cancelar" : "+ Registrar pago"}
+        </button>
+      </div>
+
+      {state.error && (
+        <div className="flex items-center gap-2 text-xs text-red-600">
+          <span>{state.error}</span>
+          <button type="button" onClick={(e) => { e.stopPropagation(); onReintentar(); }} className="underline">
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      {pagos.length === 0 ? (
+        <p className="text-xs text-gray-500">Todavía no hay pagos registrados para esta compra.</p>
+      ) : (
+        <ul className="divide-y divide-orange-100 rounded-md border border-orange-100 bg-white">
+          {pagos.map((p) => (
+            <li key={p.id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-xs">
+              <span className="font-mono text-gray-500">{formatFechaCorta(p.fecha_pago)}</span>
+              <span className="font-semibold tabular-nums text-gray-800">{formatGs(Number(p.monto))}</span>
+              {p.metodo && <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] uppercase tracking-wider text-slate-600">{p.metodo}</span>}
+              {p.nota && <span className="text-gray-500">— {p.nota}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {mostrarForm && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="grid gap-2 rounded-md border border-orange-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-4"
+        >
+          <label className="flex flex-col gap-1 text-[11px] text-slate-600">
+            Monto
+            <input
+              type="text"
+              inputMode="numeric"
+              value={monto}
+              onChange={(e) => setMonto(e.target.value)}
+              placeholder={`Hasta ${formatGs(saldo)}`}
+              className={inputFilterClass}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] text-slate-600">
+            Fecha
+            <input
+              type="date"
+              value={fechaPago}
+              onChange={(e) => setFechaPago(e.target.value)}
+              className={inputFilterClass}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] text-slate-600">
+            Método
+            <input
+              type="text"
+              value={metodo}
+              onChange={(e) => setMetodo(e.target.value)}
+              placeholder="Efectivo, transferencia…"
+              className={inputFilterClass}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] text-slate-600">
+            Nota (opcional)
+            <input
+              type="text"
+              value={nota}
+              onChange={(e) => setNota(e.target.value)}
+              className={inputFilterClass}
+            />
+          </label>
+          {errorForm && <div className="sm:col-span-2 lg:col-span-4 text-xs text-red-600">{errorForm}</div>}
+          <div className="sm:col-span-2 lg:col-span-4 flex justify-end">
+            <button
+              type="button"
+              onClick={registrar}
+              disabled={enviando}
+              className="rounded-md bg-[#4FAEB2] px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#3F8E91] disabled:opacity-60"
+            >
+              {enviando ? "Guardando…" : "Guardar pago"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
