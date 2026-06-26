@@ -390,17 +390,8 @@ function PagosPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-4 text-xs">
+      <div className="flex flex-wrap items-center gap-3 text-xs">
         <span className="font-semibold uppercase tracking-wide text-orange-700">Cuotas pagadas</span>
-        <span className="text-gray-600">
-          Total: <span className="font-semibold tabular-nums text-gray-800">{formatGs(grupo.total)}</span>
-        </span>
-        <span className="text-gray-600">
-          Pagado: <span className="font-semibold tabular-nums text-emerald-700">{formatGs(pagado)}</span>
-        </span>
-        <span className="text-gray-600">
-          Saldo: <span className={`font-semibold tabular-nums ${cancelada ? "text-emerald-700" : "text-orange-700"}`}>{formatGs(saldo)}</span>
-        </span>
         {cancelada && (
           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
             Cancelada
@@ -439,6 +430,27 @@ function PagosPanel({
           ))}
         </ul>
       )}
+
+      {/* Resumen estilo recibo */}
+      <div className="ml-auto w-full max-w-xs rounded-lg border-2 border-dashed border-orange-300 bg-white p-3 shadow-sm">
+        <div className="mb-1.5 border-b border-dashed border-orange-200 pb-1 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-orange-700">
+          Resumen de pago
+        </div>
+        <dl className="space-y-1 text-xs">
+          <div className="flex items-center justify-between">
+            <dt className="text-gray-500">Total compra</dt>
+            <dd className="font-semibold tabular-nums text-gray-800">{formatGs(grupo.total)}</dd>
+          </div>
+          <div className="flex items-center justify-between">
+            <dt className="text-gray-500">Pagado</dt>
+            <dd className="font-semibold tabular-nums text-emerald-700">− {formatGs(pagado)}</dd>
+          </div>
+          <div className="mt-1 flex items-center justify-between border-t-2 border-double border-orange-300 pt-1.5">
+            <dt className={`text-[11px] font-bold uppercase tracking-wider ${cancelada ? "text-emerald-700" : "text-orange-700"}`}>Saldo</dt>
+            <dd className={`text-base font-bold tabular-nums ${cancelada ? "text-emerald-700" : "text-orange-700"}`}>{formatGs(saldo)}</dd>
+          </div>
+        </dl>
+      </div>
 
       {mostrarForm && (
         <div
