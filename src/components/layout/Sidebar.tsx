@@ -12,7 +12,6 @@ import {
   Users,
   FileText,
   Settings,
-  UserCog,
   Building2,
   ChevronDown,
   ChevronRight,
@@ -156,7 +155,8 @@ const MENU_STRUCTURE: MenuItem[] = [
     href: "/notas-credito",
     icon: ScrollText,
   },
-  { key: "usuarios", slug: "usuarios", label: "Usuarios", href: "/usuarios", icon: UserCog },
+  // Usuarios oculto a pedido del cliente.
+  // { key: "usuarios", slug: "usuarios", label: "Usuarios", href: "/usuarios", icon: UserCog },
   {
     key: "configuracion",
     slug: "configuracion",
@@ -202,7 +202,7 @@ const MENU_FAMILIES: { id: string; titulo: string; keys: string[] }[] = [
   { id: "operaciones", titulo: "Operaciones", keys: ["inventario", "compras", "recetas", "proyectos"] },
   { id: "omnicanal", titulo: "Omnicanal", keys: ["conversaciones", "conversaciones-finalizadas", "historial-omnicanal", "monitoreo", "campanas"] },
   { id: "marketing", titulo: "Marketing y Automatización", keys: ["marketing", "marketing_ops", "sorteos"] },
-  { id: "administracion", titulo: "Administración", keys: ["usuarios", "configuracion"] },
+  { id: "administracion", titulo: "Administración", keys: ["configuracion"] },
 ];
 
 function modulosSyntheticFromMenu(): ModuloEmpresa[] {
