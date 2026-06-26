@@ -1,5 +1,4 @@
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
-import { getEmpresaId } from "@/lib/db/empresa";
 import { ymdInicioFinMesLocal } from "@/lib/fechas/calendario";
 import { getBrowserSupabaseForEmpresaData } from "@/lib/supabase/browser-data-client";
 
@@ -84,26 +83,26 @@ export async function getGastosMesActual(): Promise<Gasto[]> {
 export async function createGasto(input: GastoInput): Promise<Gasto> {
   if (input.monto <= 0) throw new Error("El monto debe ser mayor a 0");
 
-  const supabase = await getBrowserSupabaseForEmpresaData();
-  const empresa_id = await getEmpresaId();
-
-  const { data, error } = await supabase
-    .from("gastos")
-    .insert({
-      empresa_id,
-      categoria: input.categoria.trim() || null,
-      descripcion: input.descripcion.trim() || null,
+  // Usamos el endpoint server-side: empresa_id se resuelve desde la sesión,
+  // sin depender de getCurrentUser() ni del schema cache de PostgREST.
+  const res = await fetchWithSupabaseSession("/api/gastos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      categoria: input.categoria,
+      descripcion: input.descripcion,
       monto: input.monto,
       tipo: input.tipo,
       recurrente: input.recurrente,
-      frecuencia: input.frecuencia?.trim() || null,
+      frecuencia: input.frecuencia,
       fecha: input.fecha,
-    })
-    .select()
-    .single();
-
-  if (error) throw new Error(error.message);
-  return mapRow(data as Record<string, unknown>);
+    }),
+  });
+  const json = (await res.json().catch(() => ({}))) as { success?: boolean; data?: { gasto?: Record<string, unknown> }; error?: string };
+  if (!res.ok || !json.success || !json.data?.gasto) {
+    throw new Error(json.error ?? `Error al guardar (${res.status})`);
+  }
+  return mapRow(json.data.gasto);
 }
 
 export async function updateGasto(id: string, input: Partial<GastoInput>): Promise<Gasto> {
