@@ -40,7 +40,7 @@ export default function CuentasPorPagarCard() {
   if (docs === 0 && deuda === 0) return null;
 
   return (
-    <Link href="/pagos-proveedores" className="block">
+    <Link href="/compras" className="block">
       <motion.div
         whileHover={{ y: -2 }}
         className="rounded-2xl border border-rose-200 bg-rose-50/40 p-6 shadow-sm hover:shadow-md transition-shadow"
