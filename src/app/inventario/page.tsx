@@ -70,7 +70,7 @@ export default function InventarioPage() {
   // Paginación client-side. Default 50 (chico, legible, no fríe al browser
   // con 6000 filas). El usuario puede subir a 100 o "todos" si quiere ver
   // todo en una sola vista.
-  type PageSize = 10 | 50 | 100 | "todos";
+  type PageSize = 10 | 50 | 100 | 500 | 1000 | 5000 | 20000 | "todos";
   const [pageSize, setPageSize] = useState<PageSize>(50);
   const [paginaActual, setPaginaActual] = useState(0);
 
@@ -499,13 +499,17 @@ export default function InventarioPage() {
                 value={String(pageSize)}
                 onChange={(e) => {
                   const v = e.target.value;
-                  setPageSize(v === "todos" ? "todos" : (parseInt(v) as 10 | 50 | 100));
+                  setPageSize(v === "todos" ? "todos" : (parseInt(v) as 10 | 50 | 100 | 500 | 1000 | 5000 | 20000));
                 }}
                 className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/30"
               >
                 <option value="10">10</option>
                 <option value="50">50</option>
                 <option value="100">100</option>
+                <option value="500">500</option>
+                <option value="1000">1000</option>
+                <option value="5000">5000</option>
+                <option value="20000">20000</option>
                 <option value="todos">Todos</option>
               </select>
               <span className="text-xs text-slate-400">
@@ -692,13 +696,17 @@ export default function InventarioPage() {
                 value={String(pageSize)}
                 onChange={(e) => {
                   const v = e.target.value;
-                  setPageSize(v === "todos" ? "todos" : (parseInt(v) as 10 | 50 | 100));
+                  setPageSize(v === "todos" ? "todos" : (parseInt(v) as 10 | 50 | 100 | 500 | 1000 | 5000 | 20000));
                 }}
                 className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/30"
               >
                 <option value="10">10</option>
                 <option value="50">50</option>
                 <option value="100">100</option>
+                <option value="500">500</option>
+                <option value="1000">1000</option>
+                <option value="5000">5000</option>
+                <option value="20000">20000</option>
                 <option value="todos">Todos</option>
               </select>
               <span className="text-xs text-slate-400">
