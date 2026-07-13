@@ -140,11 +140,12 @@ export async function POST(request: NextRequest) {
       o.observaciones === null || o.observaciones === undefined
         ? null
         : String(o.observaciones).slice(0, 4000);
-    // Regla data-driven: leemos `empresas.permitir_venta_sin_stock_default` (boolean).
-    // Cliente puede sobreescribir vía body (`permitir_sin_stock`); si la empresa lo
-    // tiene en true (Ferretería Chaco), nunca se bloquea por falta de stock.
-    let permitirSinStock = o.permitir_sin_stock === true;
-    {
+    // Ferretería Chaco: inventario progresivo cargado por sectores. La venta
+    // NUNCA se bloquea por falta de stock — el producto queda negativo y se
+    // regulariza al hacer la próxima carga. Se lee `empresas.permitir_venta_sin_stock_default`
+    // como override (si alguna empresa la seteara en false), pero por defecto siempre true.
+    let permitirSinStock = true;
+    try {
       const sb = createServiceRoleClient();
       const ce = await sb
         .from("empresas")
@@ -152,10 +153,12 @@ export async function POST(request: NextRequest) {
         .eq("id", auth.empresa_id)
         .limit(1)
         .maybeSingle();
-      if (!ce.error && ce.data && (ce.data as { permitir_venta_sin_stock_default?: boolean }).permitir_venta_sin_stock_default === true) {
-        permitirSinStock = true;
+      if (!ce.error && ce.data) {
+        const flag = (ce.data as { permitir_venta_sin_stock_default?: boolean | null }).permitir_venta_sin_stock_default;
+        if (flag === false) permitirSinStock = false;
       }
-    }
+    } catch { /* si la columna no existe, mantenemos el default true */ }
+    if (o.permitir_sin_stock === true) permitirSinStock = true;
     // Pedido (proyecto) que se está facturando desde Caja. Opcional.
     const pedidoId = typeof o.pedido_id === "string" && o.pedido_id.trim() ? o.pedido_id.trim() : null;
 
