@@ -647,12 +647,32 @@ export default function InventarioPage() {
                       </td>
                     )}
                     <td className="py-4 pl-4 text-center">
-                      <Link
-                        href={`/inventario/${p.id}/editar`}
-                        className="inline-flex items-center justify-center min-h-[40px] rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors"
-                      >
-                        Editar
-                      </Link>
+                      <div className="inline-flex items-center gap-1.5">
+                        <Link
+                          href={`/inventario/${p.id}/editar`}
+                          className="inline-flex items-center justify-center min-h-[36px] rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors"
+                        >
+                          Editar
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!window.confirm(`¿Eliminar "${p.nombre}"? Esta acción no se puede deshacer.\n\nSi el producto tiene movimientos, se archiva (baja lógica). Si no, se borra definitivamente.`)) return;
+                            try {
+                              const r = await fetch(`/api/productos/${p.id}`, { method: "DELETE", credentials: "include" });
+                              const j = await r.json();
+                              if (!r.ok || !j?.success) throw new Error(j?.error ?? `Error ${r.status}`);
+                              setRefreshKey((k) => k + 1);
+                            } catch (e) {
+                              window.alert(e instanceof Error ? e.message : "No se pudo eliminar el producto.");
+                            }
+                          }}
+                          className="inline-flex items-center justify-center min-h-[36px] rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 hover:border-red-400 hover:bg-red-50 transition-colors"
+                          title="Eliminar producto"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

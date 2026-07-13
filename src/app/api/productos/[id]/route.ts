@@ -241,3 +241,53 @@ export async function PATCH(
     return NextResponse.json(errorResponse("No se pudo actualizar el producto."), { status: 500 });
   }
 }
+
+/**
+ * DELETE /api/productos/[id]
+ * Baja lógica: pone activo=false para preservar historia (ventas / compras
+ * referencian este producto). Si nunca se movió, borra físico.
+ */
+export async function DELETE(
+  request: NextRequest,
+  ctxParams: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await ctxParams.params;
+    if (!id) return NextResponse.json(errorResponse("id obligatorio."), { status: 400 });
+
+    const ctx = await getTenantSupabaseFromAuth(request);
+    if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
+    const { supabase: sb, auth } = ctx;
+    const empresaId = auth.empresa_id;
+
+    // Chequear si el producto tiene movimientos/ventas asociadas.
+    const mov = await sb
+      .from("movimientos_inventario")
+      .select("id", { count: "exact", head: true })
+      .eq("empresa_id", empresaId)
+      .eq("producto_id", id);
+    const tieneHistoria = (mov.count ?? 0) > 0;
+
+    if (tieneHistoria) {
+      const upd = await sb
+        .from("productos")
+        .update({ activo: false })
+        .eq("id", id)
+        .eq("empresa_id", empresaId)
+        .select("id")
+        .single();
+      if (upd.error) return NextResponse.json(errorResponse(upd.error.message), { status: 400 });
+      return NextResponse.json(successResponse({ ok: true, modo: "baja_logica" }));
+    }
+
+    // Sin historia: se puede borrar físico (con FK cleanup).
+    await sb.from("producto_categorias").delete().eq("empresa_id", empresaId).eq("producto_id", id);
+    const del = await sb.from("productos").delete().eq("id", id).eq("empresa_id", empresaId);
+    if (del.error) return NextResponse.json(errorResponse(del.error.message), { status: 400 });
+
+    return NextResponse.json(successResponse({ ok: true, modo: "borrado_fisico" }));
+  } catch (err) {
+    console.error("[/api/productos/[id] DELETE] outer", err instanceof Error ? err.message : err);
+    return NextResponse.json(errorResponse("No se pudo eliminar el producto."), { status: 500 });
+  }
+}
