@@ -32,6 +32,17 @@ export default function ExcelImportWizard({
     try {
       const fd = new FormData(); fd.append("file", file);
       const r = await fetch(previewUrl, { method: "POST", credentials: "include", body: fd });
+      const ct = (r.headers.get("content-type") || "").toLowerCase();
+      if (!ct.includes("application/json")) {
+        const txt = await r.text().catch(() => "");
+        const preview = txt.slice(0, 200).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        setError(
+          r.status >= 500
+            ? `El server tardó demasiado (${r.status}). Con archivos grandes (5k+ filas) probá importar por lotes de 2000. ${preview}`
+            : `Respuesta inválida del server (${r.status}). ${preview}`
+        );
+        return;
+      }
       const j = await r.json();
       if (!r.ok || !j?.success) { setError(j?.error ?? `Error ${r.status}`); return; }
       setPreview(j.data as PreviewResponse);
@@ -49,6 +60,17 @@ export default function ExcelImportWizard({
       fd.append("file", file);
       if (permiteCrearFaltantes) fd.append("crear_faltantes", crearFaltantes ? "1" : "0");
       const r = await fetch(commitUrl, { method: "POST", credentials: "include", body: fd });
+      const ct = (r.headers.get("content-type") || "").toLowerCase();
+      if (!ct.includes("application/json")) {
+        const txt = await r.text().catch(() => "");
+        const preview = txt.slice(0, 200).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        setError(
+          r.status >= 500
+            ? `El server tardó demasiado (${r.status}). Con archivos grandes (5k+ filas) probá importar por lotes de 2000. ${preview}`
+            : `Respuesta inválida del server (${r.status}). ${preview}`
+        );
+        return;
+      }
       const j = await r.json();
       if (!r.ok || !j?.success) { setError(j?.error ?? `Error ${r.status}`); return; }
       setCommit(j.data as CommitResponse);
