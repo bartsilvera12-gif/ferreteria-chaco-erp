@@ -150,6 +150,7 @@ export default function VentasPage() {
   const [busqueda,   setBusqueda]   = useState("");
   const [filtroTipo, setFiltroTipo] = useState<TipoVenta | "">("");
   const [filtroIva,  setFiltroIva]  = useState<TipoIvaVenta | "">("");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -165,7 +166,7 @@ export default function VentasPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshKey]);
 
   const metricas = calcularMetricas(todas);
 
@@ -395,6 +396,33 @@ export default function VentasPage() {
                           >
                             Imprimir
                           </a>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const motivo = window.prompt(
+                                `¿Anular venta ${v.numero_control}?\n\nTotal: ${formatGs(v.total)}\n\nSe revierte el stock y (si era crédito) se borra la cuenta por cobrar.\n\nMotivo (opcional):`,
+                                ""
+                              );
+                              if (motivo === null) return;
+                              try {
+                                const r = await fetch(`/api/ventas/${v.id}/anular`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  credentials: "include",
+                                  body: JSON.stringify({ motivo: motivo.trim() || null }),
+                                });
+                                const j = await r.json();
+                                if (!r.ok || !j?.success) throw new Error(j?.error ?? `Error ${r.status}`);
+                                setRefreshKey((k) => k + 1);
+                              } catch (e) {
+                                window.alert(e instanceof Error ? e.message : "No se pudo anular la venta.");
+                              }
+                            }}
+                            className="inline-flex items-center justify-center rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:border-red-400 hover:bg-red-50 transition-colors"
+                            title="Anular venta (revierte stock y CxC)"
+                          >
+                            Anular
+                          </button>
                           {v.genera_nota_remision && (
                             <a
                               href={`/api/ventas/${v.id}/ticket?tipo=remision`}
