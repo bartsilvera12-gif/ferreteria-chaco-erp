@@ -59,14 +59,28 @@ export async function GET(request: NextRequest) {
   try {
     const ctx = await getTenantSupabaseFromAuth(request);
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
-    const { data, error } = await ctx.supabase
-      .from("productos")
-      .select(PRODUCTO_COLS)
-      .eq("empresa_id", ctx.auth.empresa_id)
-      .eq("activo", true)
-      .order("nombre");
-    if (error) throw new Error(error.message);
-    const rows = ((data ?? []) as unknown as Record<string, unknown>[]).map(rowToApi);
+
+    // PostgREST tiene default max_rows=1000. Paginamos con range() para
+    // devolver TODOS los productos aunque haya miles.
+    const PAGE = 1000;
+    const MAX_PAGES = 100; // hasta 100k productos — guard contra loop infinito.
+    const all: Record<string, unknown>[] = [];
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const from = page * PAGE;
+      const to = from + PAGE - 1;
+      const { data, error } = await ctx.supabase
+        .from("productos")
+        .select(PRODUCTO_COLS)
+        .eq("empresa_id", ctx.auth.empresa_id)
+        .eq("activo", true)
+        .order("nombre")
+        .range(from, to);
+      if (error) throw new Error(error.message);
+      const chunk = (data ?? []) as unknown as Record<string, unknown>[];
+      all.push(...chunk);
+      if (chunk.length < PAGE) break; // última página.
+    }
+    const rows = all.map(rowToApi);
     return NextResponse.json(successResponse({ productos: rows }));
   } catch (err) {
     console.error("[/api/productos GET]", err instanceof Error ? err.message : err);
