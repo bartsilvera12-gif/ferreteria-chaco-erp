@@ -323,10 +323,105 @@ export async function commitProductos(
     }
   }
 
-  // Procesar productos en chunks
-  for (const chunk of chunked(parsed, 200)) {
+  // ── Bulk UPDATE optimization ─────────────────────────────────────────────
+  // Para archivos grandes (miles de rows), la vieja lógica hacía 1 SELECT + 1 UPDATE
+  // + 1 INSERT movimiento por fila = 3N queries que se van a timeout.
+  // Ahora agrupamos los UPDATEs por chunks y hacemos UPDATE ... FROM VALUES en
+  // una sola query por chunk. Los INSERTs quedan per-row (nombre_barras interno
+  // usa una secuencia). Los movimientos se generan solo si stock cambia.
+  const toUpdate = parsed.filter((p) => p.errors.length === 0 && p.match_id);
+  const toInsert = parsed.filter((p) => p.errors.length === 0 && !p.match_id);
+  const parsedWithErrors = parsed.filter((p) => p.errors.length > 0);
+  for (const p of parsedWithErrors) {
+    out.errors++;
+    out.errorMessages.push(`Fila ${p.row_number}: ${p.errors.join("; ")}`);
+  }
+
+  // Bulk UPDATE en chunks de 500 filas.
+  for (const chunk of chunked(toUpdate, 500)) {
+    try {
+      const ids = chunk.map((p) => p.match_id as string);
+      const prevQ = await pool.query<{ id: string; stock_actual: string | number }>(
+        `SELECT id::text, stock_actual FROM ${tP} WHERE empresa_id=$1::uuid AND id = ANY($2::uuid[])`,
+        [empresaId, ids]
+      );
+      const prevMap = new Map<string, number>();
+      for (const r of prevQ.rows) prevMap.set(String(r.id), Number(r.stock_actual) || 0);
+
+      // UPDATE bulk usando FROM (VALUES ...): 1 sola query para el chunk.
+      const params: unknown[] = [empresaId];
+      const rowLits: string[] = [];
+      for (const p of chunk) {
+        const categoriaId = p.categoria_nombre ? maps.categoriasByName.get(p.categoria_nombre) ?? null : null;
+        const proveedorId = p.proveedor_nombre ? maps.proveedoresByName.get(p.proveedor_nombre) ?? null : null;
+        const ubicacionId = p.ubicacion_nombre
+          ? (maps.ubicacionesByName.get(p.ubicacion_nombre) ?? maps.ubicacionesByCodigo.get(p.ubicacion_nombre) ?? null)
+          : null;
+        const base = params.length + 1;
+        params.push(
+          p.match_id, p.nombre, p.sku, p.codigo_barras || null,
+          p.unidad_medida, p.costo_promedio, p.precio_venta,
+          p.stock_actual, p.stock_minimo, p.metodo_valuacion, p.activo,
+          categoriaId, proveedorId, ubicacionId
+        );
+        rowLits.push(
+          `($${base}::uuid, $${base + 1}, $${base + 2}, $${base + 3},
+            $${base + 4}, $${base + 5}::numeric, $${base + 6}::numeric,
+            $${base + 7}::numeric, $${base + 8}::numeric, $${base + 9}, $${base + 10}::boolean,
+            $${base + 11}::uuid, $${base + 12}::uuid, $${base + 13}::uuid)`
+        );
+      }
+      const sql = `
+        UPDATE ${tP} p SET
+          nombre = d.nombre,
+          sku = d.sku,
+          codigo_barras = d.codigo_barras,
+          unidad_medida = d.unidad_medida,
+          costo_promedio = d.costo_promedio,
+          precio_venta = d.precio_venta,
+          stock_actual = d.stock_actual,
+          stock_minimo = d.stock_minimo,
+          metodo_valuacion = d.metodo_valuacion,
+          activo = d.activo,
+          categoria_principal_id = d.categoria_principal_id,
+          proveedor_principal_id = d.proveedor_principal_id,
+          ubicacion_principal_id = d.ubicacion_principal_id,
+          updated_at = now()
+        FROM (VALUES ${rowLits.join(", ")}) AS d(
+          id, nombre, sku, codigo_barras, unidad_medida, costo_promedio, precio_venta,
+          stock_actual, stock_minimo, metodo_valuacion, activo,
+          categoria_principal_id, proveedor_principal_id, ubicacion_principal_id
+        )
+        WHERE p.id = d.id AND p.empresa_id = $1::uuid`;
+      await pool.query(sql, params);
+      out.updated += chunk.length;
+
+      // Generar movimientos por delta (best-effort, per-row porque necesita
+      // el prev stock que ya cargamos en prevMap).
+      for (const p of chunk) {
+        const stockAnterior = prevMap.get(p.match_id!) ?? 0;
+        const delta = p.stock_actual - stockAnterior;
+        if (delta !== 0) {
+          await registrarMovimiento(
+            p.match_id!, p.nombre, p.sku,
+            delta > 0 ? "ENTRADA" : "SALIDA", "ajuste_manual",
+            Math.abs(delta), p.costo_promedio,
+            `Δ ${delta > 0 ? "+" : ""}${delta} (prev=${stockAnterior} new=${p.stock_actual})`
+          );
+        }
+        if (p.warnings.length > 0) out.warnings++;
+      }
+    } catch (e) {
+      // Si el bulk UPDATE falla, marcar todo el chunk como error (raro pero seguro).
+      out.errors += chunk.length;
+      const msg = (e as Error).message.slice(0, 200);
+      out.errorMessages.push(`Bulk UPDATE fallo (${chunk.length} filas): ${msg}`);
+    }
+  }
+
+  // Procesar INSERTs en chunks (per-row, requieren secuencia codigo_barras interno).
+  for (const chunk of chunked(toInsert, 200)) {
     for (const p of chunk) {
-      if (p.errors.length > 0) { out.errors++; out.errorMessages.push(`Fila ${p.row_number}: ${p.errors.join("; ")}`); continue; }
       const categoriaId = p.categoria_nombre ? maps.categoriasByName.get(p.categoria_nombre) ?? null : null;
       const proveedorId = p.proveedor_nombre ? maps.proveedoresByName.get(p.proveedor_nombre) ?? null : null;
       const ubicacionId = p.ubicacion_nombre
@@ -334,74 +429,41 @@ export async function commitProductos(
         : null;
 
       try {
-        if (p.match_id) {
-          // UPDATE — leer stock anterior para calcular delta y generar movimiento
-          const prevQ = await pool.query<{ stock_actual: string | number; nombre: string; sku: string }>(
-            `SELECT stock_actual, nombre, sku FROM ${tP} WHERE id=$1::uuid AND empresa_id=$2::uuid`,
-            [p.match_id, empresaId]
+        // Generar codigo_barras_interno si no vino
+        let codigoBarras = p.codigo_barras;
+        let codigoInterno = false;
+        if (!codigoBarras) {
+          try {
+            const r = await pool.query<{ v: string }>(`SELECT ${tSec}($1::uuid) AS v`, [empresaId]);
+            const seq = Number(r.rows[0]?.v ?? 0);
+            if (seq > 0) {
+              codigoBarras = `INT-${String(seq).padStart(6, "0")}`;
+              codigoInterno = true;
+            }
+          } catch (e) { out.warningMessages.push(`Fila ${p.row_number}: no se pudo generar código interno (${(e as Error).message})`); }
+        }
+        const inserted = await pool.query<{ id: string }>(
+          `INSERT INTO ${tP} (
+             empresa_id, nombre, sku, codigo_barras, codigo_barras_interno,
+             unidad_medida, costo_promedio, precio_venta, stock_actual, stock_minimo,
+             metodo_valuacion, activo, categoria_principal_id, proveedor_principal_id, ubicacion_principal_id
+           ) VALUES (
+             $1::uuid, $2, NULLIF($3,''), NULLIF($4,''), $5::boolean,
+             $6, $7::numeric, $8::numeric, $9::numeric, $10::numeric,
+             $11, $12::boolean, $13::uuid, $14::uuid, $15::uuid
+           ) RETURNING id`,
+          [empresaId, p.nombre, p.sku, codigoBarras, codigoInterno,
+           p.unidad_medida, p.costo_promedio, p.precio_venta, p.stock_actual, p.stock_minimo,
+           p.metodo_valuacion, p.activo, categoriaId, proveedorId, ubicacionId]
+        );
+        out.inserted++;
+        // Movimiento de inventario inicial si stock > 0
+        if (p.stock_actual > 0 && inserted.rows[0]?.id) {
+          await registrarMovimiento(
+            inserted.rows[0].id, p.nombre, p.sku,
+            "ENTRADA", "inventario_inicial",
+            p.stock_actual, p.costo_promedio
           );
-          const stockAnterior = Number(prevQ.rows[0]?.stock_actual ?? 0);
-          await pool.query(
-            `UPDATE ${tP} SET
-               nombre=$1, sku=$2, codigo_barras=NULLIF($3,''),
-               unidad_medida=$4, costo_promedio=$5::numeric, precio_venta=$6::numeric,
-               stock_actual=$7::numeric, stock_minimo=$8::numeric,
-               metodo_valuacion=$9, activo=$10::boolean,
-               categoria_principal_id=$11::uuid, proveedor_principal_id=$12::uuid, ubicacion_principal_id=$13::uuid,
-               updated_at=now()
-             WHERE id=$14::uuid AND empresa_id=$15::uuid`,
-            [p.nombre, p.sku, p.codigo_barras, p.unidad_medida, p.costo_promedio, p.precio_venta,
-             p.stock_actual, p.stock_minimo, p.metodo_valuacion, p.activo,
-             categoriaId, proveedorId, ubicacionId, p.match_id, empresaId]
-          );
-          out.updated++;
-          // Movimiento por delta (ajuste_manual + ENTRADA/SALIDA segun signo)
-          const delta = p.stock_actual - stockAnterior;
-          if (delta !== 0) {
-            await registrarMovimiento(
-              p.match_id, p.nombre, p.sku,
-              delta > 0 ? "ENTRADA" : "SALIDA", "ajuste_manual",
-              Math.abs(delta), p.costo_promedio,
-              `Δ ${delta > 0 ? "+" : ""}${delta} (prev=${stockAnterior} new=${p.stock_actual})`
-            );
-          }
-        } else {
-          // Generar codigo_barras_interno si no vino
-          let codigoBarras = p.codigo_barras;
-          let codigoInterno = false;
-          if (!codigoBarras) {
-            try {
-              const r = await pool.query<{ v: string }>(`SELECT ${tSec}($1::uuid) AS v`, [empresaId]);
-              const seq = Number(r.rows[0]?.v ?? 0);
-              if (seq > 0) {
-                codigoBarras = `INT-${String(seq).padStart(6, "0")}`;
-                codigoInterno = true;
-              }
-            } catch (e) { out.warningMessages.push(`Fila ${p.row_number}: no se pudo generar código interno (${(e as Error).message})`); }
-          }
-          const inserted = await pool.query<{ id: string }>(
-            `INSERT INTO ${tP} (
-               empresa_id, nombre, sku, codigo_barras, codigo_barras_interno,
-               unidad_medida, costo_promedio, precio_venta, stock_actual, stock_minimo,
-               metodo_valuacion, activo, categoria_principal_id, proveedor_principal_id, ubicacion_principal_id
-             ) VALUES (
-               $1::uuid, $2, NULLIF($3,''), NULLIF($4,''), $5::boolean,
-               $6, $7::numeric, $8::numeric, $9::numeric, $10::numeric,
-               $11, $12::boolean, $13::uuid, $14::uuid, $15::uuid
-             ) RETURNING id`,
-            [empresaId, p.nombre, p.sku, codigoBarras, codigoInterno,
-             p.unidad_medida, p.costo_promedio, p.precio_venta, p.stock_actual, p.stock_minimo,
-             p.metodo_valuacion, p.activo, categoriaId, proveedorId, ubicacionId]
-          );
-          out.inserted++;
-          // Movimiento de inventario inicial si stock > 0
-          if (p.stock_actual > 0 && inserted.rows[0]?.id) {
-            await registrarMovimiento(
-              inserted.rows[0].id, p.nombre, p.sku,
-              "ENTRADA", "inventario_inicial",
-              p.stock_actual, p.costo_promedio
-            );
-          }
         }
         if (p.warnings.length > 0) out.warnings++;
       } catch (e) {
