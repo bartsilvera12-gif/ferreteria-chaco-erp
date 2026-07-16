@@ -338,17 +338,22 @@ export default function EditarProductoPage() {
       }
 
       const cambioCodigo = codigoIngresado !== (codigoOriginal ?? "");
+      // Ferretería Chaco: sólo se cargan Precio efectivo y Precio tarjeta. El
+      // legacy `precio_venta` refleja el efectivo para compat con SIFEN/reportes;
+      // mayorista/distribuidor/mínima se limpian.
+      const precioEfectivoNum = form.precio_efectivo.trim() !== "" ? parseFloat(form.precio_efectivo) || 0 : 0;
+      const precioTarjetaNum = form.precio_tarjeta.trim() !== "" ? parseFloat(form.precio_tarjeta) || null : null;
       const updatePayload: Parameters<typeof updateProducto>[1] = {
         nombre: form.nombre.trim().toUpperCase(),
         sku: form.sku.trim().toUpperCase(),
         costo_promedio: parseFloat(form.costo_promedio) || 0,
-        precio_venta: parseFloat(form.precio_venta) || 0,
-        precio_mayorista: form.precio_mayorista.trim() !== "" ? parseFloat(form.precio_mayorista) || null : null,
-        cantidad_minima_mayorista: form.cantidad_minima_mayorista.trim() !== "" ? parseFloat(form.cantidad_minima_mayorista) || null : null,
-        precio_distribuidor: form.precio_distribuidor.trim() !== "" ? parseFloat(form.precio_distribuidor) || null : null,
-        es_pintura: esPintura,
-        precio_efectivo: esPintura && form.precio_efectivo.trim() !== "" ? parseFloat(form.precio_efectivo) || null : null,
-        precio_tarjeta: esPintura && form.precio_tarjeta.trim() !== "" ? parseFloat(form.precio_tarjeta) || null : null,
+        precio_venta: precioEfectivoNum,
+        precio_mayorista: null,
+        cantidad_minima_mayorista: null,
+        precio_distribuidor: null,
+        es_pintura: true,
+        precio_efectivo: precioEfectivoNum || null,
+        precio_tarjeta: precioTarjetaNum,
         stock_actual: parseInt(form.stock_actual) || 0,
         stock_minimo: parseInt(form.stock_minimo) || 0,
         unidad_medida: form.unidad_medida.trim().toUpperCase() || "UNIDAD",
@@ -796,7 +801,7 @@ export default function EditarProductoPage() {
             <p className="text-xs text-gray-400 mb-3 uppercase tracking-wide font-semibold">
               {showPrecioVenta ? "Precios" : "Costo de adquisición"}
             </p>
-            <div className={`grid grid-cols-1 gap-6 ${showPrecioVenta ? "sm:grid-cols-3" : ""}`}>
+            <div className="grid grid-cols-1 gap-6">
               <div>
                 <label className={labelClass}>{showPrecioVenta ? "Costo promedio (Gs.)" : "Costo promedio / adquisición (Gs.)"}</label>
                 <MontoInput
@@ -807,111 +812,36 @@ export default function EditarProductoPage() {
                   required
                 />
               </div>
-              {showPrecioVenta && (
-              <div>
-                <label className={labelClass}>Markup s/costo (%)</label>
-                <input
-                  type="number"
-                  name="markup"
-                  value={form.markup}
-                  onChange={handleMarkupChange}
-                  className={inputClass}
-                  step="0.01"
-                />
-              </div>
-              )}
-              <div className={showPrecioVenta ? "" : "hidden"}>
-                <label className={labelClass}>Precio de venta (Gs.)</label>
-                <MontoInput
-                  value={form.precio_venta}
-                  onChange={handlePrecioChange}
-                  className={inputClass}
-                  decimals={false}
-                  required={showPrecioVenta}
-                />
+              {/* Precio de venta (legacy) — se autocompleta con Precio efectivo al guardar. Ocultado en la UI. */}
+              <div className="hidden">
+                <MontoInput value={form.precio_venta} onChange={handlePrecioChange} className={inputClass} decimals={false} />
               </div>
             </div>
             {showPrecioVenta && (
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className={labelClass}>Precio mayorista (Gs.) <span className="text-gray-400 font-normal">(opcional)</span></label>
+                  <label className={labelClass}>Precio efectivo / transferencia (Gs.)</label>
                   <MontoInput
-                    value={form.precio_mayorista}
-                    onChange={(n) => setForm((prev) => ({ ...prev, precio_mayorista: String(n) }))}
-                    placeholder="Ej: 22000"
+                    value={form.precio_efectivo}
+                    onChange={(n) => setForm((prev) => ({ ...prev, precio_efectivo: String(n) }))}
+                    placeholder="Ej: 50000"
                     className={inputClass}
                     decimals={false}
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Cantidad mínima mayorista <span className="text-gray-400 font-normal">(opcional)</span></label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="any"
-                    value={form.cantidad_minima_mayorista}
-                    onChange={(e) => setForm((prev) => ({ ...prev, cantidad_minima_mayorista: e.target.value }))}
-                    placeholder="Ej: 10"
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Precio distribuidor (Gs.) <span className="text-gray-400 font-normal">(opcional)</span></label>
+                  <label className={labelClass}>Precio tarjeta (Gs.)</label>
                   <MontoInput
-                    value={form.precio_distribuidor}
-                    onChange={(n) => setForm((prev) => ({ ...prev, precio_distribuidor: String(n) }))}
-                    placeholder="Ej: 18000"
+                    value={form.precio_tarjeta}
+                    onChange={(n) => setForm((prev) => ({ ...prev, precio_tarjeta: String(n) }))}
+                    placeholder="Ej: 55000"
                     className={inputClass}
                     decimals={false}
                   />
                 </div>
-                <p className="sm:col-span-2 text-xs text-gray-400">
-                  Precios por canal: en Ventas el cajero elige Minorista, Mayorista o Distribuidor. El precio distribuidor es comercial (no es el costo).
+                <p className="sm:col-span-2 text-xs text-gray-500">
+                  El POS usa el precio efectivo por defecto; si el cobro es con tarjeta, cambia al precio tarjeta.
                 </p>
-              </div>
-            )}
-            {showPrecioVenta && (
-              <div className="mt-4 border border-gray-200 rounded-lg p-4 bg-gray-50">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={esPintura}
-                    onChange={(e) => setEsPintura(e.target.checked)}
-                    className="w-4 h-4"
-                  />
-                  <span className="text-sm font-medium text-gray-700">
-                    Es pintura (precio diferenciado efectivo / tarjeta)
-                  </span>
-                </label>
-                {esPintura && (
-                  <>
-                    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div>
-                        <label className={labelClass}>Precio efectivo / transferencia (Gs.)</label>
-                        <MontoInput
-                          value={form.precio_efectivo}
-                          onChange={(n) => setForm((prev) => ({ ...prev, precio_efectivo: String(n) }))}
-                          placeholder="Ej: 50000"
-                          className={inputClass}
-                          decimals={false}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Precio tarjeta (Gs.)</label>
-                        <MontoInput
-                          value={form.precio_tarjeta}
-                          onChange={(n) => setForm((prev) => ({ ...prev, precio_tarjeta: String(n) }))}
-                          placeholder="Ej: 55000"
-                          className={inputClass}
-                          decimals={false}
-                        />
-                      </div>
-                    </div>
-                    <p className="mt-2 text-xs text-gray-500">
-                      Cuando ambos precios están cargados, la venta usa el precio correspondiente al método de pago y esta línea NO recibe el recargo global del 4% de tarjeta.
-                    </p>
-                  </>
-                )}
               </div>
             )}
             {showPrecioVenta && tieneAmbos && markupCalc !== null && margenVentaCalc !== null && (
