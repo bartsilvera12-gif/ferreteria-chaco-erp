@@ -34,7 +34,12 @@ const inputClass =
 type ModalKind = null | "abrir" | "cerrar" | "mov";
 
 /** Hasta 3 cajas concurrentes — una por estación física (1, 2, 3). */
-const NUMEROS_CAJA = [1, 2, 3] as const;
+/**
+ * Ferretería Chaco: el admin opera con UNA sola caja (la propia).
+ * Los cajeros con `numero_caja_asignada` (1/2/3) siguen viendo su caja
+ * específica — el filtro por asignación tiene prioridad sobre este default.
+ */
+const NUMEROS_CAJA = [1] as const;
 
 export default function CajaControlPanel({
   onStateChange,

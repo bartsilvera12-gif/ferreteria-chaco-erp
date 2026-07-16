@@ -40,6 +40,9 @@ function precioPorTipo(p: Producto, tipo: TipoPrecioVenta): number {
   if (tipo === "mayorista") return p.precio_mayorista != null && p.precio_mayorista > 0 ? p.precio_mayorista : p.precio_venta;
   if (tipo === "distribuidor") return p.precio_distribuidor != null && p.precio_distribuidor > 0 ? p.precio_distribuidor : p.precio_venta;
   if (tipo === "costo") return p.costo_promedio ?? 0; // histórico: ya no se ofrece en la UI
+  // Pintura: si tiene precio_efectivo cargado, usarlo como base minorista
+  // (contado). Al confirmar con tarjeta se re-precia a precio_tarjeta.
+  if (p.es_pintura && p.precio_efectivo != null && p.precio_efectivo > 0) return p.precio_efectivo;
   return p.precio_venta;
 }
 
@@ -487,21 +490,56 @@ export default function NuevaVentaPage() {
   const totalSubtotalContado = items.reduce((s, i) => s + i.subtotal, 0);
   const totalIvaContado      = items.reduce((s, i) => s + i.monto_iva, 0);
   const totalContado         = items.reduce((s, i) => s + i.total_linea, 0);
+  // Precio diferenciado pintura: si el producto es pintura y tiene AMBOS precios
+  // cargados (efectivo y tarjeta), se usa el precio del método correspondiente y
+  // esa línea NO recibe el recargo global del 4% de tarjeta.
+  const productoPintura = (producto_id: string) => {
+    const p = productos.find((x) => String(x.id) === String(producto_id));
+    if (!p || p.es_pintura !== true) return null;
+    if (p.precio_efectivo == null || p.precio_tarjeta == null) return null;
+    return p;
+  };
   // Recargo automático 4% cuando el cobro es con tarjeta (Ferretería Chaco).
-  // Los ítems en pantalla se muestran a precio contado; al confirmar la venta con
-  // tarjeta, cada línea se escala 1.04 antes de enviarse (ver `itemsParaEnviar`).
-  const recargoTarjeta = calcularRecargoTarjeta(totalContado, metodoPago);
-  const factorRecargo  = totalContado > 0 ? (totalContado + recargoTarjeta) / totalContado : 1;
-  const itemsParaEnviar = recargoTarjeta > 0
-    ? items.map((i) => ({
+  // Se calcula solo sobre las líneas NO-pintura. Los ítems en pantalla se
+  // muestran a precio contado; al confirmar la venta con tarjeta las líneas
+  // no-pintura se escalan 1.04 y las líneas pintura se re-precian al
+  // precio_tarjeta cargado (ver `itemsParaEnviar`).
+  const totalContadoNoPintura = items.reduce(
+    (s, i) => s + (productoPintura(i.producto_id) ? 0 : i.total_linea),
+    0
+  );
+  const recargoTarjeta = calcularRecargoTarjeta(totalContadoNoPintura, metodoPago);
+  const factorRecargo  = totalContadoNoPintura > 0 ? (totalContadoNoPintura + recargoTarjeta) / totalContadoNoPintura : 1;
+  const itemsParaEnviar = items.map((i) => {
+    const pint = productoPintura(i.producto_id);
+    if (pint) {
+      const nuevoPrecio = metodoPago === "tarjeta"
+        ? Number(pint.precio_tarjeta)
+        : Number(pint.precio_efectivo);
+      if (!Number.isFinite(nuevoPrecio) || nuevoPrecio === i.precio_venta) return i;
+      const totalLinea = nuevoPrecio * i.cantidad;
+      const montoIva = calcIva(i.tipo_iva, totalLinea);
+      return {
+        ...i,
+        precio_venta:          nuevoPrecio,
+        precio_venta_original: nuevoPrecio,
+        subtotal:              totalLinea - montoIva,
+        monto_iva:             montoIva,
+        total_linea:           totalLinea,
+      };
+    }
+    if (recargoTarjeta > 0) {
+      return {
         ...i,
         precio_venta:          i.precio_venta * factorRecargo,
         precio_venta_original: i.precio_venta_original * factorRecargo,
         subtotal:              i.subtotal * factorRecargo,
         monto_iva:             i.monto_iva * factorRecargo,
         total_linea:           i.total_linea * factorRecargo,
-      }))
-    : items;
+      };
+    }
+    return i;
+  });
   const totalGeneral  = itemsParaEnviar.reduce((s, i) => s + i.total_linea, 0);
   const totalSubtotal = itemsParaEnviar.reduce((s, i) => s + i.subtotal, 0);
   const totalIva      = itemsParaEnviar.reduce((s, i) => s + i.monto_iva, 0);

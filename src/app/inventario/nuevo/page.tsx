@@ -41,6 +41,8 @@ export default function NuevoProductoPage() {
     precio_venta: "",
     precio_mayorista: "",
     precio_distribuidor: "",
+    precio_efectivo: "",
+    precio_tarjeta: "",
     cantidad_minima_mayorista: "",
     stock_actual: "",
     stock_minimo: "",
@@ -101,6 +103,9 @@ export default function NuevoProductoPage() {
   // Configuración gastronómica
   const [controlaStock, setControlaStock] = useState(true);
   const [valorizado, setValorizado] = useState(true);
+
+  // Pintura: habilita precios diferenciados efectivo/tarjeta (excluye del recargo global del 4%).
+  const [esPintura, setEsPintura] = useState(false);
   const [unidadCompra, setUnidadCompra] = useState("");
   const [unidadReceta, setUnidadReceta] = useState("");
   const [factorCompraReceta, setFactorCompraReceta] = useState("1");
@@ -342,6 +347,9 @@ export default function NuevoProductoPage() {
           precio_venta: parseFloat(form.precio_venta) || 0,
           precio_mayorista: form.precio_mayorista.trim() !== "" ? parseFloat(form.precio_mayorista) || null : null,
           precio_distribuidor: form.precio_distribuidor.trim() !== "" ? parseFloat(form.precio_distribuidor) || null : null,
+          es_pintura: esPintura,
+          precio_efectivo: esPintura && form.precio_efectivo.trim() !== "" ? parseFloat(form.precio_efectivo) || null : null,
+          precio_tarjeta: esPintura && form.precio_tarjeta.trim() !== "" ? parseFloat(form.precio_tarjeta) || null : null,
           cantidad_minima_mayorista: form.cantidad_minima_mayorista.trim() !== "" ? parseFloat(form.cantidad_minima_mayorista) || null : null,
           stock_actual: parseInt(form.stock_actual) || 0,
           stock_minimo: parseInt(form.stock_minimo) || 0,
@@ -801,6 +809,51 @@ export default function NuevoProductoPage() {
                 <p className="sm:col-span-2 text-xs text-gray-400">
                   Precios por canal: en Ventas el cajero elige Minorista, Mayorista o Distribuidor. El precio distribuidor es comercial (no es el costo).
                 </p>
+              </div>
+            )}
+
+            {showPrecioVenta && (
+              <div className="mt-4 border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={esPintura}
+                    onChange={(e) => setEsPintura(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    Es pintura (precio diferenciado efectivo / tarjeta)
+                  </span>
+                </label>
+                {esPintura && (
+                  <>
+                    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className={labelClass}>Precio efectivo / transferencia (Gs.)</label>
+                        <MontoInput
+                          value={form.precio_efectivo}
+                          onChange={(n) => setForm((prev) => ({ ...prev, precio_efectivo: String(n) }))}
+                          placeholder="Ej: 50000"
+                          className={inputClass}
+                          decimals={false}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Precio tarjeta (Gs.)</label>
+                        <MontoInput
+                          value={form.precio_tarjeta}
+                          onChange={(n) => setForm((prev) => ({ ...prev, precio_tarjeta: String(n) }))}
+                          placeholder="Ej: 55000"
+                          className={inputClass}
+                          decimals={false}
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Cuando ambos precios están cargados, la venta usa el precio correspondiente al método de pago y esta línea NO recibe el recargo global del 4% de tarjeta.
+                    </p>
+                  </>
+                )}
               </div>
             )}
 

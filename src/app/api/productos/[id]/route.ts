@@ -11,7 +11,8 @@ const PRODUCTO_COLS =
   "codigo_barras, codigo_barras_interno, imagen_path, imagen_url, " +
   "categoria_principal_id, ubicacion_principal_id, proveedor_principal_id, " +
   "es_vendible, es_insumo, controla_stock, valorizado, unidad_compra, unidad_receta, " +
-  "factor_compra_receta, tiempo_prep_minutos, descripcion, precio_mayorista, cantidad_minima_mayorista, precio_distribuidor, modo_receta";
+  "factor_compra_receta, tiempo_prep_minutos, descripcion, precio_mayorista, cantidad_minima_mayorista, precio_distribuidor, modo_receta, " +
+  "es_pintura, precio_efectivo, precio_tarjeta";
 
 function toNumber(v: unknown): unknown {
   return typeof v === "string" ? Number(v) : v;
@@ -32,6 +33,8 @@ function rowToApi(r: Record<string, unknown>): Record<string, unknown> {
     precio_mayorista: r.precio_mayorista != null ? toNumber(r.precio_mayorista) : null,
     cantidad_minima_mayorista: r.cantidad_minima_mayorista != null ? toNumber(r.cantidad_minima_mayorista) : null,
     precio_distribuidor: r.precio_distribuidor != null ? toNumber(r.precio_distribuidor) : null,
+    precio_efectivo: r.precio_efectivo != null ? toNumber(r.precio_efectivo) : null,
+    precio_tarjeta: r.precio_tarjeta != null ? toNumber(r.precio_tarjeta) : null,
   };
 }
 
@@ -157,6 +160,9 @@ export async function PATCH(
     if (body.precio_mayorista !== undefined) patch.precio_mayorista = toNumberOrNull(body.precio_mayorista);
     if (body.cantidad_minima_mayorista !== undefined) patch.cantidad_minima_mayorista = toNumberOrNull(body.cantidad_minima_mayorista);
     if (body.precio_distribuidor !== undefined) patch.precio_distribuidor = toNumberOrNull(body.precio_distribuidor);
+    if (typeof body.es_pintura === "boolean") patch.es_pintura = body.es_pintura;
+    if (body.precio_efectivo !== undefined) patch.precio_efectivo = toNumberOrNull(body.precio_efectivo);
+    if (body.precio_tarjeta !== undefined) patch.precio_tarjeta = toNumberOrNull(body.precio_tarjeta);
     if (body.modo_receta !== undefined) {
       const mr = body.modo_receta;
       patch.modo_receta = mr === "produccion_previa" ? "produccion_previa" : "preparado_al_vender";

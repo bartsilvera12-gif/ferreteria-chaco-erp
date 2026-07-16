@@ -167,8 +167,9 @@ function renderCopia(opts: {
   fontPx: number;
   isLast: boolean;
   negocio: string;
+  cliente: ClienteRemision | null;
 }): string {
-  const { tipo, venta, items, brief, fontPx, isLast } = opts;
+  const { tipo, venta, items, brief, fontPx, isLast, cliente } = opts;
   const showPrices = tipo === "cliente";
   const sectorBadge = tipo === "pizzeria" ? "COMANDA PIZZERÍA" : tipo === "plancha" ? "COMANDA PLANCHA" : "";
   const modalidad = modalidadLabel(brief?.modalidad);
@@ -213,6 +214,24 @@ function renderCopia(opts: {
   if (brief?.direccion_entrega) datosPedido.push(`<div>Dir: ${escapeHtml(brief.direccion_entrega)}</div>`);
   const obs = brief?.observacion || venta.observaciones || "";
 
+  // Bloque cliente estilo factura (solo en copia CLIENTE)
+  const clienteHtml =
+    showPrices && cliente
+      ? (() => {
+          const filas: string[] = [];
+          if (cliente.nombre) filas.push(`<div><strong>${escapeHtml(cliente.nombre)}</strong></div>`);
+          if (cliente.ruc) filas.push(`<div>RUC: ${escapeHtml(cliente.ruc)}</div>`);
+          else if (cliente.documento) filas.push(`<div>Documento: ${escapeHtml(cliente.documento)}</div>`);
+          if (cliente.direccion) filas.push(`<div>Dir: ${escapeHtml(cliente.direccion)}</div>`);
+          if (cliente.ciudad) filas.push(`<div>${escapeHtml(cliente.ciudad)}</div>`);
+          return filas.length > 0
+            ? `<hr><div class="cliente-box"><div class="cliente-title">CLIENTE</div>${filas.join("")}</div>`
+            : "";
+        })()
+      : showPrices
+        ? `<hr><div class="cliente-box"><div class="cliente-title">CLIENTE</div><div>Consumidor final</div></div>`
+        : "";
+
   const headerCocina = sectorBadge
     ? `<div class="sector-banner">${sectorBadge}</div>`
     : "";
@@ -235,12 +254,16 @@ function renderCopia(opts: {
        </div>`
     : `<div class="footer-cocina">${formatFecha(venta.fecha)}</div>`;
 
+  const tituloDoc = showPrices ? `<div class="doc-title">COMPROBANTE DE VENTA</div>` : "";
+
   return `<section class="paper ${isLast ? "last" : ""}">
     ${headerCocina || membreteTicket()}
+    ${tituloDoc}
     <div class="meta">
       ${escapeHtml(venta.numero_control)}<br>
       ${formatFecha(venta.fecha)}
     </div>
+    ${clienteHtml}
     ${datosPedido.length > 0 ? `<hr><div class="pedido">${datosPedido.join("")}</div>` : ""}
     <hr>
     <table>
@@ -383,6 +406,28 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
   if (iQ.error) return new NextResponse(`Error items: ${iQ.error.message}`, { status: 500 });
   const itemsRaw = (iQ.data ?? []) as unknown as ItemRow[];
 
+  // Cliente (para bloque estilo factura y para remisión).
+  let cliente: ClienteRemision | null = null;
+  if (venta.cliente_id) {
+    const cQ = await ctx.supabase
+      .from("clientes")
+      .select("empresa, nombre, nombre_contacto, ruc, documento, direccion, ciudad")
+      .eq("id", venta.cliente_id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    const c = cQ.data as Record<string, string | null> | null;
+    if (c) {
+      const s = (v: string | null | undefined) => (typeof v === "string" && v.trim() ? v.trim() : null);
+      cliente = {
+        nombre: s(c.empresa) || s(c.nombre_contacto) || s(c.nombre),
+        ruc: s(c.ruc),
+        documento: s(c.documento),
+        direccion: s(c.direccion),
+        ciudad: s(c.ciudad),
+      };
+    }
+  }
+
   // ── Nota de remisión: documento separado (no fiscal). Solo productos + cantidades.
   if (esRemision) {
     // Unidades de medida por producto.
@@ -398,29 +443,8 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
         unidadByProd.set(r.id, r.unidad_medida ?? "UNIDAD");
       }
     }
-    // Cliente (si la venta tiene cliente_id).
-    let clienteRem: ClienteRemision | null = null;
-    if (venta.cliente_id) {
-      const cQ = await ctx.supabase
-        .from("clientes")
-        .select("empresa, nombre, nombre_contacto, ruc, documento, direccion, ciudad")
-        .eq("id", venta.cliente_id)
-        .eq("empresa_id", empresaId)
-        .maybeSingle();
-      const c = cQ.data as Record<string, string | null> | null;
-      if (c) {
-        const s = (v: string | null | undefined) => (typeof v === "string" && v.trim() ? v.trim() : null);
-        clienteRem = {
-          nombre: s(c.empresa) || s(c.nombre_contacto) || s(c.nombre),
-          ruc: s(c.ruc),
-          documento: s(c.documento),
-          direccion: s(c.direccion),
-          ciudad: s(c.ciudad),
-        };
-      }
-    }
     const itemsRem = itemsRaw.map((it) => ({ ...it, unidad: unidadByProd.get(it.producto_id) ?? "UNIDAD" }));
-    const htmlRem = renderNotaRemision({ negocio, venta, items: itemsRem, cliente: clienteRem });
+    const htmlRem = renderNotaRemision({ negocio, venta, items: itemsRem, cliente });
     return new NextResponse(htmlRem, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
 
@@ -504,7 +528,7 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
 
   const seccionesHtml = copias
     .map((tipo, idx) =>
-      renderCopia({ tipo, venta, items, brief, fontPx, isLast: idx === copias.length - 1, negocio })
+      renderCopia({ tipo, venta, items, brief, fontPx, isLast: idx === copias.length - 1, negocio, cliente })
     )
     .join("");
 
@@ -520,6 +544,9 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
   .paper { background: #fff; width: ${widthMm}mm; margin: 0 auto 12mm; padding: 6mm 4mm; box-shadow: 0 1px 4px rgba(0,0,0,0.1); page-break-after: always; break-after: page; }
   .paper.last { page-break-after: auto; break-after: auto; margin-bottom: 0; }
   h1 { font-size: ${fontPx + 4}px; text-align: center; margin: 0 0 2mm; letter-spacing: 1px; }
+  .doc-title { font-size: ${fontPx + 2}px; font-weight: 800; text-align: center; padding: 1mm; border: 1.5px solid #000; margin: 2mm 0; letter-spacing: 1.5px; }
+  .cliente-box { font-size: ${fontPx}px; margin: 1mm 0; }
+  .cliente-title { font-weight: 800; font-size: ${fontPx - 1}px; letter-spacing: 1px; margin-bottom: 0.5mm; }
   .sector-banner { font-size: ${fontPx + 6}px; font-weight: 800; text-align: center; padding: 2mm; border: 2px solid #000; margin: 0 0 3mm; letter-spacing: 1px; }
   .meta { font-size: ${fontPx - 1}px; text-align: center; margin: 1mm 0 2mm; }
   hr { border: none; border-top: 1px dashed #000; margin: 2mm 0; }

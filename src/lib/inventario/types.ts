@@ -14,6 +14,12 @@ export interface Producto {
   cantidad_minima_mayorista?: number | null;
   /** Precio distribuidor (opcional). Precio comercial por canal — NO es el costo. */
   precio_distribuidor?: number | null;
+  /** Marca al producto como pintura → habilita precio diferenciado efectivo/tarjeta y lo excluye del recargo global del 4%. */
+  es_pintura?: boolean;
+  /** Precio para efectivo/transferencia (solo si es_pintura). */
+  precio_efectivo?: number | null;
+  /** Precio para tarjeta (solo si es_pintura). */
+  precio_tarjeta?: number | null;
   stock_actual: number;
   stock_minimo: number;
   unidad_medida: string;

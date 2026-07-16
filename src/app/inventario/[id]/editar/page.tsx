@@ -48,6 +48,8 @@ export default function EditarProductoPage() {
     precio_mayorista: "",
     cantidad_minima_mayorista: "",
     precio_distribuidor: "",
+    precio_efectivo: "",
+    precio_tarjeta: "",
     stock_actual: "",
     stock_minimo: "",
     unidad_medida: "",
@@ -82,6 +84,9 @@ export default function EditarProductoPage() {
 
   // Configuración gastronómica
   const [controlaStock, setControlaStock] = useState(true);
+
+  // Pintura: habilita precios diferenciados efectivo/tarjeta (y excluye del recargo global del 4%).
+  const [esPintura, setEsPintura] = useState(false);
 
   /** Cambia el tipo de producto y aplica los flags correctos (igual que en Nuevo producto). */
   function aplicarTipoGastro(tipo: TipoGastro) {
@@ -198,6 +203,8 @@ export default function EditarProductoPage() {
         precio_mayorista: p.precio_mayorista != null ? String(p.precio_mayorista) : "",
         cantidad_minima_mayorista: p.cantidad_minima_mayorista != null ? String(p.cantidad_minima_mayorista) : "",
         precio_distribuidor: p.precio_distribuidor != null ? String(p.precio_distribuidor) : "",
+        precio_efectivo: p.precio_efectivo != null ? String(p.precio_efectivo) : "",
+        precio_tarjeta: p.precio_tarjeta != null ? String(p.precio_tarjeta) : "",
         stock_actual: String(p.stock_actual),
         stock_minimo: String(p.stock_minimo),
         unidad_medida: p.unidad_medida,
@@ -218,6 +225,7 @@ export default function EditarProductoPage() {
       setModoReceta(p.modo_receta === "produccion_previa" ? "produccion_previa" : "preparado_al_vender");
       setDescripcion(p.descripcion ?? "");
       setValorizado(p.valorizado ?? true);
+      setEsPintura(p.es_pintura === true);
       setUnidadCompra(p.unidad_compra ?? "");
       setUnidadReceta(p.unidad_receta ?? "");
       setFactorCompraReceta(String(p.factor_compra_receta ?? 1));
@@ -338,6 +346,9 @@ export default function EditarProductoPage() {
         precio_mayorista: form.precio_mayorista.trim() !== "" ? parseFloat(form.precio_mayorista) || null : null,
         cantidad_minima_mayorista: form.cantidad_minima_mayorista.trim() !== "" ? parseFloat(form.cantidad_minima_mayorista) || null : null,
         precio_distribuidor: form.precio_distribuidor.trim() !== "" ? parseFloat(form.precio_distribuidor) || null : null,
+        es_pintura: esPintura,
+        precio_efectivo: esPintura && form.precio_efectivo.trim() !== "" ? parseFloat(form.precio_efectivo) || null : null,
+        precio_tarjeta: esPintura && form.precio_tarjeta.trim() !== "" ? parseFloat(form.precio_tarjeta) || null : null,
         stock_actual: parseInt(form.stock_actual) || 0,
         stock_minimo: parseInt(form.stock_minimo) || 0,
         unidad_medida: form.unidad_medida.trim().toUpperCase() || "UNIDAD",
@@ -857,6 +868,50 @@ export default function EditarProductoPage() {
                 <p className="sm:col-span-2 text-xs text-gray-400">
                   Precios por canal: en Ventas el cajero elige Minorista, Mayorista o Distribuidor. El precio distribuidor es comercial (no es el costo).
                 </p>
+              </div>
+            )}
+            {showPrecioVenta && (
+              <div className="mt-4 border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={esPintura}
+                    onChange={(e) => setEsPintura(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    Es pintura (precio diferenciado efectivo / tarjeta)
+                  </span>
+                </label>
+                {esPintura && (
+                  <>
+                    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className={labelClass}>Precio efectivo / transferencia (Gs.)</label>
+                        <MontoInput
+                          value={form.precio_efectivo}
+                          onChange={(n) => setForm((prev) => ({ ...prev, precio_efectivo: String(n) }))}
+                          placeholder="Ej: 50000"
+                          className={inputClass}
+                          decimals={false}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Precio tarjeta (Gs.)</label>
+                        <MontoInput
+                          value={form.precio_tarjeta}
+                          onChange={(n) => setForm((prev) => ({ ...prev, precio_tarjeta: String(n) }))}
+                          placeholder="Ej: 55000"
+                          className={inputClass}
+                          decimals={false}
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Cuando ambos precios están cargados, la venta usa el precio correspondiente al método de pago y esta línea NO recibe el recargo global del 4% de tarjeta.
+                    </p>
+                  </>
+                )}
               </div>
             )}
             {showPrecioVenta && tieneAmbos && markupCalc !== null && margenVentaCalc !== null && (
