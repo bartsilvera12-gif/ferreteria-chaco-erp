@@ -33,13 +33,20 @@ const inputClass =
 
 type ModalKind = null | "abrir" | "cerrar" | "mov";
 
-/** Hasta 3 cajas concurrentes — una por estación física (1, 2, 3). */
+/** Hasta 3 cajas concurrentes de cajero — una por estación física (1, 2, 3).
+ *  Además, el admin usa su propia caja separada con numero_caja=0.
+ */
 /**
- * Ferretería Chaco: el admin opera con UNA sola caja (la propia).
+ * Ferretería Chaco: el admin opera con UNA sola caja (la propia, numero=0).
  * Los cajeros con `numero_caja_asignada` (1/2/3) siguen viendo su caja
  * específica — el filtro por asignación tiene prioridad sobre este default.
  */
-const NUMEROS_CAJA = [1] as const;
+const NUMEROS_CAJA = [0] as const;
+
+/** Etiqueta legible para un numero_caja (0 → "Admin", 1..3 → número). */
+function cajaLabel(n: number): string {
+  return n === 0 ? "Admin" : String(n);
+}
 
 export default function CajaControlPanel({
   onStateChange,
@@ -144,7 +151,7 @@ function CajaSlotCard({
           <div className="flex items-center gap-2">
             <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
             <span className="text-xs font-semibold uppercase tracking-wider text-amber-700">
-              Caja {numeroCaja} · cerrada
+              Caja {cajaLabel(numeroCaja)} · cerrada
             </span>
           </div>
           <p className="mt-1 text-sm text-slate-600">Para vender desde esta estación, abrila.</p>
@@ -153,7 +160,7 @@ function CajaSlotCard({
             onClick={() => setModal("abrir")}
             className="mt-3 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-emerald-700"
           >
-            Abrir Caja {numeroCaja}
+            Abrir Caja {cajaLabel(numeroCaja)}
           </button>
         </div>
         {modal === "abrir" && (
@@ -170,7 +177,7 @@ function CajaSlotCard({
           <div className="flex items-center gap-2">
             <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
             <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
-              Caja {numeroCaja} · abierta
+              Caja {cajaLabel(numeroCaja)} · abierta
             </span>
           </div>
           <span className="text-[10px] text-slate-500">#{caja.numero_caja}</span>
@@ -278,7 +285,7 @@ function AbrirCajaModal({
   }
 
   return (
-    <ModalShell title={`Abrir Caja ${numeroCaja}`} onClose={onClose}>
+    <ModalShell title={`Abrir Caja ${cajaLabel(numeroCaja)}`} onClose={onClose}>
       <label className="mb-1.5 block text-sm font-medium text-slate-700">Monto de apertura (Gs.)</label>
       <MontoInput value={monto} onChange={(n) => setMonto(String(n))} placeholder="Ej: 300.000" className={inputClass} decimals={false} />
       <label className="mb-1.5 mt-3 block text-sm font-medium text-slate-700">Observación (opcional)</label>
@@ -327,7 +334,7 @@ function CerrarCajaModal({
   }
 
   return (
-    <ModalShell title={`Cerrar Caja ${caja.numero_caja}`} onClose={onClose}>
+    <ModalShell title={`Cerrar Caja ${cajaLabel(caja.numero_caja)}`} onClose={onClose}>
       <SectionLabel>Resumen de ventas del turno</SectionLabel>
       <div className="space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
         <Row label="Cantidad de ventas" value={String(resumen.cantidad_ventas)} />
@@ -462,7 +469,7 @@ function MovimientoModal({
   }
 
   return (
-    <ModalShell title={`Movimiento · Caja ${numeroCaja}`} onClose={onClose}>
+    <ModalShell title={`Movimiento · Caja ${cajaLabel(numeroCaja)}`} onClose={onClose}>
       <label className="mb-1.5 block text-sm font-medium text-slate-700">Tipo</label>
       <div className="grid grid-cols-4 gap-1">
         {TIPOS.map((t) => (

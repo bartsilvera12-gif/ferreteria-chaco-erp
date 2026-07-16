@@ -23,8 +23,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(errorResponse("Monto de apertura inválido."), { status: 400 });
     }
     const numeroCaja = Number(o.numero_caja);
-    if (!Number.isFinite(numeroCaja) || numeroCaja < 1 || numeroCaja > 3 || !Number.isInteger(numeroCaja)) {
-      return NextResponse.json(errorResponse("Número de caja inválido (1, 2 o 3)."), { status: 400 });
+    if (!Number.isFinite(numeroCaja) || numeroCaja < 0 || numeroCaja > 3 || !Number.isInteger(numeroCaja)) {
+      return NextResponse.json(errorResponse("Número de caja inválido (0=admin o 1..3)."), { status: 400 });
     }
     const observacion =
       o.observacion == null || o.observacion === "" ? null : String(o.observacion).slice(0, 2000);

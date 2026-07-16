@@ -371,7 +371,7 @@ async function computeResumen(sb: Sb, empresaId: string, caja: Caja): Promise<Ca
 // ── Escrituras ────────────────────────────────────────────────────────────────
 
 /**
- * Abre una caja en la estación `numeroCaja` (1, 2 o 3).
+ * Abre una caja en la estación `numeroCaja` (0=admin, 1..3=cajeros).
  * Falla si esa estación ya tiene una caja abierta (índice único parcial en DB).
  * Múltiples estaciones pueden estar abiertas a la vez (multi-caja).
  */
@@ -386,8 +386,8 @@ export async function abrirCajaPg(params: {
   const sb = createServiceRoleClientWithDbSchema(params.schema);
 
   const n = Math.trunc(params.numeroCaja);
-  if (!Number.isFinite(n) || n < 1 || n > 3) {
-    throw new Error("Número de caja inválido (debe ser 1, 2 o 3).");
+  if (!Number.isFinite(n) || n < 0 || n > 3) {
+    throw new Error("Número de caja inválido (debe ser 0=admin o 1..3).");
   }
 
   const yaAbierta = await sb
