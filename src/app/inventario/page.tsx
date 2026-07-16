@@ -106,10 +106,14 @@ export default function InventarioPage() {
   // Con catalogos de 500-5000 productos esto era visible (lag al tipear).
   // useMemo solo recalcula cuando cambian las dependencias relevantes.
   const productos = useMemo(() => todos.filter((p) => {
-    // Nombre — fold accents/diacritics ("atun" matchea "ATÚN")
-    if (filtroPorNombre.trim() !== "" &&
-        !foldText(p.nombre).includes(foldText(filtroPorNombre.trim())))
-      return false;
+    // Nombre / código de barras — fold accents/diacritics ("atun" matchea "ATÚN").
+    // El mismo input busca por código de barras cuando se escanea/tipea el número.
+    if (filtroPorNombre.trim() !== "") {
+      const q = foldText(filtroPorNombre.trim());
+      const enNombre = foldText(p.nombre).includes(q);
+      const enBarras = (p.codigo_barras ?? "").toLowerCase().includes(q);
+      if (!enNombre && !enBarras) return false;
+    }
 
     // SKU
     if (filtroPorSku.trim() !== "" &&
@@ -325,7 +329,7 @@ export default function InventarioPage() {
             </Link>
             <input
               type="text"
-              placeholder="Buscar por nombre..."
+              placeholder="Buscar por nombre o código de barras..."
               value={filtroPorNombre}
               onChange={(e) => setFiltroPorNombre(e.target.value)}
               className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none sm:w-64 sm:flex-none"
@@ -564,17 +568,10 @@ export default function InventarioPage() {
             <thead>
               <tr className="bg-slate-50 text-slate-600 text-sm font-semibold">
                 <th className="py-3 pr-4 font-medium">Nombre</th>
-                <th className="hidden py-3 pr-4 font-medium lg:table-cell">SKU</th>
                 <th className="py-3 pr-4 font-medium">Costo Prom.</th>
                 {tab !== "materia" && <th className="py-3 pr-4 font-medium">Precio Venta</th>}
                 <th className="py-3 pr-4 font-medium text-center">Stock actual</th>
                 <th className="py-3 pr-4 text-center font-medium hidden lg:table-cell">Stock Mín.</th>
-                <th className="py-3 pr-4 font-medium hidden lg:table-cell">Proveedor</th>
-                {tab !== "materia" && (
-                  <th className="hidden py-3 pr-6 text-right font-medium lg:table-cell">
-                    <span title="(precio - costo) / precio × 100">Margen s/venta</span>
-                  </th>
-                )}
                 <th className="py-3 pl-4 font-medium text-center w-28">Acción</th>
               </tr>
             </thead>
@@ -624,9 +621,25 @@ export default function InventarioPage() {
                         })()}
                       </div>
                     </td>
-                    <td className="hidden py-4 pr-4 font-mono text-gray-500 lg:table-cell">{p.sku}</td>
                     <td className="py-4 pr-4 text-gray-700">{formatGs(p.costo_promedio)}</td>
-                    {tab !== "materia" && <td className="py-4 pr-4 text-gray-700">{formatGs(p.precio_venta)}</td>}
+                    {tab !== "materia" && (
+                      <td className="py-4 pr-4 text-gray-700">
+                        {p.es_pintura && p.precio_efectivo != null && p.precio_tarjeta != null ? (
+                          <div className="flex flex-col leading-tight">
+                            <span className="tabular-nums">
+                              <span className="text-[10px] uppercase tracking-wide text-gray-400 mr-1">Ef.</span>
+                              {formatGs(p.precio_efectivo)}
+                            </span>
+                            <span className="tabular-nums">
+                              <span className="text-[10px] uppercase tracking-wide text-gray-400 mr-1">Tarj.</span>
+                              {formatGs(p.precio_tarjeta)}
+                            </span>
+                          </div>
+                        ) : (
+                          formatGs(p.precio_venta)
+                        )}
+                      </td>
+                    )}
                     <td className="py-4 pr-4 text-center">
                       {sinControl ? (
                         <span className="text-xs text-gray-400">— sin control</span>
@@ -640,16 +653,6 @@ export default function InventarioPage() {
                     <td className="py-4 pr-4 text-center text-gray-500 hidden lg:table-cell">
                       {sinControl ? "—" : <span className="tabular-nums">{formatStock(p.stock_minimo)}</span>}
                     </td>
-                    <td className="py-4 pr-4 text-gray-600 text-xs hidden lg:table-cell">
-                      {p.distribuidor_nombre
-                        ? <span className="font-medium text-gray-700">{p.distribuidor_nombre}</span>
-                        : <span className="text-gray-300">—</span>}
-                    </td>
-                    {tab !== "materia" && (
-                      <td className={`hidden py-4 pr-6 text-right font-semibold tabular-nums lg:table-cell ${margenColor(margen)}`}>
-                        {margen.toFixed(2)}%
-                      </td>
-                    )}
                     <td className="py-4 pl-4 text-center">
                       <div className="inline-flex items-center gap-1.5">
                         <Link
