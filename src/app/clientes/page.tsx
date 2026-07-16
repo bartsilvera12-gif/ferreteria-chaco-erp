@@ -50,7 +50,7 @@ function BadgeOrigen({ origen }: { origen: Cliente["origen"] }) {
 
 // ── Columnas configurables ────────────────────────────────────────────────────
 
-const CLIENTES_COLUMNAS_STORAGE_KEY = "neura.erp.clientes.columnas.v1";
+const CLIENTES_COLUMNAS_STORAGE_KEY = "neura.erp.clientes.columnas.v2";
 
 type ClienteColumnKey =
   | "codigo"
@@ -82,9 +82,7 @@ const DEFAULT_VISIBLE_COLUMN_KEYS: ClienteColumnKey[] = [
   "empresa_nombre",
   "contacto",
   "telefono",
-  "plan_activo",
   "origen",
-  "tipo_servicio",
   "estado",
   "desde",
 ];
