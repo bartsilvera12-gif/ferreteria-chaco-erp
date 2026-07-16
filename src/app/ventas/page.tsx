@@ -313,6 +313,23 @@ export default function CajaPage() {
     return entidades.filter((e) => e.tipo !== "caja"); // transferencia
   }, [entidades, metodo]);
 
+  // Typeahead para el buscador de entidad (por código o nombre).
+  const [entidadQuery, setEntidadQuery] = useState("");
+  const entidadesTypeahead = useMemo(() => {
+    const q = entidadQuery.trim().toLowerCase();
+    if (!q) return entidadesFiltradas.slice(0, 8);
+    return entidadesFiltradas
+      .filter((e) =>
+        (e.codigo ?? "").toLowerCase().includes(q) ||
+        (e.nombre ?? "").toLowerCase().includes(q)
+      )
+      .slice(0, 8);
+  }, [entidadesFiltradas, entidadQuery]);
+  const entidadSeleccionada = useMemo(
+    () => entidadesFiltradas.find((e) => e.id === entidadId) ?? null,
+    [entidadesFiltradas, entidadId]
+  );
+
   // Búsqueda con debounce + cache en memoria + AbortController.
   // - Cache: las mismas letras dos veces (typo+backspace, buscar producto que
   //   ya viste, etc.) devuelven resultado sin fetch. TTL 50 min (menor al ~1h
@@ -493,6 +510,7 @@ export default function CajaPage() {
     setReferencia("");
     setTitular("");
     setEntidadId("");
+    setEntidadQuery("");
     setFechaAcreditacion(new Date().toISOString().slice(0, 10));
     setCobroOpen(true);
   }
@@ -1100,65 +1118,79 @@ export default function CajaPage() {
 
             {(metodo === "transferencia" || metodo === "tarjeta") && (
               <div className="space-y-3">
-                <label className="block text-sm">
+                <p className="text-sm font-semibold text-slate-800">
+                  {metodo === "tarjeta" ? "Datos de tarjeta / débito" : "Datos de transferencia"}
+                </p>
+
+                {/* Typeahead entidad / banco */}
+                <div className="block text-sm">
                   <span className="mb-1 block font-medium text-slate-700">
-                    {metodo === "tarjeta" ? "Tarjeta / banco" : "Entidad / banco"}
+                    {metodo === "tarjeta" ? "Entidad / banco / POS" : "Entidad / banco"}
                   </span>
-                  <select
-                    value={entidadId}
-                    onChange={(e) => setEntidadId(e.target.value)}
+                  <input
+                    type="text"
+                    value={entidadQuery}
+                    onChange={(e) => { setEntidadQuery(e.target.value); if (entidadId) setEntidadId(""); }}
+                    placeholder="Buscar por código o nombre…"
                     className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#4FAEB2] focus:ring-2 focus:ring-[#4FAEB2]/20"
-                  >
-                    <option value="">— Seleccionar —</option>
-                    {entidadesFiltradas.map((en) => (
-                      <option key={en.id} value={en.id}>
-                        {en.nombre}{en.codigo ? ` (${en.codigo})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                  {entidadesFiltradas.length === 0 && (
+                  />
+                  {entidadesTypeahead.length > 0 ? (
+                    <ul className="mt-1 max-h-40 overflow-auto rounded-md border border-slate-200 bg-white shadow-sm">
+                      {entidadesTypeahead.map((en) => {
+                        const sel = en.id === entidadId;
+                        return (
+                          <li key={en.id}>
+                            <button
+                              type="button"
+                              onClick={() => { setEntidadId(en.id); setEntidadQuery(""); }}
+                              className={`flex w-full gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50 ${sel ? "bg-[#4FAEB2]/10" : ""}`}
+                            >
+                              {en.codigo && (
+                                <span className="w-10 shrink-0 font-mono text-[11px] text-slate-500">{en.codigo}</span>
+                              )}
+                              <span className="text-slate-800">{en.nombre}</span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
                     <p className="mt-1 text-[11px] text-slate-400">
-                      Sin entidades cargadas. Configuralas en Configuración → Entidades bancarias.
+                      {entidadesFiltradas.length === 0
+                        ? "Sin entidades cargadas. Configuralas en Configuración → Entidades bancarias."
+                        : "Sin coincidencias."}
                     </p>
                   )}
-                </label>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="block text-sm">
-                    <span className="mb-1 block font-medium text-slate-700">
-                      {metodo === "tarjeta" ? "Voucher / últimos 4" : "N° de operación"}
-                    </span>
-                    <input
-                      type="text"
-                      value={referencia}
-                      onChange={(e) => setReferencia(e.target.value)}
-                      placeholder={metodo === "tarjeta" ? "1234" : "Ej. 78912345"}
-                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#4FAEB2] focus:ring-2 focus:ring-[#4FAEB2]/20"
-                    />
-                  </label>
-                  <label className="block text-sm">
-                    <span className="mb-1 block font-medium text-slate-700">Fecha acreditación</span>
-                    <input
-                      type="date"
-                      value={fechaAcreditacion}
-                      onChange={(e) => setFechaAcreditacion(e.target.value)}
-                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#4FAEB2] focus:ring-2 focus:ring-[#4FAEB2]/20"
-                    />
-                  </label>
+                  {entidadSeleccionada && (
+                    <p className="mt-1 text-xs font-medium text-emerald-700">
+                      Seleccionada: {entidadSeleccionada.nombre}
+                    </p>
+                  )}
                 </div>
 
                 {metodo === "transferencia" && (
                   <label className="block text-sm">
-                    <span className="mb-1 block font-medium text-slate-700">Titular (opcional)</span>
+                    <span className="mb-1 block font-medium text-slate-700">Titular que transfirió</span>
                     <input
                       type="text"
                       value={titular}
                       onChange={(e) => setTitular(e.target.value)}
-                      placeholder="Nombre del que hizo la transferencia"
+                      placeholder="Nombre del titular"
                       className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#4FAEB2] focus:ring-2 focus:ring-[#4FAEB2]/20"
                     />
                   </label>
                 )}
+
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-700">N° de comprobante / referencia</span>
+                  <input
+                    type="text"
+                    value={referencia}
+                    onChange={(e) => setReferencia(e.target.value)}
+                    placeholder="Comprobante / transacción"
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#4FAEB2] focus:ring-2 focus:ring-[#4FAEB2]/20"
+                  />
+                </label>
               </div>
             )}
 
