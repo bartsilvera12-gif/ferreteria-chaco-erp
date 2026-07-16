@@ -131,6 +131,7 @@ function CajaSlotCard({
 }) {
   const [resumen, setResumen] = useState<CajaResumen | null>(null);
   const [modal, setModal] = useState<ModalKind>(null);
+  const [minimizado, setMinimizado] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,51 +174,67 @@ function CajaSlotCard({
   return (
     <>
       <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
-              Caja {cajaLabel(numeroCaja)} · abierta
-            </span>
-          </div>
-          <span className="text-[10px] text-slate-500">#{caja.numero_caja}</span>
-        </div>
-        <p className="mt-1 text-xs text-slate-600">
-          Apertura: <strong>{formatFechaHora(caja.fecha_apertura)}</strong>
-        </p>
-        <p className="text-xs text-slate-600">
-          Inicial: <strong>{formatGs(caja.monto_apertura)}</strong>
-        </p>
-
-        {resumen && (
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-            <MiniStat label="Vendido" value={formatGs(resumen.total_vendido)} sub={`${resumen.cantidad_ventas} venta(s)`} />
-            <MiniStat label="Efectivo" value={formatGs(resumen.total_efectivo)} />
-            <MiniStat label="Transf." value={formatGs(resumen.total_transferencia)} />
-            <MiniStat label="Tarjeta" value={formatGs(resumen.total_tarjeta)} />
-            <div className="col-span-2 rounded-lg border border-emerald-300 bg-emerald-100/60 p-2">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Debería haber</p>
-              <p className="text-sm font-bold tabular-nums text-emerald-900">{formatGs(resumen.efectivo_esperado)}</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
+                Caja Abierta
+              </span>
             </div>
+            <p className="mt-1 text-xs text-slate-600">
+              Apertura: <strong>{formatFechaHora(caja.fecha_apertura)}</strong>
+              {" · "}
+              Monto inicial <strong>{formatGs(caja.monto_apertura)}</strong>
+            </p>
           </div>
-        )}
-
-        <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            onClick={() => setModal("mov")}
-            className="flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Movimiento
-          </button>
-          <button
-            type="button"
-            onClick={() => setModal("cerrar")}
-            className="flex-1 rounded-lg bg-rose-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-rose-700"
-          >
-            Cerrar
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMinimizado((v) => !v)}
+              aria-label={minimizado ? "Expandir" : "Minimizar"}
+              title={minimizado ? "Expandir" : "Minimizar"}
+              className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              {minimizado ? "▼" : "▲"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setModal("mov")}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Movimiento
+            </button>
+            <button
+              type="button"
+              onClick={() => setModal("cerrar")}
+              className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-700"
+            >
+              Cerrar caja
+            </button>
+          </div>
         </div>
+
+        {!minimizado && resumen && (
+          <>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+              <MiniStat label="Total vendido" value={formatGs(resumen.total_vendido)} sub={`${resumen.cantidad_ventas} venta(s)`} />
+              <MiniStat label="Efectivo" value={formatGs(resumen.total_efectivo)} />
+              <MiniStat label="Transferencia" value={formatGs(resumen.total_transferencia)} />
+              <MiniStat label="Tarjeta" value={formatGs(resumen.total_tarjeta)} />
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+              <div className="rounded-md border border-emerald-300 bg-emerald-100/60 p-2">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Debería haber en caja</p>
+                <p className="text-sm font-bold tabular-nums text-emerald-900">{formatGs(resumen.efectivo_esperado)}</p>
+                <p className="text-[9px] text-slate-500">apertura + efectivo ± mov.</p>
+              </div>
+              <MiniStat label="Ingresos efvo." value={formatGs(resumen.ingresos_efectivo)} />
+              <MiniStat label="Egresos efvo." value={formatGs(resumen.egresos_efectivo)} />
+              <MiniStat label="Retiros efvo." value={formatGs(resumen.retiros_efectivo)} />
+            </div>
+          </>
+        )}
       </div>
 
       {modal === "cerrar" && resumen && (
