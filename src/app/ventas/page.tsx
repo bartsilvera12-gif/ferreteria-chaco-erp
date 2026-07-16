@@ -75,6 +75,13 @@ export default function CajaPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [ultimoAgregado, setUltimoAgregado] = useState<CartItem | null>(null);
 
+  // Selector de cliente (opcional — null = consumidor final)
+  type ClienteLite = { id: string; nombre: string; ruc: string | null; documento: string | null };
+  const [clientes, setClientes] = useState<ClienteLite[]>([]);
+  const [clienteSel, setClienteSel] = useState<ClienteLite | null>(null);
+  const [clienteQuery, setClienteQuery] = useState("");
+  const [clientesAbierto, setClientesAbierto] = useState(false);
+
   // Modal cobro
   const [cobroOpen, setCobroOpen] = useState(false);
   const [metodo, setMetodo] = useState<MetodoPago>("efectivo");
@@ -169,6 +176,43 @@ export default function CajaPage() {
       .catch(() => { /* opcional */ });
     return () => { cancel = true; };
   }, []);
+
+  // Cargar lista de clientes para el selector.
+  useEffect(() => {
+    let cancel = false;
+    fetchWithSupabaseSession("/api/clientes", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancel || !j?.success) return;
+        const rows = Array.isArray(j.data) ? j.data : [];
+        const list: ClienteLite[] = rows.map((r: Record<string, unknown>) => {
+          const empresa = typeof r.empresa === "string" ? r.empresa.trim() : "";
+          const contacto = typeof r.nombre_contacto === "string" ? r.nombre_contacto.trim() : "";
+          const nombre = typeof r.nombre === "string" ? r.nombre.trim() : "";
+          return {
+            id: String(r.id),
+            nombre: empresa || contacto || nombre || "(sin nombre)",
+            ruc: (r.ruc as string | null) ?? null,
+            documento: (r.documento as string | null) ?? null,
+          };
+        });
+        setClientes(list);
+      })
+      .catch(() => { /* opcional */ });
+    return () => { cancel = true; };
+  }, []);
+
+  const clientesFiltrados = useMemo(() => {
+    const q = clienteQuery.trim().toLowerCase();
+    if (!q) return clientes.slice(0, 20);
+    return clientes
+      .filter((c) =>
+        c.nombre.toLowerCase().includes(q) ||
+        (c.ruc ?? "").toLowerCase().includes(q) ||
+        (c.documento ?? "").toLowerCase().includes(q)
+      )
+      .slice(0, 20);
+  }, [clientes, clienteQuery]);
 
   // Entidades disponibles según método (excluye tipo "caja" para trans/tarjeta).
   const entidadesFiltradas = useMemo(() => {
@@ -310,7 +354,13 @@ export default function CajaPage() {
     setCart((prev) => prev.filter((x) => x.producto_id !== id));
     setUltimoAgregado((u) => (u && u.producto_id === id ? null : u));
   };
-  const vaciarCarrito = () => { setCart([]); setUltimoAgregado(null); };
+  const vaciarCarrito = () => {
+    setCart([]);
+    setUltimoAgregado(null);
+    setClienteSel(null);
+    setClienteQuery("");
+    setClientesAbierto(false);
+  };
 
   const total = useMemo(() => cart.reduce((s, it) => s + it.cantidad * precioEfectivo(it), 0), [cart]);
   const cantTotal = useMemo(() => cart.reduce((s, it) => s + it.cantidad, 0), [cart]);
@@ -373,7 +423,7 @@ export default function CajaPage() {
         total: subtotalTotal,
         tipo_venta: "CONTADO",
         metodo_pago: metodo,
-        cliente_id: null,
+        cliente_id: clienteSel?.id ?? null,
       }, undefined, pagoDetalle);
       if (!res.success) {
         setCobroError(res.error);
@@ -651,6 +701,63 @@ export default function CajaPage() {
 
             {/* Totales + botón */}
             <div className="border-t border-slate-100 p-5 space-y-3">
+              {/* Selector de cliente */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Cliente</span>
+                  {clienteSel && (
+                    <button
+                      type="button"
+                      onClick={() => { setClienteSel(null); setClienteQuery(""); }}
+                      className="text-[11px] text-slate-500 underline hover:text-slate-800"
+                    >
+                      Quitar
+                    </button>
+                  )}
+                </div>
+                {clienteSel ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                    <p className="font-semibold text-slate-800">{clienteSel.nombre}</p>
+                    <p className="text-xs text-slate-500">
+                      {clienteSel.ruc ? `RUC: ${clienteSel.ruc}` : clienteSel.documento ? `Doc: ${clienteSel.documento}` : "Sin RUC/Doc"}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={clienteQuery}
+                      onChange={(e) => { setClienteQuery(e.target.value); setClientesAbierto(true); }}
+                      onFocus={() => setClientesAbierto(true)}
+                      onBlur={() => setTimeout(() => setClientesAbierto(false), 150)}
+                      placeholder="Consumidor final — buscá por nombre/RUC…"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#4FAEB2]"
+                    />
+                    {clientesAbierto && clientesFiltrados.length > 0 && (
+                      <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                        {clientesFiltrados.map((c) => (
+                          <li key={c.id}>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => { setClienteSel(c); setClienteQuery(""); setClientesAbierto(false); }}
+                              className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                            >
+                              <span className="font-medium text-slate-800">{c.nombre}</span>
+                              {(c.ruc || c.documento) && (
+                                <span className="ml-2 text-xs text-slate-500">
+                                  {c.ruc ? `RUC ${c.ruc}` : `Doc ${c.documento}`}
+                                </span>
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="flex items-baseline justify-between text-sm text-slate-500">
                 <span>Ítems</span>
                 <span className="font-medium tabular-nums text-slate-800">{cantTotal}</span>
