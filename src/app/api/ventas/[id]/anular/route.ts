@@ -49,7 +49,7 @@ export async function POST(
     // 2) Reversar stock: por cada ítem con controla_stock, ENTRADA por cantidad.
     const itemsQ = await sb
       .from("ventas_items")
-      .select("producto_id, producto_nombre, sku, cantidad, costo_unitario")
+      .select("producto_id, producto_nombre, sku, cantidad")
       .eq("empresa_id", empresaId)
       .eq("venta_id", ventaId);
     if (itemsQ.error) throw new Error(itemsQ.error.message);
@@ -58,7 +58,6 @@ export async function POST(
       producto_nombre: string | null;
       sku: string | null;
       cantidad: number | string;
-      costo_unitario: number | string | null;
     }>;
 
     const fechaIso = new Date().toISOString();
@@ -68,12 +67,12 @@ export async function POST(
 
       const prodQ = await sb
         .from("productos")
-        .select("stock_actual, controla_stock")
+        .select("stock_actual, controla_stock, costo_promedio")
         .eq("id", it.producto_id)
         .eq("empresa_id", empresaId)
         .maybeSingle();
       if (prodQ.error || !prodQ.data) continue;
-      const p = prodQ.data as { stock_actual: number | string; controla_stock?: boolean };
+      const p = prodQ.data as { stock_actual: number | string; controla_stock?: boolean; costo_promedio?: number | string | null };
       const controla = p.controla_stock !== false;
       if (!controla) continue;
 
@@ -93,7 +92,7 @@ export async function POST(
         producto_sku: it.sku,
         tipo: "ENTRADA",
         cantidad: cant,
-        costo_unitario: Number(it.costo_unitario) || 0,
+        costo_unitario: Number(p.costo_promedio) || 0,
         origen: "anulacion",
         referencia: `ANUL-${venta.numero_control}`,
         fecha: fechaIso,
