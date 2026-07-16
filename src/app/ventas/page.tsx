@@ -620,7 +620,7 @@ export default function CajaPage() {
           <p className="mt-0.5 text-xs text-slate-500">Escaneá o buscá un producto y cobrálo directo.</p>
         </div>
         <Link
-          href="/reportes/ventas-del-dia"
+          href="/reportes/ventas"
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
         >
           Ver órdenes del día →
