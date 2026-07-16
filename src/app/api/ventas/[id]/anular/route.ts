@@ -49,14 +49,14 @@ export async function POST(
     // 2) Reversar stock: por cada ítem con controla_stock, ENTRADA por cantidad.
     const itemsQ = await sb
       .from("ventas_items")
-      .select("producto_id, producto_nombre, producto_sku, cantidad, costo_unitario")
+      .select("producto_id, producto_nombre, sku, cantidad, costo_unitario")
       .eq("empresa_id", empresaId)
       .eq("venta_id", ventaId);
     if (itemsQ.error) throw new Error(itemsQ.error.message);
     const items = (itemsQ.data ?? []) as Array<{
       producto_id: string;
       producto_nombre: string | null;
-      producto_sku: string | null;
+      sku: string | null;
       cantidad: number | string;
       costo_unitario: number | string | null;
     }>;
@@ -90,7 +90,7 @@ export async function POST(
         empresa_id: empresaId,
         producto_id: it.producto_id,
         producto_nombre: it.producto_nombre,
-        producto_sku: it.producto_sku,
+        producto_sku: it.sku,
         tipo: "ENTRADA",
         cantidad: cant,
         costo_unitario: Number(it.costo_unitario) || 0,
