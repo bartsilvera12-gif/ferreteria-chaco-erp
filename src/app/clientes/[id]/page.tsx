@@ -83,10 +83,7 @@ type TabId = "informacion" | "estado_cuenta" | "suscripciones" | "marketing" | "
 const TABS: { id: TabId; label: string; showWhen?: (c: Cliente) => boolean }[] = [
   { id: "informacion",   label: "Información"      },
   { id: "estado_cuenta", label: "Estado de cuenta" },
-  { id: "suscripciones", label: "Suscripciones"    },
   { id: "marketing",     label: "Marketing",        showWhen: (c) => c.tipo_servicio_cliente === "marketing" },
-  { id: "proyectos",     label: "Proyectos"         },
-  { id: "actividad",     label: "Actividad"         },
   { id: "notas",         label: "Notas"             },
 ];
 
@@ -952,55 +949,61 @@ export default function ClienteDetailPage() {
       </button>
 
       {/* ── Panel resumen ─────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-[#0EA5E9] to-[#0284C7] px-6 py-5">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-5">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
               {/* Avatar */}
-              <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-xl font-bold text-white shrink-0 ${
-                cliente.tipo_cliente === "empresa" ? "bg-blue-500/80" : "bg-violet-500/80"
+              <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-lg font-bold shrink-0 ${
+                cliente.tipo_cliente === "empresa"
+                  ? "bg-[#4FAEB2]/10 text-[#3F8E91]"
+                  : "bg-violet-100 text-violet-700"
               }`}>
                 {nombre.slice(0, 2).toUpperCase()}
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white leading-tight">{nombre}</h1>
-                <div className="flex items-center gap-3 mt-1 flex-wrap">
-                  <span className="text-gray-300 font-mono text-xs">{cliente.codigo_cliente}</span>
+                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#4FAEB2]">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#4FAEB2]" />
+                  Cliente
+                </div>
+                <h1 className="mt-1 text-2xl font-bold text-slate-900 leading-tight">{nombre}</h1>
+                <div className="flex items-center gap-3 mt-2 flex-wrap">
+                  <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600">{cliente.codigo_cliente}</span>
                   {cliente.ruc && (
-                    <span className="text-gray-300 text-xs">RUC: {cliente.ruc}</span>
+                    <span className="text-xs text-slate-500">RUC: <strong className="text-slate-700">{cliente.ruc}</strong></span>
                   )}
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                     cliente.estado === "activo"
-                      ? "bg-green-500/20 text-green-300"
-                      : "bg-gray-500/30 text-gray-300"
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-slate-100 text-slate-500"
                   }`}>
                     ● {cliente.estado === "activo" ? "Activo" : "Inactivo"}
                   </span>
                   {cliente.perfil_tributario_activo && (
-                    <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-white/15 text-white border border-white/25">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
                       Tributario
                     </span>
                   )}
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-slate-400">
                     Cliente desde {formatFecha(cliente.created_at)}
                   </span>
                 </div>
               </div>
             </div>
-            {/* Acciones del header */}
+            {/* Acciones del header — outline arriba a la derecha */}
             <div className="flex items-center gap-2 shrink-0">
               {cliente.estado === "activo" ? (
                 esAdmin ? (
                   <button
                     onClick={abrirModalBajaOperativa}
-                    className="text-xs font-medium border border-amber-400/60 text-amber-200 hover:bg-amber-500/20 px-3 py-1.5 rounded-lg transition-colors"
+                    className="text-xs font-medium border border-amber-400 text-amber-700 hover:bg-amber-50 px-3 py-1.5 rounded-lg transition-colors"
                   >
-                    Dar de baja cliente
+                    Dar de baja
                   </button>
                 ) : (
                   <button
                     onClick={handleToggleEstado}
-                    className="text-xs font-medium border border-white/20 text-white/80 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors"
+                    className="text-xs font-medium border border-slate-300 text-slate-600 hover:bg-slate-50 px-3 py-1.5 rounded-lg transition-colors"
                   >
                     Desactivar
                   </button>
@@ -1008,7 +1011,7 @@ export default function ClienteDetailPage() {
               ) : (
                 <button
                   onClick={handleToggleEstado}
-                  className="text-xs font-medium border border-white/20 text-white/80 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors"
+                  className="text-xs font-medium border border-slate-300 text-slate-600 hover:bg-slate-50 px-3 py-1.5 rounded-lg transition-colors"
                 >
                   Reactivar
                 </button>
@@ -1017,7 +1020,7 @@ export default function ClienteDetailPage() {
                 <button
                   type="button"
                   onClick={() => void abrirModalEliminar()}
-                  className="text-red-200 hover:text-white hover:bg-red-900/40 border border-red-400/40 flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors text-xs font-medium"
+                  className="text-rose-600 hover:bg-rose-50 border border-rose-300 flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium"
                   title="Eliminar cliente (baja lógica)"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0" aria-hidden>
@@ -1028,7 +1031,7 @@ export default function ClienteDetailPage() {
               )}
             </div>
           </div>
-          <div className="mt-4 pt-4 border-t border-white/15 flex flex-wrap gap-2">
+          <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => {
@@ -1043,9 +1046,9 @@ export default function ClienteDetailPage() {
                 });
                 setModalSuscripcion(true);
               }}
-              className="text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 px-3 py-1.5 rounded-lg transition-colors"
+              className="text-xs font-medium bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
             >
-              Nueva suscripción
+              + Nueva suscripción
             </button>
             <button
               type="button"
@@ -1054,14 +1057,14 @@ export default function ClienteDetailPage() {
                 setErrorFacturaContado(null);
                 setModalFacturaContado(true);
               }}
-              className="text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 px-3 py-1.5 rounded-lg transition-colors"
+              className="text-xs font-medium bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-1.5 rounded-lg transition-colors"
             >
               Factura al contado
             </button>
             <button
               type="button"
               onClick={abrirRegistrarPago}
-              className="text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 px-3 py-1.5 rounded-lg transition-colors"
+              className="text-xs font-medium bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-1.5 rounded-lg transition-colors"
             >
               Registrar pago
             </button>
