@@ -50,9 +50,12 @@ function cajaLabel(n: number): string {
 
 export default function CajaControlPanel({
   onStateChange,
+  refreshTrigger,
 }: {
   /** Notifica al padre si HAY ALGUNA caja abierta (cualquier estación). */
   onStateChange?: (algunaAbierta: boolean) => void;
+  /** Si cambia (ej. contador que incrementa el padre tras una venta), refresca resumen. */
+  refreshTrigger?: number;
 }) {
   const [loading, setLoading] = useState(true);
   const [cajas, setCajas] = useState<Caja[]>([]);
@@ -114,6 +117,7 @@ export default function CajaControlPanel({
           numeroCaja={n}
           caja={cajas.find((c) => c.numero_caja === n) ?? null}
           onRefresh={refresh}
+          refreshTrigger={refreshTrigger}
         />
       ))}
     </div>
@@ -124,24 +128,29 @@ function CajaSlotCard({
   numeroCaja,
   caja,
   onRefresh,
+  refreshTrigger,
 }: {
   numeroCaja: number;
   caja: Caja | null;
   onRefresh: () => void | Promise<void>;
+  refreshTrigger?: number;
 }) {
   const [resumen, setResumen] = useState<CajaResumen | null>(null);
   const [modal, setModal] = useState<ModalKind>(null);
   const [minimizado, setMinimizado] = useState(false);
 
+  // Refresca resumen cuando cambia la caja, cuando el padre incrementa
+  // `refreshTrigger` (p.ej. tras una venta), y en un intervalo de 15s.
   useEffect(() => {
+    if (!caja) { setResumen(null); return; }
     let cancelled = false;
-    if (caja) {
+    const load = () => {
       void getResumenCaja(caja.id).then((r) => { if (!cancelled) setResumen(r); });
-    } else {
-      setResumen(null);
-    }
-    return () => { cancelled = true; };
-  }, [caja]);
+    };
+    load();
+    const iv = setInterval(load, 15_000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [caja, refreshTrigger]);
 
   const after = async () => { setModal(null); await onRefresh(); };
 

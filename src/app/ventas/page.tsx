@@ -62,6 +62,8 @@ function formatGs(v: number) {
 export default function CajaPage() {
   // Estado de caja abierta
   const [cajaAbierta, setCajaAbierta] = useState(false);
+  // Contador que la caja usa para refrescar su resumen tras cobrar.
+  const [cajaRefreshTick, setCajaRefreshTick] = useState(0);
 
   // Búsqueda de productos (izquierda)
   const [q, setQ] = useState("");
@@ -435,6 +437,7 @@ export default function CajaPage() {
       setVentaOk(v.numero_control);
       setCobroOpen(false);
       vaciarCarrito();
+      setCajaRefreshTick((n) => n + 1);
       setTimeout(() => setVentaOk(null), 3500);
       inputRef.current?.focus();
     } catch (e) {
@@ -479,7 +482,7 @@ export default function CajaPage() {
         </Link>
       </div>
 
-      <CajaControlPanel onStateChange={setCajaAbierta} />
+      <CajaControlPanel onStateChange={setCajaAbierta} refreshTrigger={cajaRefreshTick} />
 
       {/* Toast venta OK */}
       {ventaOk && (
