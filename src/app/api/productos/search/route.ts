@@ -27,6 +27,9 @@ interface ProductoSearchHit {
   es_vendible: boolean;
   controla_stock: boolean;
   modo_receta: string;
+  es_pintura: boolean;
+  precio_efectivo: number | null;
+  precio_tarjeta: number | null;
 }
 
 const DEFAULT_LIMIT = 30;
@@ -66,7 +69,8 @@ export async function GET(request: NextRequest) {
           "precio_venta, precio_mayorista, precio_distribuidor, costo_promedio, stock_actual, stock_minimo, " +
           "unidad_medida, metodo_valuacion, imagen_path, imagen_url, " +
           "categoria_principal_id, proveedor_principal_id, ubicacion_principal_id, " +
-          "es_vendible, controla_stock, modo_receta, activo"
+          "es_vendible, controla_stock, modo_receta, activo, " +
+          "es_pintura, precio_efectivo, precio_tarjeta"
       )
       .eq("empresa_id", empresaId)
       .eq("activo", true)
@@ -102,6 +106,9 @@ export async function GET(request: NextRequest) {
       es_vendible: r.es_vendible !== false,
       controla_stock: r.controla_stock !== false,
       modo_receta: typeof r.modo_receta === "string" ? r.modo_receta : "preparado_al_vender",
+      es_pintura: r.es_pintura === true,
+      precio_efectivo: r.precio_efectivo != null ? Number(r.precio_efectivo) : null,
+      precio_tarjeta: r.precio_tarjeta != null ? Number(r.precio_tarjeta) : null,
     }));
 
     // Firmar URLs solo para los primeros 20 visibles (optimización).
@@ -135,6 +142,9 @@ export async function GET(request: NextRequest) {
       es_vendible: r.es_vendible,
       controla_stock: r.controla_stock,
       modo_receta: r.modo_receta,
+      es_pintura: r.es_pintura,
+      precio_efectivo: r.precio_efectivo,
+      precio_tarjeta: r.precio_tarjeta,
     }));
 
     return NextResponse.json(successResponse({ items: hits, count: hits.length, q }));

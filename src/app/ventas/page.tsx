@@ -8,7 +8,7 @@ import MontoInput, { parseMontoInput } from "@/components/ui/MontoInput";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { saveVenta } from "@/lib/ventas/storage";
 import type { LineaVenta, MetodoPago } from "@/lib/ventas/types";
-import { CARD_SURCHARGE_PCT, calcularRecargoTarjeta, totalConRecargo } from "@/lib/ventas/recargo-tarjeta";
+import { CARD_SURCHARGE_PCT, calcularRecargoTarjeta } from "@/lib/ventas/recargo-tarjeta";
 
 type EntidadBancaria = { id: string; codigo: string | null; nombre: string; tipo: string | null };
 
@@ -24,6 +24,9 @@ type ProductoHit = {
   cantidad_minima_mayorista: number | null;
   stock_actual: number;
   imagen_url: string | null;
+  es_pintura: boolean;
+  precio_efectivo: number | null;
+  precio_tarjeta: number | null;
 };
 
 type CartItem = {
@@ -36,10 +39,18 @@ type CartItem = {
   precio_venta: number;         // precio unitario minorista base
   precio_mayorista: number;     // precio unitario mayorista (0 si no aplica)
   cantidad_minima_mayorista: number | null;
+  es_pintura: boolean;
+  precio_efectivo: number | null;
+  precio_tarjeta: number | null;
 };
 
-/** Precio unitario efectivo según la cantidad y el umbral del producto. */
-function precioEfectivo(it: Pick<CartItem, "cantidad" | "precio_venta" | "precio_mayorista" | "cantidad_minima_mayorista">): number {
+/** Precio unitario efectivo (contado) según la cantidad y el umbral del producto.
+ *  Pintura con precio_efectivo cargado: usa ese como base contado.
+ */
+function precioEfectivo(it: Pick<CartItem, "cantidad" | "precio_venta" | "precio_mayorista" | "cantidad_minima_mayorista" | "es_pintura" | "precio_efectivo">): number {
+  if (it.es_pintura && it.precio_efectivo != null && it.precio_efectivo > 0) {
+    return it.precio_efectivo;
+  }
   if (
     it.precio_mayorista > 0 &&
     it.cantidad_minima_mayorista != null &&
@@ -50,7 +61,16 @@ function precioEfectivo(it: Pick<CartItem, "cantidad" | "precio_venta" | "precio
   }
   return it.precio_venta;
 }
-function esMayoristaAplicado(it: Pick<CartItem, "cantidad" | "precio_venta" | "precio_mayorista" | "cantidad_minima_mayorista">): boolean {
+/** Precio unitario cuando el cobro es con tarjeta. Pintura con precio_tarjeta cargado
+ *  usa ese valor; el resto sigue la lógica de recargo (se aplica arriba en confirmarCobro).
+ */
+function precioTarjeta(it: Pick<CartItem, "cantidad" | "precio_venta" | "precio_mayorista" | "cantidad_minima_mayorista" | "es_pintura" | "precio_efectivo" | "precio_tarjeta">): number {
+  if (it.es_pintura && it.precio_tarjeta != null && it.precio_tarjeta > 0) {
+    return it.precio_tarjeta;
+  }
+  return precioEfectivo(it);
+}
+function esMayoristaAplicado(it: Pick<CartItem, "cantidad" | "precio_venta" | "precio_mayorista" | "cantidad_minima_mayorista" | "es_pintura" | "precio_efectivo">): boolean {
   return precioEfectivo(it) === it.precio_mayorista && it.precio_mayorista > 0 && it.precio_mayorista !== it.precio_venta;
 }
 
@@ -141,6 +161,9 @@ export default function CajaPage() {
           cantidad_minima_mayorista: p.cantidad_minima_mayorista != null ? Number(p.cantidad_minima_mayorista) : null,
           stock_actual: Number(p.stock_actual) || 0,
           imagen_url: (p.imagen_url as string | null) ?? null,
+          es_pintura: p.es_pintura === true,
+          precio_efectivo: p.precio_efectivo != null ? Number(p.precio_efectivo) : null,
+          precio_tarjeta: p.precio_tarjeta != null ? Number(p.precio_tarjeta) : null,
         }));
         setAsociarHits(items);
       } finally {
@@ -335,6 +358,9 @@ export default function CajaPage() {
           cantidad_minima_mayorista: p.cantidad_minima_mayorista != null ? Number(p.cantidad_minima_mayorista) : null,
           stock_actual: Number(p.stock_actual) || 0,
           imagen_url: (p.imagen_url as string | null) ?? null,
+          es_pintura: p.es_pintura === true,
+          precio_efectivo: p.precio_efectivo != null ? Number(p.precio_efectivo) : null,
+          precio_tarjeta: p.precio_tarjeta != null ? Number(p.precio_tarjeta) : null,
         }));
         searchCacheRef.current.set(key, { hits: items, ts: Date.now() });
         // Techo defensivo: si el cache pasa las 200 entradas, tiramos las viejas.
@@ -367,6 +393,9 @@ export default function CajaPage() {
       precio_venta: p.precio_venta,
       precio_mayorista: p.precio_mayorista,
       cantidad_minima_mayorista: p.cantidad_minima_mayorista,
+      es_pintura: p.es_pintura,
+      precio_efectivo: p.precio_efectivo,
+      precio_tarjeta: p.precio_tarjeta,
     };
     setCart((prev) => {
       const ex = prev.find((x) => x.producto_id === p.id);
@@ -409,6 +438,9 @@ export default function CajaPage() {
           cantidad_minima_mayorista: first.cantidad_minima_mayorista != null ? Number(first.cantidad_minima_mayorista) : null,
           stock_actual: Number(first.stock_actual) || 0,
           imagen_url: (first.imagen_url as string | null) ?? null,
+          es_pintura: first.es_pintura === true,
+          precio_efectivo: first.precio_efectivo != null ? Number(first.precio_efectivo) : null,
+          precio_tarjeta: first.precio_tarjeta != null ? Number(first.precio_tarjeta) : null,
         });
       }
     } catch {
@@ -433,9 +465,24 @@ export default function CajaPage() {
 
   const total = useMemo(() => cart.reduce((s, it) => s + it.cantidad * precioEfectivo(it), 0), [cart]);
   const cantTotal = useMemo(() => cart.reduce((s, it) => s + it.cantidad, 0), [cart]);
-  // Total efectivo del cobro según método (aplica recargo 4% cuando es tarjeta).
-  const totalCobro = useMemo(() => totalConRecargo(total, metodo), [total, metodo]);
-  const recargoTarjeta = useMemo(() => calcularRecargoTarjeta(total, metodo), [total, metodo]);
+  // Total con tarjeta: pintura usa precio_tarjeta; no-pintura aplica recargo 4%.
+  const totalNoPinturaContado = useMemo(
+    () => cart.reduce((s, it) => s + (it.es_pintura && it.precio_tarjeta != null && it.precio_tarjeta > 0 ? 0 : it.cantidad * precioEfectivo(it)), 0),
+    [cart]
+  );
+  const totalCobro = useMemo(() => {
+    if (metodo !== "tarjeta") return total;
+    // pintura con precio_tarjeta → ese precio; el resto → precioEfectivo + recargo 4%.
+    const totalPinturaTarjeta = cart.reduce(
+      (s, it) => s + (it.es_pintura && it.precio_tarjeta != null && it.precio_tarjeta > 0 ? it.cantidad * it.precio_tarjeta : 0),
+      0
+    );
+    return totalPinturaTarjeta + totalNoPinturaContado + calcularRecargoTarjeta(totalNoPinturaContado, "tarjeta");
+  }, [cart, metodo, total, totalNoPinturaContado]);
+  const recargoTarjeta = useMemo(
+    () => calcularRecargoTarjeta(totalNoPinturaContado, metodo),
+    [totalNoPinturaContado, metodo]
+  );
 
   // Abrir modal
   function abrirCobro() {
@@ -456,12 +503,18 @@ export default function CajaPage() {
     setCobrando(true);
     setCobroError(null);
     try {
-      const totalContado = cart.reduce((s, it) => s + it.cantidad * precioEfectivo(it), 0);
-      const recargoTot = calcularRecargoTarjeta(totalContado, metodo);
-      const factorRecargo = totalContado > 0 ? (totalContado + recargoTot) / totalContado : 1;
+      // Sólo aplicamos recargo 4% sobre lo NO pintura; los ítems pintura ya
+      // tienen su precio_tarjeta cargado por producto.
+      const totalContadoNoPintura = cart.reduce(
+        (s, it) => s + (it.es_pintura && it.precio_tarjeta != null && it.precio_tarjeta > 0 ? 0 : it.cantidad * precioEfectivo(it)),
+        0
+      );
+      const recargoTot = calcularRecargoTarjeta(totalContadoNoPintura, metodo);
+      const factorRecargo = totalContadoNoPintura > 0 ? (totalContadoNoPintura + recargoTot) / totalContadoNoPintura : 1;
       const items: LineaVenta[] = cart.map((it) => {
-        const precioBase = precioEfectivo(it);
-        const precio = recargoTot > 0 ? precioBase * factorRecargo : precioBase;
+        const usaPrecioTarjetaPintura = metodo === "tarjeta" && it.es_pintura && it.precio_tarjeta != null && it.precio_tarjeta > 0;
+        const precioBase = usaPrecioTarjetaPintura ? it.precio_tarjeta! : precioEfectivo(it);
+        const precio = (recargoTot > 0 && !usaPrecioTarjetaPintura) ? precioBase * factorRecargo : precioBase;
         const esMay = esMayoristaAplicado(it);
         const subtotal = it.cantidad * precio;
         return {
@@ -688,6 +741,11 @@ export default function CajaPage() {
                             {it.sku}
                             {" · "}
                             {formatGs(precioEfectivo(it))} c/u
+                            {it.es_pintura && it.precio_tarjeta != null && it.precio_tarjeta > 0 && it.precio_tarjeta !== precioEfectivo(it) && (
+                              <span className="ml-1 text-fuchsia-600">
+                                (tarjeta {formatGs(it.precio_tarjeta)})
+                              </span>
+                            )}
                             {!esMayoristaAplicado(it) && it.precio_mayorista > 0 && it.precio_mayorista !== it.precio_venta && it.cantidad_minima_mayorista != null && it.cantidad_minima_mayorista > 0 && (
                               <span className="ml-1 text-indigo-500">
                                 (desde {it.cantidad_minima_mayorista} u → {formatGs(it.precio_mayorista)})
