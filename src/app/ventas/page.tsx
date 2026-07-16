@@ -84,6 +84,15 @@ export default function CajaPage() {
   const [clienteQuery, setClienteQuery] = useState("");
   const [clientesAbierto, setClientesAbierto] = useState(false);
 
+  // Modal "crear cliente" desde el POS
+  const [nuevoClienteOpen, setNuevoClienteOpen] = useState(false);
+  const [nuevoClienteNombre, setNuevoClienteNombre] = useState("");
+  const [nuevoClienteRuc, setNuevoClienteRuc] = useState("");
+  const [nuevoClienteDoc, setNuevoClienteDoc] = useState("");
+  const [nuevoClienteTelefono, setNuevoClienteTelefono] = useState("");
+  const [nuevoClienteError, setNuevoClienteError] = useState<string | null>(null);
+  const [nuevoClienteGuardando, setNuevoClienteGuardando] = useState(false);
+
   // Modal cobro
   const [cobroOpen, setCobroOpen] = useState(false);
   const [metodo, setMetodo] = useState<MetodoPago>("efectivo");
@@ -215,6 +224,63 @@ export default function CajaPage() {
       )
       .slice(0, 20);
   }, [clientes, clienteQuery]);
+
+  function abrirCrearCliente() {
+    setNuevoClienteNombre(clienteQuery.trim());
+    setNuevoClienteRuc("");
+    setNuevoClienteDoc("");
+    setNuevoClienteTelefono("");
+    setNuevoClienteError(null);
+    setNuevoClienteOpen(true);
+    setClientesAbierto(false);
+  }
+
+  async function crearClienteSubmit() {
+    const nombre = nuevoClienteNombre.trim();
+    if (!nombre) {
+      setNuevoClienteError("El nombre es obligatorio.");
+      return;
+    }
+    setNuevoClienteError(null);
+    setNuevoClienteGuardando(true);
+    try {
+      const res = await fetchWithSupabaseSession("/api/clientes", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tipo_cliente: "empresa",
+          empresa: nombre,
+          nombre_contacto: nombre,
+          ruc: nuevoClienteRuc.trim() || null,
+          documento: nuevoClienteDoc.trim() || null,
+          telefono: nuevoClienteTelefono.trim() || null,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j?.success) {
+        setNuevoClienteError(j?.error ?? "No se pudo crear el cliente.");
+        return;
+      }
+      const c = j.data as Record<string, unknown>;
+      const nuevo: ClienteLite = {
+        id: String(c.id),
+        nombre:
+          (typeof c.empresa === "string" && c.empresa.trim()) ||
+          (typeof c.nombre_contacto === "string" && c.nombre_contacto.trim()) ||
+          nombre,
+        ruc: (c.ruc as string | null) ?? null,
+        documento: (c.documento as string | null) ?? null,
+      };
+      setClientes((prev) => [nuevo, ...prev]);
+      setClienteSel(nuevo);
+      setClienteQuery("");
+      setNuevoClienteOpen(false);
+    } catch (e) {
+      setNuevoClienteError(e instanceof Error ? e.message : "No se pudo crear el cliente.");
+    } finally {
+      setNuevoClienteGuardando(false);
+    }
+  }
 
   // Entidades disponibles según método (excluye tipo "caja" para trans/tarjeta).
   const entidadesFiltradas = useMemo(() => {
@@ -736,8 +802,18 @@ export default function CajaPage() {
                       placeholder="Consumidor final — buscá por nombre/RUC…"
                       className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#4FAEB2]"
                     />
-                    {clientesAbierto && clientesFiltrados.length > 0 && (
+                    {clientesAbierto && (
                       <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                        <li className="border-b border-slate-100 bg-emerald-50/40">
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={abrirCrearCliente}
+                            className="block w-full px-3 py-2 text-left text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+                          >
+                            + Crear cliente{clienteQuery.trim() ? ` "${clienteQuery.trim()}"` : ""}
+                          </button>
+                        </li>
                         {clientesFiltrados.map((c) => (
                           <li key={c.id}>
                             <button
@@ -755,6 +831,9 @@ export default function CajaPage() {
                             </button>
                           </li>
                         ))}
+                        {clientesFiltrados.length === 0 && (
+                          <li className="px-3 py-2 text-xs text-slate-400">Sin resultados.</li>
+                        )}
                       </ul>
                     )}
                   </div>
@@ -786,6 +865,89 @@ export default function CajaPage() {
                   Vaciar carrito
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal crear cliente rápido */}
+      {nuevoClienteOpen && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4"
+          onClick={() => { if (!nuevoClienteGuardando) setNuevoClienteOpen(false); }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-md space-y-3 rounded-2xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-slate-900">Nuevo cliente</h3>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Nombre / razón social *</label>
+              <input
+                type="text"
+                autoFocus
+                value={nuevoClienteNombre}
+                onChange={(e) => setNuevoClienteNombre(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#4FAEB2]"
+                placeholder="Ej: Juan Pérez o Constructora XYZ"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">RUC</label>
+                <input
+                  type="text"
+                  value={nuevoClienteRuc}
+                  onChange={(e) => setNuevoClienteRuc(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#4FAEB2]"
+                  placeholder="80012345-6"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Documento</label>
+                <input
+                  type="text"
+                  value={nuevoClienteDoc}
+                  onChange={(e) => setNuevoClienteDoc(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#4FAEB2]"
+                  placeholder="CI"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Teléfono</label>
+              <input
+                type="text"
+                value={nuevoClienteTelefono}
+                onChange={(e) => setNuevoClienteTelefono(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#4FAEB2]"
+                placeholder="0981 123 456"
+              />
+            </div>
+            {nuevoClienteError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                {nuevoClienteError}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={nuevoClienteGuardando}
+                onClick={() => setNuevoClienteOpen(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={nuevoClienteGuardando}
+                onClick={crearClienteSubmit}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {nuevoClienteGuardando ? "Guardando…" : "Crear y seleccionar"}
+              </button>
             </div>
           </div>
         </div>
