@@ -8,6 +8,7 @@ import MontoInput, { parseMontoInput } from "@/components/ui/MontoInput";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { saveVenta } from "@/lib/ventas/storage";
 import type { LineaVenta, MetodoPago } from "@/lib/ventas/types";
+import { CARD_SURCHARGE_PCT, calcularRecargoTarjeta, totalConRecargo } from "@/lib/ventas/recargo-tarjeta";
 
 type EntidadBancaria = { id: string; codigo: string | null; nombre: string; tipo: string | null };
 
@@ -432,6 +433,9 @@ export default function CajaPage() {
 
   const total = useMemo(() => cart.reduce((s, it) => s + it.cantidad * precioEfectivo(it), 0), [cart]);
   const cantTotal = useMemo(() => cart.reduce((s, it) => s + it.cantidad, 0), [cart]);
+  // Total efectivo del cobro según método (aplica recargo 4% cuando es tarjeta).
+  const totalCobro = useMemo(() => totalConRecargo(total, metodo), [total, metodo]);
+  const recargoTarjeta = useMemo(() => calcularRecargoTarjeta(total, metodo), [total, metodo]);
 
   // Abrir modal
   function abrirCobro() {
@@ -452,8 +456,12 @@ export default function CajaPage() {
     setCobrando(true);
     setCobroError(null);
     try {
+      const totalContado = cart.reduce((s, it) => s + it.cantidad * precioEfectivo(it), 0);
+      const recargoTot = calcularRecargoTarjeta(totalContado, metodo);
+      const factorRecargo = totalContado > 0 ? (totalContado + recargoTot) / totalContado : 1;
       const items: LineaVenta[] = cart.map((it) => {
-        const precio = precioEfectivo(it);
+        const precioBase = precioEfectivo(it);
+        const precio = recargoTot > 0 ? precioBase * factorRecargo : precioBase;
         const esMay = esMayoristaAplicado(it);
         const subtotal = it.cantidad * precio;
         return {
@@ -516,9 +524,9 @@ export default function CajaPage() {
   const diferenciaEfectivo = useMemo(() => {
     if (metodo !== "efectivo") return 0;
     const r = parseMontoInput(efectivoRecibido);
-    if (!Number.isFinite(r) || r <= 0) return -total;
-    return r - total;
-  }, [efectivoRecibido, total, metodo]);
+    if (!Number.isFinite(r) || r <= 0) return -totalCobro;
+    return r - totalCobro;
+  }, [efectivoRecibido, totalCobro, metodo]);
   const vuelto = diferenciaEfectivo > 0 ? diferenciaEfectivo : 0;
   const faltaEfectivo = diferenciaEfectivo < 0 ? -diferenciaEfectivo : 0;
   const efectivoIngresado = parseMontoInput(efectivoRecibido) > 0;
@@ -967,24 +975,36 @@ export default function CajaPage() {
           >
             <div>
               <h3 className="text-lg font-semibold text-slate-900">Cobrar</h3>
-              <p className="mt-1 text-sm text-slate-500">Total: <strong className="text-slate-900">{formatGs(total)}</strong> · {cantTotal} ítem{cantTotal === 1 ? "" : "s"}</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Total: <strong className="text-slate-900">{formatGs(totalCobro)}</strong> · {cantTotal} ítem{cantTotal === 1 ? "" : "s"}
+              </p>
+              {recargoTarjeta > 0 && (
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Contado <span className="tabular-nums">{formatGs(total)}</span>
+                  {" + "}
+                  <span className="tabular-nums">{formatGs(recargoTarjeta)}</span> recargo tarjeta ({Math.round(CARD_SURCHARGE_PCT * 100)}%)
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-3 gap-2">
-              {(["efectivo", "transferencia", "tarjeta"] as MetodoPago[]).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setMetodo(m)}
-                  className={`rounded-lg border px-3 py-3 text-sm font-medium capitalize transition-colors ${
-                    metodo === m
-                      ? "border-[#4FAEB2] bg-[#4FAEB2]/10 text-[#3F8E91]"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  {m}
-                </button>
-              ))}
+              {(["efectivo", "transferencia", "tarjeta"] as MetodoPago[]).map((m) => {
+                const label = m === "tarjeta" ? `Tarjeta (+${Math.round(CARD_SURCHARGE_PCT * 100)}%)` : m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMetodo(m)}
+                    className={`rounded-lg border px-3 py-3 text-sm font-medium capitalize transition-colors ${
+                      metodo === m
+                        ? "border-[#4FAEB2] bg-[#4FAEB2]/10 text-[#3F8E91]"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
 
             {metodo === "efectivo" && (
