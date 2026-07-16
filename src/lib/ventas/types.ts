@@ -47,5 +47,8 @@ export interface Venta {
   /** Número de nota de remisión (NR-XXXXXX) si genera_nota_remision. */
   nota_remision_numero?: string | null;
 
+  /** Estado de la venta: 'confirmada' | 'anulada' (u otros). null para ventas viejas sin estado. */
+  estado?: string | null;
+
   fecha: string;             // ISO string, generado automáticamente
 }

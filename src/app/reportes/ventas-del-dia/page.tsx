@@ -130,9 +130,10 @@ export default function VentasDelDiaPage() {
   }, [ventasDia, busqueda]);
 
   const totales = useMemo(() => {
-    const facturacion = filtradas.reduce((s, v) => s + v.total, 0);
-    const cantidad = filtradas.length;
-    const unidades = filtradas.reduce((s, v) => s + v.items.reduce((si, i) => si + i.cantidad, 0), 0);
+    const activas = filtradas.filter((v) => v.estado !== "anulada");
+    const facturacion = activas.reduce((s, v) => s + v.total, 0);
+    const cantidad = activas.length;
+    const unidades = activas.reduce((s, v) => s + v.items.reduce((si, i) => si + i.cantidad, 0), 0);
     const promedio = cantidad > 0 ? facturacion / cantidad : 0;
     return { facturacion, cantidad, unidades, promedio };
   }, [filtradas]);
@@ -271,9 +272,17 @@ export default function VentasDelDiaPage() {
               filtradas.map((v) => {
                 const cantTotal = v.items.reduce((s, i) => s + i.cantidad, 0);
                 const primer = v.items[0];
+                const anulada = v.estado === "anulada";
                 return (
-                  <tr key={v.id} className="border-t border-slate-100 hover:bg-slate-50/70">
-                    <td className="px-5 py-3 font-mono text-xs text-slate-600">{v.numero_control}</td>
+                  <tr key={v.id} className={`border-t border-slate-100 hover:bg-slate-50/70 ${anulada ? "bg-rose-50/40 text-slate-400" : ""}`}>
+                    <td className="px-5 py-3 font-mono text-xs text-slate-600">
+                      {v.numero_control}
+                      {anulada && (
+                        <span className="ml-2 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700">
+                          Anulada
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-3">
                       {primer ? (
                         <div>
@@ -305,14 +314,16 @@ export default function VentasDelDiaPage() {
                         >
                           <Printer className="h-3.5 w-3.5" /> Imprimir
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => { setAnularTarget(v); setAnularMotivo(""); setAnularError(null); }}
-                          title="Anular venta"
-                          className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50"
-                        >
-                          <XCircle className="h-3.5 w-3.5" /> Anular
-                        </button>
+                        {!anulada && (
+                          <button
+                            type="button"
+                            onClick={() => { setAnularTarget(v); setAnularMotivo(""); setAnularError(null); }}
+                            title="Anular venta"
+                            className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50"
+                          >
+                            <XCircle className="h-3.5 w-3.5" /> Anular
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
