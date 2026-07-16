@@ -668,12 +668,12 @@ export default function CajaPage() {
               className="relative flex-1 min-h-[280px] rounded-t-2xl overflow-hidden bg-gradient-to-br from-[#0F172A] via-[#164e63] to-[#4FAEB2]"
             >
               {/* Fallback textual: si no hay logo, mostramos el nombre grande de fondo. */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-                <div className="text-center px-6">
-                  <p className="text-white/10 font-black uppercase tracking-tight leading-none text-[5rem] sm:text-[6rem]">
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden">
+                <div className="w-full text-center px-4">
+                  <p className="text-white/10 font-black uppercase tracking-tight leading-[0.9] text-[clamp(1.75rem,7vw,3.5rem)]">
                     Ferretería
                   </p>
-                  <p className="text-white/25 font-black uppercase tracking-tight leading-none text-[5rem] sm:text-[6rem] -mt-4">
+                  <p className="text-white/25 font-black uppercase tracking-tight leading-[0.9] text-[clamp(1.75rem,7vw,3.5rem)]">
                     Chaco
                   </p>
                 </div>
