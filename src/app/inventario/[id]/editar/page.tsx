@@ -342,7 +342,6 @@ export default function EditarProductoPage() {
       // legacy `precio_venta` refleja el efectivo para compat con SIFEN/reportes;
       // mayorista/distribuidor/mínima se limpian.
       const precioEfectivoNum = form.precio_efectivo.trim() !== "" ? parseFloat(form.precio_efectivo) || 0 : 0;
-      const precioTarjetaNum = form.precio_tarjeta.trim() !== "" ? parseFloat(form.precio_tarjeta) || null : null;
       const updatePayload: Parameters<typeof updateProducto>[1] = {
         nombre: form.nombre.trim().toUpperCase(),
         sku: form.sku.trim().toUpperCase(),
@@ -353,7 +352,7 @@ export default function EditarProductoPage() {
         precio_distribuidor: null,
         es_pintura: true,
         precio_efectivo: precioEfectivoNum || null,
-        precio_tarjeta: precioTarjetaNum,
+        precio_tarjeta: null,
         stock_actual: parseInt(form.stock_actual) || 0,
         stock_minimo: parseInt(form.stock_minimo) || 0,
         unidad_medida: form.unidad_medida.trim().toUpperCase() || "UNIDAD",
@@ -829,18 +828,8 @@ export default function EditarProductoPage() {
                     decimals={false}
                   />
                 </div>
-                <div>
-                  <label className={labelClass}>Precio tarjeta (Gs.)</label>
-                  <MontoInput
-                    value={form.precio_tarjeta}
-                    onChange={(n) => setForm((prev) => ({ ...prev, precio_tarjeta: String(n) }))}
-                    placeholder="Ej: 55000"
-                    className={inputClass}
-                    decimals={false}
-                  />
-                </div>
                 <p className="sm:col-span-2 text-xs text-gray-500">
-                  El POS usa el precio efectivo por defecto; si el cobro es con tarjeta, cambia al precio tarjeta.
+                  El POS usa este precio por defecto; si el cobro es con tarjeta, se le suma automáticamente 4%.
                 </p>
               </div>
             )}

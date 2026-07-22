@@ -349,7 +349,7 @@ export default function NuevoProductoPage() {
           precio_distribuidor: form.precio_distribuidor.trim() !== "" ? parseFloat(form.precio_distribuidor) || null : null,
           es_pintura: esPintura,
           precio_efectivo: esPintura && form.precio_efectivo.trim() !== "" ? parseFloat(form.precio_efectivo) || null : null,
-          precio_tarjeta: esPintura && form.precio_tarjeta.trim() !== "" ? parseFloat(form.precio_tarjeta) || null : null,
+          precio_tarjeta: null,
           cantidad_minima_mayorista: form.cantidad_minima_mayorista.trim() !== "" ? parseFloat(form.cantidad_minima_mayorista) || null : null,
           stock_actual: parseInt(form.stock_actual) || 0,
           stock_minimo: parseInt(form.stock_minimo) || 0,
@@ -838,19 +838,9 @@ export default function NuevoProductoPage() {
                           decimals={false}
                         />
                       </div>
-                      <div>
-                        <label className={labelClass}>Precio tarjeta (Gs.)</label>
-                        <MontoInput
-                          value={form.precio_tarjeta}
-                          onChange={(n) => setForm((prev) => ({ ...prev, precio_tarjeta: String(n) }))}
-                          placeholder="Ej: 55000"
-                          className={inputClass}
-                          decimals={false}
-                        />
-                      </div>
                     </div>
                     <p className="mt-2 text-xs text-gray-500">
-                      Cuando ambos precios están cargados, la venta usa el precio correspondiente al método de pago y esta línea NO recibe el recargo global del 4% de tarjeta.
+                      El POS usa este precio por defecto; si el cobro es con tarjeta, se le suma automáticamente 4%.
                     </p>
                   </>
                 )}
