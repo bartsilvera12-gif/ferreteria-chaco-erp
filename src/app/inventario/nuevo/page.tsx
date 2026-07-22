@@ -840,7 +840,7 @@ export default function NuevoProductoPage() {
                       </div>
                     </div>
                     <p className="mt-2 text-xs text-gray-500">
-                      El POS usa este precio por defecto; si el cobro es con tarjeta, se le suma automáticamente 4%.
+                      El POS usa este precio por defecto; si el cobro es con tarjeta, se le suma automáticamente 3%.
                     </p>
                   </>
                 )}

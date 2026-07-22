@@ -4,7 +4,7 @@
  * transferencia. Cuando el cobro es con tarjeta, se aplica este recargo sobre el total.
  */
 
-export const CARD_SURCHARGE_PCT = 0.04;
+export const CARD_SURCHARGE_PCT = 0.03;
 
 export type MetodoPagoTarjetable = "efectivo" | "tarjeta" | "transferencia" | string;
 
