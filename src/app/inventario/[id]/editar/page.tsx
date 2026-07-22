@@ -203,7 +203,9 @@ export default function EditarProductoPage() {
         precio_mayorista: p.precio_mayorista != null ? String(p.precio_mayorista) : "",
         cantidad_minima_mayorista: p.cantidad_minima_mayorista != null ? String(p.cantidad_minima_mayorista) : "",
         precio_distribuidor: p.precio_distribuidor != null ? String(p.precio_distribuidor) : "",
-        precio_efectivo: p.precio_efectivo != null ? String(p.precio_efectivo) : "",
+        precio_efectivo: p.precio_efectivo != null && p.precio_efectivo > 0
+          ? String(p.precio_efectivo)
+          : (p.precio_venta > 0 ? String(p.precio_venta) : ""),
         precio_tarjeta: p.precio_tarjeta != null ? String(p.precio_tarjeta) : "",
         stock_actual: String(p.stock_actual),
         stock_minimo: String(p.stock_minimo),
