@@ -815,35 +815,35 @@ export default function CajaPage() {
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col">
             {/* Área visual: branding Ferretería Chaco + foto producto. */}
             <div
-              className="relative flex-1 min-h-[280px] rounded-t-2xl overflow-hidden bg-gradient-to-br from-[#0F172A] via-[#164e63] to-[#4FAEB2]"
+              className="relative flex-1 min-h-[180px] rounded-t-2xl overflow-hidden bg-gradient-to-br from-[#0F172A] via-[#164e63] to-[#4FAEB2]"
             >
               {/* Fallback textual: si no hay logo, mostramos el nombre grande de fondo. */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden">
                 <div className="w-full text-center px-4">
-                  <p className="text-white/10 font-black uppercase tracking-tight leading-[0.9] text-[clamp(1.75rem,7vw,3.5rem)]">
+                  <p className="text-white/10 font-black uppercase tracking-tight leading-[0.9] text-[clamp(1.25rem,4.5vw,2.25rem)]">
                     Ferretería
                   </p>
-                  <p className="text-white/25 font-black uppercase tracking-tight leading-[0.9] text-[clamp(1.75rem,7vw,3.5rem)]">
+                  <p className="text-white/25 font-black uppercase tracking-tight leading-[0.9] text-[clamp(1.25rem,4.5vw,2.25rem)]">
                     Chaco
                   </p>
                 </div>
               </div>
               {/* Foto del último producto agregado, encima */}
               {ultimoAgregado && (
-                <div className="relative z-10 flex h-full items-center justify-center p-6">
+                <div className="relative z-10 flex h-full items-center justify-center p-4">
                   <div className="rounded-2xl border-2 border-white/20 bg-white/95 p-3 shadow-2xl">
                     {ultimoAgregado.imagen_url ? (
                       <img
                         src={ultimoAgregado.imagen_url}
                         alt={ultimoAgregado.producto_nombre}
-                        className="h-56 w-56 object-contain"
+                        className="h-36 w-36 object-contain"
                       />
                     ) : (
-                      <div className="flex h-56 w-56 items-center justify-center text-slate-300">
-                        <Package className="h-24 w-24" />
+                      <div className="flex h-36 w-36 items-center justify-center text-slate-300">
+                        <Package className="h-16 w-16" />
                       </div>
                     )}
-                    <p className="mt-2 max-w-[224px] truncate text-center text-sm font-semibold text-slate-800">
+                    <p className="mt-2 max-w-[176px] text-center text-xs font-semibold leading-tight text-slate-800 line-clamp-2">
                       {ultimoAgregado.producto_nombre}
                     </p>
                     <p className="text-center font-mono text-[10px] text-slate-400">{ultimoAgregado.sku}</p>
