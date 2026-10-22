@@ -126,6 +126,7 @@ export default function CajaPage() {
   const [cobrando, setCobrando] = useState(false);
   const [cobroError, setCobroError] = useState<string | null>(null);
   const [ventaOk, setVentaOk] = useState<string | null>(null);
+  const [ventaOkId, setVentaOkId] = useState<string | null>(null);
 
   // Modal "asociar código de barras a un producto"
   const [asociarOpen, setAsociarOpen] = useState(false);
@@ -580,10 +581,11 @@ export default function CajaPage() {
       // Abrir ticket auto-print en pestaña nueva
       try { window.open(`/api/ventas/${v.id}/ticket?auto=1`, "_blank", "noopener"); } catch {}
       setVentaOk(v.numero_control);
+      setVentaOkId(v.id);
       setCobroOpen(false);
       vaciarCarrito();
       setCajaRefreshTick((n) => n + 1);
-      setTimeout(() => setVentaOk(null), 3500);
+      setTimeout(() => { setVentaOk(null); setVentaOkId(null); }, 15000);
       inputRef.current?.focus();
     } catch (e) {
       setCobroError(e instanceof Error ? e.message : "No se pudo registrar la venta.");
@@ -631,8 +633,19 @@ export default function CajaPage() {
 
       {/* Toast venta OK */}
       {ventaOk && (
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 shadow-sm">
-          <CheckCircle2 className="h-5 w-5" /> Venta <strong>{ventaOk}</strong> registrada. Ticket enviado a imprimir.
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 shadow-sm">
+          <span className="flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5" /> Venta <strong>{ventaOk}</strong> registrada. Ticket enviado a imprimir.
+          </span>
+          {ventaOkId && (
+            <button
+              type="button"
+              onClick={() => { try { window.open(`/api/ventas/${ventaOkId}/factura-preimpreso`, "_blank", "noopener"); } catch {} }}
+              className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+            >
+              🖨️ Imprimir factura preimpresa
+            </button>
+          )}
         </div>
       )}
 
