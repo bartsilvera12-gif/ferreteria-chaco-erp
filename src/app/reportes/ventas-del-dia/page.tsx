@@ -165,6 +165,10 @@ export default function VentasDelDiaPage() {
     try { window.open(`/api/ventas/${v.id}/ticket`, "_blank", "noopener"); } catch {}
   }
 
+  function imprimirFacturaPreimpresa(v: Venta) {
+    try { window.open(`/api/ventas/${v.id}/factura-preimpreso`, "_blank", "noopener"); } catch {}
+  }
+
   return (
     <div className="space-y-6 p-4 lg:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -313,6 +317,14 @@ export default function VentasDelDiaPage() {
                           className="inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-white px-2.5 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-50"
                         >
                           <Printer className="h-3.5 w-3.5" /> Imprimir
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => imprimirFacturaPreimpresa(v)}
+                          title="Imprimir factura sobre formulario preimpreso"
+                          className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                        >
+                          <Printer className="h-3.5 w-3.5" /> Factura
                         </button>
                         {!anulada && (
                           <button
