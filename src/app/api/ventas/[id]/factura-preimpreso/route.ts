@@ -52,12 +52,12 @@ const F = {
   condContado: { x: 122.5, y: 37.5 }, //casillero CONTADO
   condCredito: { x: 142.5, y: 37.5 }, //casillero CRÉDITO
   ruc: { x: 22.0, y: 46.0 }, //         fila R.U.C. (y 44.5→53)
-  razon: { x: 44.0, y: 56.5 }, //       fila NOMBRE/RAZÓN SOCIAL (y 53→61)
+  razon: { x: 34.0, y: 56.5 }, //       fila NOMBRE/RAZÓN SOCIAL (y 53→61)
   subtotal: { xRight: 143.5, y: 178.0 }, // SUB TOTAL (y 175.5→189.5)
-  totalPagar: { xRight: 143.5, y: 185.0 }, // TOTAL A PAGAR Gs.:
-  liqIva5: { xRight: 70.0, y: 194.0 }, //   LIQUIDACIÓN DEL IVA (5%)
-  liqIva10: { xRight: 112.0, y: 194.0 }, // (10%)
-  totalIva: { xRight: 143.5, y: 194.0 }, // TOTAL IVA:
+  totalPagar: { xRight: 140.5, y: 187.0 }, // TOTAL A PAGAR Gs.:
+  liqIva5: { xRight: 67.0, y: 195.5 }, //   LIQUIDACIÓN DEL IVA (5%)
+  liqIva10: { xRight: 109.0, y: 195.5 }, // (10%)
+  totalIva: { xRight: 140.5, y: 195.5 }, // TOTAL IVA:
 };
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
