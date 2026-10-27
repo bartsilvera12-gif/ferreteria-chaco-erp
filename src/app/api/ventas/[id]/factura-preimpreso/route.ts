@@ -49,8 +49,8 @@ const ITEMS = { top: 71.0, rowH: 4.8, maxRows: 21 };
 const F = {
   numero: { x: 98.0, y: 30.5 }, //      campo Nº (header, solo si numero=1)
   fecha: { x: 24.0, y: 40.0 }, //       fila FECHA (y 36.5→44.5)
-  condContado: { x: 122.5, y: 37.5 }, //casillero CONTADO
-  condCredito: { x: 142.5, y: 37.5 }, //casillero CRÉDITO
+  condContado: { x: 122.5, y: 39.0 }, //casillero CONTADO
+  condCredito: { x: 142.5, y: 39.0 }, //casillero CRÉDITO
   ruc: { x: 22.0, y: 46.0 }, //         fila R.U.C. (y 44.5→53)
   razon: { x: 34.0, y: 56.5 }, //       fila NOMBRE/RAZÓN SOCIAL (y 53→61)
   subtotal: { xRight: 143.5, y: 178.0 }, // SUB TOTAL (y 175.5→189.5)
@@ -141,14 +141,17 @@ type Adj = Record<string, { dx?: number; dy?: number }>;
 const ADJ_IZQ: Adj = {
   cond: { dx: 2.5 }, // X de CONTADO: un poco a la derecha
   cant: { dx: 2 }, //   cantidad: a la derecha
-  desc: { dx: 2 }, //   descripción: a la derecha
+  desc: { dx: 3.5 }, // descripción: más a la derecha
+  pu: { dx: 2 }, //     precio unitario: a la derecha
+  exentas: { dx: 2 }, //exentas: a la derecha
 };
 // Mitad DERECHA (duplicado).
 const ADJ_DER: Adj = {
   cond: { dx: -2.5 }, // X de CONTADO: un poco a la izquierda
   pu: { dx: -2 }, //     precio unitario: a la izquierda
   exentas: { dx: -2 }, //exentas: a la izquierda
-  razon: { dy: -2 }, //  razón social: un poco más arriba
+  razon: { dy: -0.5 }, //razón social: casi centrada (un poco más abajo)
+  totalPagar: { dx: -2 }, // TOTAL A PAGAR: a la izquierda
 };
 
 // ── Render de UN bloque (una factura) ────────────────────────────────────────
