@@ -49,8 +49,8 @@ const ITEMS = { top: 71.0, rowH: 4.8, maxRows: 21 };
 const F = {
   numero: { x: 98.0, y: 30.5 }, //      campo Nº (header, solo si numero=1)
   fecha: { x: 24.0, y: 37.5 }, //       fila FECHA (y 36.5→44.5)
-  condContado: { x: 118.5, y: 37.5 }, //casillero CONTADO
-  condCredito: { x: 140.5, y: 37.5 }, //casillero CRÉDITO
+  condContado: { x: 122.5, y: 37.5 }, //casillero CONTADO
+  condCredito: { x: 142.5, y: 37.5 }, //casillero CRÉDITO
   ruc: { x: 22.0, y: 46.0 }, //         fila R.U.C. (y 44.5→53)
   razon: { x: 44.0, y: 56.5 }, //       fila NOMBRE/RAZÓN SOCIAL (y 53→61)
   subtotal: { xRight: 143.5, y: 178.0 }, // SUB TOTAL (y 175.5→189.5)
