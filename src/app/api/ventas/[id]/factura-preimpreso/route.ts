@@ -210,8 +210,14 @@ function gridGuia(offsetX: number): string {
 export async function GET(request: NextRequest, ctxParams: { params: Promise<{ id: string }> }) {
   const { id } = await ctxParams.params;
   const url = new URL(request.url);
-  const dx = Number(url.searchParams.get("dx") ?? "0") || 0;
-  const dy = Number(url.searchParams.get("dy") ?? "0") || 0;
+  // Calibración por defecto contra la matricial de Ferretería Chaco.
+  // Se puede sobrescribir en vivo con ?dx= y ?dy= (mm). + derecha / + abajo.
+  const CAL_DX = 0;
+  const CAL_DY = 2;
+  const dxParam = url.searchParams.get("dx");
+  const dyParam = url.searchParams.get("dy");
+  const dx = dxParam !== null ? (Number(dxParam) || 0) : CAL_DX;
+  const dy = dyParam !== null ? (Number(dyParam) || 0) : CAL_DY;
   const soloIzquierda = url.searchParams.get("half") === "left";
   const printNumero = url.searchParams.get("numero") === "1";
   const cal = url.searchParams.get("cal") === "1";
