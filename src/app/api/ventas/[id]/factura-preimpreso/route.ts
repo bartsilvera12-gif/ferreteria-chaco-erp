@@ -48,13 +48,13 @@ const ITEMS = { top: 71.0, rowH: 4.8, maxRows: 21 };
 // Posiciones de campos escalares (mm). y = borde superior del texto.
 const F = {
   numero: { x: 98.0, y: 30.5 }, //      campo Nº (header, solo si numero=1)
-  fecha: { x: 24.0, y: 37.5 }, //       fila FECHA (y 36.5→44.5)
+  fecha: { x: 24.0, y: 40.0 }, //       fila FECHA (y 36.5→44.5)
   condContado: { x: 122.5, y: 37.5 }, //casillero CONTADO
   condCredito: { x: 142.5, y: 37.5 }, //casillero CRÉDITO
   ruc: { x: 22.0, y: 46.0 }, //         fila R.U.C. (y 44.5→53)
   razon: { x: 34.0, y: 56.5 }, //       fila NOMBRE/RAZÓN SOCIAL (y 53→61)
   subtotal: { xRight: 143.5, y: 178.0 }, // SUB TOTAL (y 175.5→189.5)
-  totalPagar: { xRight: 140.5, y: 187.0 }, // TOTAL A PAGAR Gs.:
+  totalPagar: { xRight: 138.5, y: 187.0 }, // TOTAL A PAGAR Gs.:
   liqIva5: { xRight: 67.0, y: 195.5 }, //   LIQUIDACIÓN DEL IVA (5%)
   liqIva10: { xRight: 109.0, y: 195.5 }, // (10%)
   totalIva: { xRight: 140.5, y: 195.5 }, // TOTAL IVA:
@@ -132,6 +132,25 @@ function dato(
   return `<div class="d" style="${style}top:${y}mm;font-size:${size}pt;${bold ? "font-weight:700;" : ""}">${text}</div>`;
 }
 
+// Ajustes finos por bloque (mm). Compensan la no-linealidad horizontal de la
+// impresora: aunque el formulario es simétrico, cada mitad puede necesitar una
+// corrección distinta. Formato: { campo: { dx, dy } }.
+type Adj = Record<string, { dx?: number; dy?: number }>;
+
+// Mitad IZQUIERDA (original).
+const ADJ_IZQ: Adj = {
+  cond: { dx: 2.5 }, // X de CONTADO: un poco a la derecha
+  cant: { dx: 2 }, //   cantidad: a la derecha
+  desc: { dx: 2 }, //   descripción: a la derecha
+};
+// Mitad DERECHA (duplicado).
+const ADJ_DER: Adj = {
+  cond: { dx: -2.5 }, // X de CONTADO: un poco a la izquierda
+  pu: { dx: -2 }, //     precio unitario: a la izquierda
+  exentas: { dx: -2 }, //exentas: a la izquierda
+  razon: { dy: -2 }, //  razón social: un poco más arriba
+};
+
 // ── Render de UN bloque (una factura) ────────────────────────────────────────
 function renderBloque(
   offsetX: number,
@@ -148,40 +167,43 @@ function renderBloque(
     liq10: number;
     totalIva: number;
     printNumero: boolean;
-  }
+  },
+  adj: Adj = {}
 ): string {
   const partes: string[] = [];
-  const X = (x: number) => x + offsetX;
+  const gx = (campo: string, baseX: number) => baseX + offsetX + (adj[campo]?.dx ?? 0);
+  const gy = (campo: string, baseY: number) => baseY + (adj[campo]?.dy ?? 0);
 
   if (data.printNumero && data.numero) {
-    partes.push(dato(X(F.numero.x), F.numero.y, escapeHtml(data.numero), { bold: true, size: 8 }));
+    partes.push(dato(gx("numero", F.numero.x), gy("numero", F.numero.y), escapeHtml(data.numero), { bold: true, size: 8 }));
   }
-  partes.push(dato(X(F.fecha.x), F.fecha.y, escapeHtml(data.fecha)));
+  partes.push(dato(gx("fecha", F.fecha.x), gy("fecha", F.fecha.y), escapeHtml(data.fecha)));
   partes.push(
     data.esContado
-      ? dato(X(F.condContado.x), F.condContado.y, "X", { bold: true, size: 8 })
-      : dato(X(F.condCredito.x), F.condCredito.y, "X", { bold: true, size: 8 })
+      ? dato(gx("cond", F.condContado.x), gy("cond", F.condContado.y), "X", { bold: true, size: 8 })
+      : dato(gx("cond", F.condCredito.x), gy("cond", F.condCredito.y), "X", { bold: true, size: 8 })
   );
-  if (data.ruc) partes.push(dato(X(F.ruc.x), F.ruc.y, escapeHtml(data.ruc)));
-  if (data.razon) partes.push(dato(X(F.razon.x), F.razon.y, escapeHtml(data.razon)));
+  if (data.ruc) partes.push(dato(gx("ruc", F.ruc.x), gy("ruc", F.ruc.y), escapeHtml(data.ruc)));
+  if (data.razon) partes.push(dato(gx("razon", F.razon.x), gy("razon", F.razon.y), escapeHtml(data.razon)));
 
   // Ítems
   data.items.slice(0, ITEMS.maxRows).forEach((it, idx) => {
     const y = ITEMS.top + idx * ITEMS.rowH;
-    partes.push(dato(X(COL.cantRight), y, escapeHtml(it.cant), { align: "right" }));
-    partes.push(dato(X(COL.descLeft), y, escapeHtml(it.desc)));
-    partes.push(dato(X(COL.puRight), y, nf(it.pu), { align: "right" }));
-    const colX =
+    partes.push(dato(gx("cant", COL.cantRight), gy("items", y), escapeHtml(it.cant), { align: "right" }));
+    partes.push(dato(gx("desc", COL.descLeft), gy("items", y), escapeHtml(it.desc)));
+    partes.push(dato(gx("pu", COL.puRight), gy("items", y), nf(it.pu), { align: "right" }));
+    const colBase =
       it.tasa === "EXENTA" ? COL.exentasRight : it.tasa === "5%" ? COL.iva5Right : COL.iva10Right;
-    partes.push(dato(X(colX), y, nf(it.valor), { align: "right" }));
+    const colCampo = it.tasa === "EXENTA" ? "exentas" : it.tasa === "5%" ? "iva5" : "iva10";
+    partes.push(dato(gx(colCampo, colBase), gy("items", y), nf(it.valor), { align: "right" }));
   });
 
   // Totales
-  partes.push(dato(X(F.subtotal.xRight), F.subtotal.y, nf(data.subtotal), { align: "right", bold: true }));
-  partes.push(dato(X(F.totalPagar.xRight), F.totalPagar.y, nf(data.totalPagar), { align: "right", bold: true }));
-  if (data.liq5 > 0) partes.push(dato(X(F.liqIva5.xRight), F.liqIva5.y, nf(data.liq5), { align: "right" }));
-  if (data.liq10 > 0) partes.push(dato(X(F.liqIva10.xRight), F.liqIva10.y, nf(data.liq10), { align: "right" }));
-  partes.push(dato(X(F.totalIva.xRight), F.totalIva.y, nf(data.totalIva), { align: "right", bold: true }));
+  partes.push(dato(gx("subtotal", F.subtotal.xRight), gy("subtotal", F.subtotal.y), nf(data.subtotal), { align: "right", bold: true }));
+  partes.push(dato(gx("totalPagar", F.totalPagar.xRight), gy("totalPagar", F.totalPagar.y), nf(data.totalPagar), { align: "right", bold: true }));
+  if (data.liq5 > 0) partes.push(dato(gx("liq5", F.liqIva5.xRight), gy("liq5", F.liqIva5.y), nf(data.liq5), { align: "right" }));
+  if (data.liq10 > 0) partes.push(dato(gx("liq10", F.liqIva10.xRight), gy("liq10", F.liqIva10.y), nf(data.liq10), { align: "right" }));
+  partes.push(dato(gx("totalIva", F.totalIva.xRight), gy("totalIva", F.totalIva.y), nf(data.totalIva), { align: "right", bold: true }));
 
   return partes.join("\n");
 }
@@ -324,8 +346,8 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
     };
   }
 
-  const bloques = [renderBloque(0, data)];
-  if (!soloIzquierda) bloques.push(renderBloque(DX_DUPLICADO, data));
+  const bloques = [renderBloque(0, data, ADJ_IZQ)];
+  if (!soloIzquierda) bloques.push(renderBloque(DX_DUPLICADO, data, ADJ_DER));
   const guias = cal ? gridGuia(0) + (soloIzquierda ? "" : gridGuia(DX_DUPLICADO)) : "";
 
   const html = `<!doctype html>
