@@ -124,7 +124,7 @@ function dato(
   text: string,
   opts: { align?: "left" | "right"; bold?: boolean; size?: number } = {}
 ): string {
-  const { align = "left", bold = false, size = 8 } = opts;
+  const { align = "left", bold = false, size = 7 } = opts;
   const style =
     align === "right"
       ? `right:${PAGE.w - x}mm;text-align:right;`
@@ -154,13 +154,13 @@ function renderBloque(
   const X = (x: number) => x + offsetX;
 
   if (data.printNumero && data.numero) {
-    partes.push(dato(X(F.numero.x), F.numero.y, escapeHtml(data.numero), { bold: true, size: 9 }));
+    partes.push(dato(X(F.numero.x), F.numero.y, escapeHtml(data.numero), { bold: true, size: 8 }));
   }
   partes.push(dato(X(F.fecha.x), F.fecha.y, escapeHtml(data.fecha)));
   partes.push(
     data.esContado
-      ? dato(X(F.condContado.x), F.condContado.y, "X", { bold: true, size: 9 })
-      : dato(X(F.condCredito.x), F.condCredito.y, "X", { bold: true, size: 9 })
+      ? dato(X(F.condContado.x), F.condContado.y, "X", { bold: true, size: 8 })
+      : dato(X(F.condCredito.x), F.condCredito.y, "X", { bold: true, size: 8 })
   );
   if (data.ruc) partes.push(dato(X(F.ruc.x), F.ruc.y, escapeHtml(data.ruc)));
   if (data.razon) partes.push(dato(X(F.razon.x), F.razon.y, escapeHtml(data.razon)));
