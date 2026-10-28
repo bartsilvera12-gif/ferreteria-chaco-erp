@@ -29,7 +29,7 @@ import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 
 // ── Geometría del formulario (mm, origen arriba-izquierda de la hoja) ─────────
 // Medidas extraídas del PDF vectorial de la imprenta. Bloque IZQUIERDO (original).
-const PAGE = { w: 297, h: 215.9 };
+const PAGE = { w: 297, h: 210 }; // A4 apaisado (el formulario físico es A4)
 const DX_DUPLICADO = 146.5; // desplazamiento del bloque derecho (duplicado)
 
 // Columnas de la tabla de ítems: límites x (mm) del bloque izquierdo.
@@ -48,16 +48,16 @@ const ITEMS = { top: 71.0, rowH: 4.8, maxRows: 21 };
 // Posiciones de campos escalares (mm). y = borde superior del texto.
 const F = {
   numero: { x: 98.0, y: 30.5 }, //      campo Nº (header, solo si numero=1)
-  fecha: { x: 24.0, y: 40.0 }, //       fila FECHA (y 36.5→44.5)
-  condContado: { x: 122.5, y: 39.0 }, //casillero CONTADO
-  condCredito: { x: 142.5, y: 39.0 }, //casillero CRÉDITO
+  fecha: { x: 24.0, y: 37.5 }, //       fila FECHA (y 36.5→44.5)
+  condContado: { x: 118.5, y: 37.5 }, //casillero CONTADO
+  condCredito: { x: 140.5, y: 37.5 }, //casillero CRÉDITO
   ruc: { x: 22.0, y: 46.0 }, //         fila R.U.C. (y 44.5→53)
-  razon: { x: 34.0, y: 56.5 }, //       fila NOMBRE/RAZÓN SOCIAL (y 53→61)
+  razon: { x: 44.0, y: 56.5 }, //       fila NOMBRE/RAZÓN SOCIAL (y 53→61)
   subtotal: { xRight: 143.5, y: 178.0 }, // SUB TOTAL (y 175.5→189.5)
-  totalPagar: { xRight: 138.5, y: 187.0 }, // TOTAL A PAGAR Gs.:
-  liqIva5: { xRight: 67.0, y: 195.5 }, //   LIQUIDACIÓN DEL IVA (5%)
-  liqIva10: { xRight: 109.0, y: 195.5 }, // (10%)
-  totalIva: { xRight: 140.5, y: 195.5 }, // TOTAL IVA:
+  totalPagar: { xRight: 143.5, y: 185.0 }, // TOTAL A PAGAR Gs.:
+  liqIva5: { xRight: 70.0, y: 194.0 }, //   LIQUIDACIÓN DEL IVA (5%)
+  liqIva10: { xRight: 112.0, y: 194.0 }, // (10%)
+  totalIva: { xRight: 143.5, y: 194.0 }, // TOTAL IVA:
 };
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
@@ -137,22 +137,11 @@ function dato(
 // corrección distinta. Formato: { campo: { dx, dy } }.
 type Adj = Record<string, { dx?: number; dy?: number }>;
 
-// Mitad IZQUIERDA (original).
-const ADJ_IZQ: Adj = {
-  cond: { dx: 2.5 }, // X de CONTADO: un poco a la derecha
-  cant: { dx: 2 }, //   cantidad: a la derecha
-  desc: { dx: 3.5 }, // descripción: más a la derecha
-  pu: { dx: 2 }, //     precio unitario: a la derecha
-  exentas: { dx: 2 }, //exentas: a la derecha
-};
+// Mitad IZQUIERDA (original). Sin compensaciones: el formulario es simétrico y
+// la impresión es A4 a 100%, así que ambas mitades usan las mismas coordenadas.
+const ADJ_IZQ: Adj = {};
 // Mitad DERECHA (duplicado).
-const ADJ_DER: Adj = {
-  cond: { dx: -2.5 }, // X de CONTADO: un poco a la izquierda
-  pu: { dx: -2 }, //     precio unitario: a la izquierda
-  exentas: { dx: -2 }, //exentas: a la izquierda
-  razon: { dy: -0.5 }, //razón social: casi centrada (un poco más abajo)
-  totalPagar: { dx: -2 }, // TOTAL A PAGAR: a la izquierda
-};
+const ADJ_DER: Adj = {};
 
 // ── Render de UN bloque (una factura) ────────────────────────────────────────
 function renderBloque(
@@ -238,7 +227,7 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
   // Calibración por defecto contra la matricial de Ferretería Chaco.
   // Se puede sobrescribir en vivo con ?dx= y ?dy= (mm). + derecha / + abajo.
   const CAL_DX = 0;
-  const CAL_DY = 2;
+  const CAL_DY = 0;
   const dxParam = url.searchParams.get("dx");
   const dyParam = url.searchParams.get("dy");
   const dx = dxParam !== null ? (Number(dxParam) || 0) : CAL_DX;
