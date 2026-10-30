@@ -35,7 +35,7 @@ const DX_DUPLICADO = 146.5; // desplazamiento del bloque derecho (duplicado)
 // Columnas de la tabla de ítems: límites x (mm) del bloque izquierdo.
 const COL = {
   cantRight: 13.0, //  CANT        : 6     → 13.5
-  descLeft: 15.0, //   DESCRIPCIÓN : 13.5  → 97.5
+  descLeft: 20.0, //   DESCRIPCIÓN (medido en A4)
   puRight: 107.5, //   PRECIO UNIT.: 97.5  → 108.5
   exentasRight: 118.5, // EXENTAS   : 108.5 → 119.5
   iva5Right: 129.5, //   5%        : 119.5 → 130.5
@@ -43,21 +43,21 @@ const COL = {
 };
 
 // Filas de la tabla de ítems.
-const ITEMS = { top: 71.0, rowH: 4.8, maxRows: 21 };
+const ITEMS = { top: 69.0, rowH: 4.8, maxRows: 19 };
 
 // Posiciones de campos escalares (mm). y = borde superior del texto.
 const F = {
   numero: { x: 98.0, y: 30.5 }, //      campo Nº (header, solo si numero=1)
-  fecha: { x: 24.0, y: 37.5 }, //       fila FECHA (y 36.5→44.5)
-  condContado: { x: 118.5, y: 37.5 }, //casillero CONTADO
-  condCredito: { x: 140.5, y: 37.5 }, //casillero CRÉDITO
-  ruc: { x: 22.0, y: 46.0 }, //         fila R.U.C. (y 44.5→53)
-  razon: { x: 44.0, y: 56.5 }, //       fila NOMBRE/RAZÓN SOCIAL (y 53→61)
-  subtotal: { xRight: 143.5, y: 178.0 }, // SUB TOTAL (y 175.5→189.5)
-  totalPagar: { xRight: 143.5, y: 185.0 }, // TOTAL A PAGAR Gs.:
-  liqIva5: { xRight: 70.0, y: 194.0 }, //   LIQUIDACIÓN DEL IVA (5%)
-  liqIva10: { xRight: 112.0, y: 194.0 }, // (10%)
-  totalIva: { xRight: 143.5, y: 194.0 }, // TOTAL IVA:
+  fecha: { x: 22.0, y: 40.0 }, //       fila FECHA (medido en A4)
+  condContado: { x: 118.5, y: 40.0 }, //casillero CONTADO
+  condCredito: { x: 140.5, y: 40.0 }, //casillero CRÉDITO
+  ruc: { x: 22.0, y: 47.0 }, //         fila R.U.C. (medido en A4)
+  razon: { x: 40.0, y: 52.0 }, //       fila NOMBRE/RAZÓN SOCIAL (medido en A4)
+  subtotal: { xRight: 143.5, y: 166.0 }, // SUB TOTAL (medido en A4)
+  totalPagar: { xRight: 143.5, y: 178.0 }, // TOTAL A PAGAR Gs.:
+  liqIva5: { xRight: 70.0, y: 185.0 }, //   LIQUIDACIÓN DEL IVA (5%)
+  liqIva10: { xRight: 112.0, y: 185.0 }, // (10%)
+  totalIva: { xRight: 143.5, y: 185.0 }, // TOTAL IVA:
 };
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
