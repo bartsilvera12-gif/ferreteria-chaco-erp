@@ -5,8 +5,10 @@
  *  - Acepta el RUC con o sin guion (`80014066-1` o `800140661`). Se intenta
  *    separar el dígito verificador del cuerpo; si el formato no es interpretable
  *    se delega al proveedor.
- *  - La API key vive SOLO en `process.env.DNIT_CONSULTA_PUBLICA_API_KEY`
- *    (server-only). NUNCA se expone en bundles cliente.
+ *  - La API key vive SOLO en env (server-only). Se acepta cualquiera de:
+ *      `DNIT_CONSULTA_PUBLICA_API_KEY`  (nombre canónico en este repo)
+ *      `SET_CONSULTA_PUBLICA_APIKEY`    (nombre histórico usado en Coolify)
+ *    NUNCA se expone en bundles cliente.
  *  - Si no hay API key configurada, devuelve `apiKeyMissing: true` para que la
  *    UI degrade limpio a carga manual.
  *  - La URL del servicio se puede sobreescribir con `DNIT_CONSULTA_RUC_URL`.
@@ -56,7 +58,9 @@ export async function consultarDnitRuc(rucInput: string): Promise<DnitLookupResu
     return { found: false, reason: "invalid_ruc", mensaje: "Formato de RUC inválido. Usá dígitos opcionalmente con guion." };
   }
 
-  const apiKey = process.env.DNIT_CONSULTA_PUBLICA_API_KEY?.trim();
+  const apiKey =
+    process.env.DNIT_CONSULTA_PUBLICA_API_KEY?.trim() ||
+    process.env.SET_CONSULTA_PUBLICA_APIKEY?.trim();
   if (!apiKey) {
     return {
       found: false,

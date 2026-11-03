@@ -186,10 +186,39 @@ export default function NuevaVentaPage() {
   const clienteContainerRef = useRef<HTMLDivElement>(null);
   // Nota de remisión: activada si el cliente la usa; toggle manual solo con cliente.
   const [generaNotaRemision, setGeneraNotaRemision] = useState(false);
+  // ── Consulta DNIT por RUC + alta inline de cliente desde Caja ────────────
+  const [dnitLoading, setDnitLoading] = useState(false);
+  const [dnitResult, setDnitResult] = useState<
+    | null
+    | { ruc: string; dv: string | null; ruc_completo: string; razon_social: string }
+  >(null);
+  const [dnitMsg, setDnitMsg] = useState<string | null>(null);
+  const [creandoCliente, setCreandoCliente] = useState(false);
 
   // ── Cobro (solo CONTADO, no se persiste — solo ayuda al cajero) ───────────
   const [montoRecibido, setMontoRecibido] = useState("");
   const [metodoPago, setMetodoPago] = useState<MetodoPago>("efectivo");
+  // Tipo de comprobante a imprimir al confirmar: ticket (default) o factura autoimpresor.
+  const [tipoComprobante, setTipoComprobante] = useState<"ticket" | "factura">("ticket");
+  // ── Pago mixto (efectivo + transferencia + tarjeta) ──────────────────────
+  //
+  // Recargo tarjeta en modo mixto: se aplica el porcentaje CARD_SURCHARGE_PCT
+  // sobre la porción del monto cargada a tarjeta de líneas no-pintura. Las
+  // líneas pintura se re-precian a `precio_tarjeta` solo cuando el método único
+  // es tarjeta (comportamiento clásico); en modo mixto se mantienen a precio
+  // contado para no distorsionar el reparto por fila.
+  type PagoMixtoRow = {
+    metodo_pago: "efectivo" | "transferencia" | "tarjeta";
+    monto: string; // string para input
+    entidad_bancaria_id: string;
+    referencia: string;
+    titular: string;
+  };
+  const [pagoMixtoActivo, setPagoMixtoActivo] = useState(false);
+  const [pagosMixtos, setPagosMixtos] = useState<PagoMixtoRow[]>([
+    { metodo_pago: "efectivo", monto: "", entidad_bancaria_id: "", referencia: "", titular: "" },
+    { metodo_pago: "transferencia", monto: "", entidad_bancaria_id: "", referencia: "", titular: "" },
+  ]);
 
   // ── Detalle de cobro (conciliación bancaria) ──────────────────────────────
   const [entidades, setEntidades] = useState<{ id: string; codigo: string | null; nombre: string; tipo: string | null }[]>([]);
@@ -547,7 +576,16 @@ export default function NuevaVentaPage() {
   const plazoDiasNum = parseInt(plazoDias) || 0;
   // Crédito exige cliente seleccionado Y plazo/vencimiento (≥1 día). Genera cuenta por cobrar.
   const creditoValido = tipoVenta === "CONTADO" || (plazoDiasNum >= 1 && !!clienteId);
-  const ventaValida   = items.length > 0 && creditoValido;
+  // Pago mixto válido: todas las filas con monto > 0 y suma = total (tolerancia 1 Gs).
+  const _sumaPagosMixtosParaValidar = pagoMixtoActivo
+    ? pagosMixtos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0)
+    : 0;
+  const pagoMixtoValido = !pagoMixtoActivo
+    ? true
+    : pagosMixtos.length >= 2 &&
+      pagosMixtos.every((p) => (parseFloat(p.monto) || 0) > 0) &&
+      Math.abs(_sumaPagosMixtosParaValidar - totalGeneral) <= 1;
+  const ventaValida   = items.length > 0 && creditoValido && pagoMixtoValido;
 
   // Cliente (opcional) — selección + filtrado del buscador.
   const clienteSel = clientes.find((c) => c.id === clienteId) ?? null;
@@ -558,6 +596,113 @@ export default function NuevaVentaPage() {
         return c.label.toLowerCase().includes(q) || (c.ruc ?? "").toLowerCase().includes(q);
       })
   ).slice(0, 50);
+
+  // ¿El texto tipeado en el buscador parece un RUC? (dígitos opcionalmente con -DV)
+  function parseRucLocal(input: string): { ruc: string; dv: string | null; rucCompleto: string } | null {
+    const clean = input.replace(/\s+/g, "").trim();
+    if (!clean) return null;
+    const m = clean.match(/^(\d{3,11})(?:-(\d))?$/);
+    if (!m) return null;
+    return { ruc: m[1], dv: m[2] ?? null, rucCompleto: m[2] ? `${m[1]}-${m[2]}` : m[1] };
+  }
+  const rucParseado = parseRucLocal(clienteQuery);
+
+  async function handleConsultarRucDnit() {
+    if (!rucParseado) return;
+    setDnitLoading(true);
+    setDnitMsg(null);
+    setDnitResult(null);
+    try {
+      const r = await fetch(
+        `/api/dnit/consulta-ruc?ruc=${encodeURIComponent(rucParseado.rucCompleto)}`,
+        { credentials: "include", cache: "no-store" }
+      );
+      const j = (await r.json()) as Record<string, unknown>;
+      if (j.found === true) {
+        const cli = j.cliente as { id?: string; empresa?: string | null; nombre_contacto?: string | null; ruc?: string | null } | undefined;
+        const razon = typeof j.razon_social === "string" ? j.razon_social : rucParseado.rucCompleto;
+        const rucCompleto = typeof j.ruc_completo === "string" ? j.ruc_completo : rucParseado.rucCompleto;
+        if (cli?.id) {
+          // Ya existe en la base: lo agrego a la lista local (si no está) y lo selecciono.
+          setClientes((prev) => {
+            if (prev.some((p) => p.id === cli.id)) return prev;
+            const lite: ClienteLite = {
+              id: cli.id!,
+              label: (cli.empresa || cli.nombre_contacto || razon || "Cliente").trim(),
+              ruc: (cli.ruc || rucCompleto) ?? null,
+              usa_nota_remision: false,
+            };
+            return [lite, ...prev];
+          });
+          setClienteId(cli.id);
+          setClienteQuery("");
+          setClienteOpen(false);
+          setDnitMsg("Cliente ya existente, seleccionado.");
+        } else {
+          setDnitResult({
+            ruc: typeof j.ruc === "string" ? j.ruc : rucParseado.ruc,
+            dv: typeof j.dv === "string" ? j.dv : rucParseado.dv,
+            ruc_completo: rucCompleto,
+            razon_social: razon,
+          });
+        }
+      } else {
+        setDnitMsg(
+          (typeof j.mensaje === "string" ? j.mensaje : null) ||
+            "RUC no encontrado. Cargá los datos manualmente."
+        );
+      }
+    } catch {
+      setDnitMsg("No se pudo contactar con DNIT. Reintentá o cargá manual.");
+    } finally {
+      setDnitLoading(false);
+    }
+  }
+
+  async function handleCrearClienteDesdeDnit() {
+    if (!dnitResult) return;
+    setCreandoCliente(true);
+    setDnitMsg(null);
+    try {
+      const r = await fetch("/api/clientes", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo_cliente: "empresa",
+          empresa: dnitResult.razon_social,
+          nombre_contacto: dnitResult.razon_social,
+          ruc: dnitResult.ruc_completo,
+        }),
+      });
+      const j = (await r.json()) as {
+        success?: boolean;
+        data?: { id?: string; empresa?: string | null; nombre_contacto?: string | null; ruc?: string | null; usa_nota_remision?: boolean | null } | null;
+        error?: string;
+      };
+      if (!r.ok || !j?.data?.id) {
+        setDnitMsg(j?.error || "No se pudo crear el cliente.");
+        return;
+      }
+      const lite: ClienteLite = {
+        id: j.data.id,
+        label: (j.data.empresa || j.data.nombre_contacto || dnitResult.razon_social).trim(),
+        ruc: j.data.ruc ?? dnitResult.ruc_completo,
+        usa_nota_remision: j.data.usa_nota_remision === true,
+      };
+      setClientes((prev) => [lite, ...prev]);
+      setClienteId(lite.id);
+      setClienteQuery("");
+      setClienteOpen(false);
+      setGeneraNotaRemision(lite.usa_nota_remision);
+      setDnitResult(null);
+      setDnitMsg("Cliente creado y seleccionado.");
+    } catch {
+      setDnitMsg("Error de red al crear el cliente.");
+    } finally {
+      setCreandoCliente(false);
+    }
+  }
 
   // Cobro: entidad seleccionada + filtrado por código/nombre.
   const entidadSel = entidades.find((e) => e.id === pagoEntidadId) ?? null;
@@ -609,6 +754,23 @@ export default function NuevaVentaPage() {
       setEntidadQuery("");
       setCobroModalOpen(true);
     }
+  }
+
+  // ── Pago mixto: validación + helpers ─────────────────────────────────────
+  const sumaPagosMixtos = pagoMixtoActivo
+    ? pagosMixtos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0)
+    : 0;
+  function updatePagoMixto<K extends keyof PagoMixtoRow>(idx: number, key: K, val: PagoMixtoRow[K]) {
+    setPagosMixtos((prev) => prev.map((p, i) => (i === idx ? { ...p, [key]: val } : p)));
+  }
+  function addPagoMixtoRow() {
+    setPagosMixtos((prev) => [
+      ...prev,
+      { metodo_pago: "efectivo", monto: "", entidad_bancaria_id: "", referencia: "", titular: "" },
+    ]);
+  }
+  function removePagoMixtoRow(idx: number) {
+    setPagosMixtos((prev) => (prev.length <= 2 ? prev : prev.filter((_, i) => i !== idx)));
   }
 
   /** Cambia el tipo de precio de la línea en construcción y ajusta el precio unitario. */
@@ -726,7 +888,23 @@ export default function NuevaVentaPage() {
           titular: metodoPago === "transferencia" ? pagoTitular.trim() || null : null,
           observacion: pagoObservacion.trim() || null,
         },
-        { permitirSinStock, pedidoId, pedidoCajaId: pedidoCajaIdLoaded, cajaId }
+        {
+          permitirSinStock,
+          pedidoId,
+          pedidoCajaId: pedidoCajaIdLoaded,
+          cajaId,
+          pagosMixtos: pagoMixtoActivo
+            ? pagosMixtos.map((p) => ({
+                metodo_pago: p.metodo_pago,
+                monto: parseFloat(p.monto) || 0,
+                entidad_bancaria_id: p.entidad_bancaria_id || null,
+                entidad_nombre_snapshot:
+                  entidades.find((e) => e.id === p.entidad_bancaria_id)?.nombre ?? null,
+                referencia: p.referencia.trim() || null,
+                titular: p.metodo_pago === "transferencia" ? p.titular.trim() || null : null,
+              }))
+            : null,
+        }
       );
 
       if (!resultado.success) {
@@ -740,10 +918,14 @@ export default function NuevaVentaPage() {
         setErrorVenta(resultado.error);
         return;
       }
-      // Abrir ticket en otra ventana (como si imprimieran) y volver al listado.
+      // Abrir el comprobante elegido (ticket o factura autoimpresor) en otra ventana.
       try {
         if (resultado.venta?.id) {
-          window.open(`/api/ventas/${resultado.venta.id}/ticket`, "_blank", "noopener,noreferrer");
+          const urlComprobante =
+            tipoComprobante === "factura"
+              ? `/api/ventas/${resultado.venta.id}/factura-preimpreso`
+              : `/api/ventas/${resultado.venta.id}/ticket`;
+          window.open(urlComprobante, "_blank", "noopener,noreferrer");
         }
       } catch { /* si el popup queda bloqueado, no rompe la venta */ }
       router.push("/ventas");
@@ -882,10 +1064,95 @@ export default function NuevaVentaPage() {
                       </button>
                     ))
                   )}
+                  {rucParseado && clientesFiltrados.length === 0 && (
+                    <div className="border-t border-slate-100 p-2">
+                      <button
+                        type="button"
+                        onClick={handleConsultarRucDnit}
+                        disabled={dnitLoading}
+                        className="w-full rounded-md bg-sky-50 px-3 py-2 text-xs font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+                      >
+                        {dnitLoading ? "Consultando DNIT…" : `Consultar RUC ${rucParseado.rucCompleto} en DNIT`}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
+
+              {/* Panel de resultado DNIT (fuera del dropdown absoluto para que
+                  quede visible aun si el dropdown se cierra). */}
+              {(dnitResult || dnitMsg) && !clienteSel && (
+                <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2 text-xs">
+                  {dnitResult ? (
+                    <div className="flex flex-col gap-2">
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wider text-sky-700">Datos del RUC</div>
+                        <input
+                          type="text"
+                          value={dnitResult.razon_social}
+                          onChange={(e) => setDnitResult({ ...dnitResult, razon_social: e.target.value })}
+                          placeholder="Razón social"
+                          className="w-full rounded border border-slate-200 px-2 py-1 text-sm font-medium text-slate-800"
+                        />
+                        <div className="mt-1 text-slate-500">RUC {dnitResult.ruc_completo}</div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleCrearClienteDesdeDnit}
+                          disabled={creandoCliente || !dnitResult.razon_social.trim()}
+                          className="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+                        >
+                          {creandoCliente ? "Creando…" : "Registrar y seleccionar"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setDnitResult(null); setDnitMsg(null); }}
+                          className="rounded-md border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
+                        >
+                          Descartar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-slate-700">{dnitMsg}</span>
+                        <button
+                          type="button"
+                          onClick={() => setDnitMsg(null)}
+                          className="shrink-0 text-slate-400 hover:text-slate-600"
+                          aria-label="Cerrar aviso"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      {/* Si DNIT falla pero el usuario tipeó un RUC válido,
+                          ofrecer carga manual rápida sin salir de Caja. */}
+                      {rucParseado && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDnitResult({
+                              ruc: rucParseado.ruc,
+                              dv: rucParseado.dv,
+                              ruc_completo: rucParseado.rucCompleto,
+                              razon_social: "",
+                            });
+                            setDnitMsg(null);
+                          }}
+                          className="w-full rounded-md border border-sky-300 bg-white px-3 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-50"
+                        >
+                          Cargar manualmente RUC {rucParseado.rucCompleto}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <p className="mt-1 text-[11px] text-gray-400">
-                Si no seleccionás cliente, la venta se registra sin cliente.
+                Si no seleccionás cliente, la venta se registra sin cliente. Si tipeás un RUC que no está en tu base, podés consultarlo en DNIT y registrarlo desde acá.
               </p>
 
               {/* Nota de remisión: solo con cliente. Si el cliente la usa, viene activada. */}
@@ -1056,7 +1323,44 @@ export default function NuevaVentaPage() {
 
                   {tipoVenta === "CONTADO" && (
                     <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2.5">
-                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Cobro</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Cobro</p>
+                        <label className="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={pagoMixtoActivo}
+                            onChange={(e) => setPagoMixtoActivo(e.target.checked)}
+                            className="h-3.5 w-3.5"
+                          />
+                          Pago mixto
+                        </label>
+                      </div>
+
+                      {/* Selector del comprobante a imprimir al confirmar la venta. */}
+                      <div>
+                        <p className="mb-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Comprobante a imprimir</p>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {([
+                            { v: "ticket", label: "Ticket" },
+                            { v: "factura", label: "Factura autoimpresor" },
+                          ] as { v: "ticket" | "factura"; label: string }[]).map((t) => (
+                            <button
+                              key={t.v}
+                              type="button"
+                              onClick={() => setTipoComprobante(t.v)}
+                              className={`text-xs py-2 rounded-md border transition-colors ${
+                                tipoComprobante === t.v
+                                  ? "border-[#0EA5E9] bg-[#0EA5E9]/10 text-[#0EA5E9] font-medium"
+                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                              }`}
+                            >
+                              {t.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {!pagoMixtoActivo && (
                       <div className="grid grid-cols-3 gap-1.5">
                         {([
                           { v: "efectivo", label: "Efectivo" },
@@ -1077,9 +1381,100 @@ export default function NuevaVentaPage() {
                           </button>
                         ))}
                       </div>
+                      )}
+
+                      {/* Pago mixto: lista editable de filas (efectivo + transferencia + tarjeta) */}
+                      {pagoMixtoActivo && (
+                        <div className="space-y-2 rounded-md border border-slate-200 bg-white p-2">
+                          {pagosMixtos.some((p) => p.metodo_pago === "tarjeta") && (
+                            <p className="text-[10px] text-amber-700">
+                              En pago mixto, el recargo 3% de tarjeta no se agrega al total: repartí el monto contado entre los métodos.
+                            </p>
+                          )}
+                          {pagosMixtos.map((p, idx) => (
+                            <div key={idx} className="rounded-md border border-slate-100 p-2 space-y-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <select
+                                  value={p.metodo_pago}
+                                  onChange={(e) => updatePagoMixto(idx, "metodo_pago", e.target.value as "efectivo" | "transferencia" | "tarjeta")}
+                                  className="rounded border border-slate-200 text-xs px-1.5 py-1"
+                                >
+                                  <option value="efectivo">Efectivo</option>
+                                  <option value="transferencia">Transferencia</option>
+                                  <option value="tarjeta">Tarjeta (+{Math.round(CARD_SURCHARGE_PCT * 100)}%)</option>
+                                </select>
+                                <MontoInput
+                                  value={p.monto}
+                                  onChange={(n) => updatePagoMixto(idx, "monto", String(n))}
+                                  placeholder="Monto"
+                                  className="flex-1 rounded border border-slate-200 text-xs px-2 py-1"
+                                  decimals={false}
+                                />
+                                {pagosMixtos.length > 2 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removePagoMixtoRow(idx)}
+                                    className="text-red-500 text-xs hover:underline"
+                                    aria-label="Quitar fila"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
+                              </div>
+                              {p.metodo_pago === "transferencia" && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                  <select
+                                    value={p.entidad_bancaria_id}
+                                    onChange={(e) => updatePagoMixto(idx, "entidad_bancaria_id", e.target.value)}
+                                    className="rounded border border-slate-200 text-xs px-1.5 py-1"
+                                  >
+                                    <option value="">— Entidad —</option>
+                                    {entidades.filter((en) => en.tipo === "banco" || en.tipo === "billetera").map((en) => (
+                                      <option key={en.id} value={en.id}>{en.codigo ? `${en.codigo} · ${en.nombre}` : en.nombre}</option>
+                                    ))}
+                                  </select>
+                                  <input
+                                    type="text"
+                                    value={p.referencia}
+                                    onChange={(e) => updatePagoMixto(idx, "referencia", e.target.value)}
+                                    placeholder="Comprobante / ref"
+                                    className="rounded border border-slate-200 text-xs px-2 py-1"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={p.titular}
+                                    onChange={(e) => updatePagoMixto(idx, "titular", e.target.value)}
+                                    placeholder="Titular (opcional)"
+                                    className="rounded border border-slate-200 text-xs px-2 py-1 sm:col-span-2"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          <div className="flex items-center justify-between pt-1">
+                            <button
+                              type="button"
+                              onClick={addPagoMixtoRow}
+                              className="text-sky-600 text-xs font-medium hover:underline"
+                            >
+                              + Agregar pago
+                            </button>
+                            <div className="text-right text-xs">
+                              <div className="text-slate-500">
+                                Suma: <span className="tabular-nums font-medium text-slate-800">{formatGs(sumaPagosMixtos)}</span>
+                              </div>
+                              <div className={`tabular-nums ${pagoMixtoValido ? "text-emerald-600" : "text-red-600"}`}>
+                                {pagoMixtoValido
+                                  ? "✓ coincide con el total"
+                                  : `Diferencia: ${formatGs(totalGeneral - sumaPagosMixtos)}`}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Efectivo: monto recibido + vuelto, sin datos extra */}
-                      {metodoPago === "efectivo" && (
+                      {!pagoMixtoActivo && metodoPago === "efectivo" && (
                         <div className="space-y-1.5">
                           <MontoInput
                             value={montoRecibido}
@@ -1100,7 +1495,7 @@ export default function NuevaVentaPage() {
                       )}
 
                       {/* Transferencia / Tarjeta: resumen compacto + editar */}
-                      {(metodoPago === "transferencia" || metodoPago === "tarjeta") && (
+                      {!pagoMixtoActivo && (metodoPago === "transferencia" || metodoPago === "tarjeta") && (
                         <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs space-y-1">
                           <div className="flex items-center justify-between">
                             <span className="font-medium text-slate-700">
@@ -1134,9 +1529,9 @@ export default function NuevaVentaPage() {
             </div>
           )}
 
-          {/* Acciones — stack vertical full-width en mobile (mas facil de tappear),
-              fila en sm+. Confirmar en orden visual primero (primary). */}
-          <div className="mt-6 flex flex-col-reverse sm:flex-row gap-3">
+          {/* Acciones — barra sticky al pie del viewport para que Confirmar/Cancelar
+              queden siempre visibles sin tener que hacer zoom ni scroll hasta el fondo. */}
+          <div className="sticky bottom-0 z-10 -mx-4 sm:-mx-6 mt-6 flex flex-col-reverse sm:flex-row gap-3 border-t border-slate-200 bg-white/95 px-4 sm:px-6 py-3 backdrop-blur">
             <button
               type="button"
               onClick={() => router.push("/ventas")}

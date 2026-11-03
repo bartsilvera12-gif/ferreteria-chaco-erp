@@ -338,25 +338,63 @@ export async function POST(request: NextRequest) {
 
     // Detalle de cobro (conciliación) — best-effort, FUERA de la transacción de
     // venta. Si falla, la venta queda igual (no se rompe ni se afectan recetas).
-    // 1 detalle por venta: método = metodoPago; monto = total (suma = total).
+    // Modo clásico: 1 detalle por venta (método = metodoPago, monto = total).
+    // Modo mixto (pagos_mixtos): N detalles, uno por fila (debe sumar ≈ total).
     try {
-      const pd = (o.pago_detalle ?? null) as Record<string, unknown> | null;
       const str = (v: unknown, max = 200) =>
         v === null || v === undefined || String(v).trim() === "" ? null : String(v).trim().slice(0, max);
-      const fechaAcred = (() => {
-        const v = pd?.fecha_acreditacion;
-        return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
-      })();
-      await insertVentaPagoDetalle(schema, auth.empresa_id, ventaId, {
-        metodo_pago: metodoPago,
-        entidad_bancaria_id: pd?.entidad_bancaria_id ? String(pd.entidad_bancaria_id) : null,
-        entidad_nombre_snapshot: str(pd?.entidad_nombre_snapshot),
-        monto: totalDeclarado,
-        referencia: str(pd?.referencia),
-        titular: str(pd?.titular),
-        fecha_acreditacion: fechaAcred,
-        observacion: str(pd?.observacion, 500),
-      });
+
+      const pagosMixtosRaw = (o.pagos_mixtos ?? null) as unknown;
+      const pagosMixtos: Array<Record<string, unknown>> = Array.isArray(pagosMixtosRaw)
+        ? (pagosMixtosRaw.filter((x) => x && typeof x === "object") as Array<Record<string, unknown>>)
+        : [];
+
+      if (pagosMixtos.length >= 2) {
+        // Validación de suma: tolerancia ±1 Gs por redondeo.
+        const sumaPagos = pagosMixtos.reduce((s, p) => s + (Number(p.monto) || 0), 0);
+        const okSuma = Math.abs(sumaPagos - totalDeclarado) <= 1;
+        // Métodos admitidos en mixto: efectivo, transferencia, tarjeta.
+        const metodosOk = pagosMixtos.every(
+          (p) =>
+            p.metodo_pago === "efectivo" ||
+            p.metodo_pago === "transferencia" ||
+            p.metodo_pago === "tarjeta"
+        );
+        if (!okSuma || !metodosOk) {
+          console.error("[ventas/create] pagos_mixtos inválidos (venta OK, se omiten detalles)", {
+            sumaPagos, totalDeclarado, metodosOk,
+          });
+        } else {
+          for (const p of pagosMixtos) {
+            await insertVentaPagoDetalle(schema, auth.empresa_id, ventaId, {
+              metodo_pago: p.metodo_pago as "efectivo" | "transferencia" | "tarjeta",
+              entidad_bancaria_id: p.entidad_bancaria_id ? String(p.entidad_bancaria_id) : null,
+              entidad_nombre_snapshot: str(p.entidad_nombre_snapshot),
+              monto: Number(p.monto) || 0,
+              referencia: str(p.referencia),
+              titular: str(p.titular),
+              fecha_acreditacion: null,
+              observacion: null,
+            });
+          }
+        }
+      } else {
+        const pd = (o.pago_detalle ?? null) as Record<string, unknown> | null;
+        const fechaAcred = (() => {
+          const v = pd?.fecha_acreditacion;
+          return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+        })();
+        await insertVentaPagoDetalle(schema, auth.empresa_id, ventaId, {
+          metodo_pago: metodoPago,
+          entidad_bancaria_id: pd?.entidad_bancaria_id ? String(pd.entidad_bancaria_id) : null,
+          entidad_nombre_snapshot: str(pd?.entidad_nombre_snapshot),
+          monto: totalDeclarado,
+          referencia: str(pd?.referencia),
+          titular: str(pd?.titular),
+          fecha_acreditacion: fechaAcred,
+          observacion: str(pd?.observacion, 500),
+        });
+      }
     } catch (e) {
       console.error("[ventas/create] pago_detalle best-effort fallo (venta OK):", e instanceof Error ? e.message : e);
     }

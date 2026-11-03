@@ -37,6 +37,19 @@ export type PagoDetalleInput = {
 };
 
 /**
+ * Fila de pago cuando la venta se cobra con varios métodos (pago mixto).
+ * El recargo 3% se aplica solo sobre la porción cargada a tarjeta (líneas no-pintura).
+ */
+export type PagoMixtoRow = {
+  metodo_pago: "efectivo" | "transferencia" | "tarjeta";
+  monto: number;
+  entidad_bancaria_id?: string | null;
+  entidad_nombre_snapshot?: string | null;
+  referencia?: string | null;
+  titular?: string | null;
+};
+
+/**
  * Lista ventas del tenant (misma fuente que el dashboard: tablas `ventas` / `ventas_items`).
  */
 export async function getVentas(): Promise<Venta[]> {
@@ -65,7 +78,14 @@ export async function saveVenta(
   datos: Omit<Venta, "id" | "numero_control" | "fecha"> & { cliente_id?: string | null; genera_nota_remision?: boolean },
   pedidoCocina?: PedidoCocinaInput,
   pagoDetalle?: PagoDetalleInput | null,
-  opts?: { permitirSinStock?: boolean; pedidoId?: string | null; pedidoCajaId?: string | null; cajaId?: string | null }
+  opts?: {
+    permitirSinStock?: boolean;
+    pedidoId?: string | null;
+    pedidoCajaId?: string | null;
+    cajaId?: string | null;
+    /** Si se envía (≥2 filas), el backend persiste varios cobros en ventas_pagos_detalle. */
+    pagosMixtos?: PagoMixtoRow[] | null;
+  }
 ): Promise<ResultadoGuardarVenta> {
   if (!datos.items || datos.items.length === 0) {
     return { success: false, error: "La venta debe tener al menos un producto." };
@@ -94,6 +114,10 @@ export async function saveVenta(
         pedido_id: opts?.pedidoId ?? null,
         pedido_caja_id: opts?.pedidoCajaId ?? null,
         caja_id: opts?.cajaId ?? null,
+        pagos_mixtos:
+          Array.isArray(opts?.pagosMixtos) && opts!.pagosMixtos!.length >= 2
+            ? opts!.pagosMixtos
+            : null,
       }),
     });
 
