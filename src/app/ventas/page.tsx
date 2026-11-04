@@ -648,12 +648,20 @@ export default function CajaPage() {
       );
       const recargoTot = calcularRecargoTarjeta(totalContadoNoPintura, metodoCalculo);
       const factorRecargo = totalContadoNoPintura > 0 ? (totalContadoNoPintura + recargoTot) / totalContadoNoPintura : 1;
+      // Las ventas de ferretería son IVA 10% por defecto en Paraguay (precios al público
+      // ya vienen con IVA incluido). Calculo la liquidación de IVA por línea:
+      //   subtotal = base imponible (sin IVA)
+      //   monto_iva = total_linea / 11  (IVA 10 % incluido)
+      //   total_linea = precio * cantidad  (precio al público con IVA)
+      // Antes TODO iba como EXENTA y la factura salía sin IVA liquidado — bug grave.
       const items: LineaVenta[] = cart.map((it) => {
         const usaPrecioTarjetaPintura = metodoCalculo === "tarjeta" && it.es_pintura && it.precio_tarjeta != null && it.precio_tarjeta > 0;
         const precioBase = usaPrecioTarjetaPintura ? it.precio_tarjeta! : precioEfectivo(it);
         const precio = (recargoTot > 0 && !usaPrecioTarjetaPintura) ? precioBase * factorRecargo : precioBase;
         const esMay = esMayoristaAplicado(it);
-        const subtotal = it.cantidad * precio;
+        const totalLinea = it.cantidad * precio;
+        const montoIva = Math.round(totalLinea / 11); // IVA 10 % incluido
+        const subtotalLinea = totalLinea - montoIva;
         return {
           producto_id: it.producto_id,
           producto_nombre: it.producto_nombre,
@@ -661,14 +669,16 @@ export default function CajaPage() {
           cantidad: it.cantidad,
           precio_venta_original: precio,
           precio_venta: precio,
-          tipo_iva: "EXENTA",
+          tipo_iva: "10%",
           tipo_precio: esMay ? "mayorista" : "minorista",
-          subtotal,
-          monto_iva: 0,
-          total_linea: subtotal,
+          subtotal: subtotalLinea,
+          monto_iva: montoIva,
+          total_linea: totalLinea,
         };
       });
       const subtotalTotal = items.reduce((s, it) => s + it.subtotal, 0);
+      const ivaTotal = items.reduce((s, it) => s + it.monto_iva, 0);
+      const totalConIva = items.reduce((s, it) => s + it.total_linea, 0);
       const entidadSel = entidades.find((e) => e.id === entidadId);
       const pagoDetalle = metodo === "efectivo"
         ? null
@@ -702,8 +712,8 @@ export default function CajaPage() {
         moneda: "GS",
         tipo_cambio: 1,
         subtotal: subtotalTotal,
-        monto_iva: 0,
-        total: subtotalTotal,
+        monto_iva: ivaTotal,
+        total: totalConIva,
         tipo_venta: "CONTADO",
         metodo_pago: metodoCabecera,
         cliente_id: clienteSel?.id ?? null,
