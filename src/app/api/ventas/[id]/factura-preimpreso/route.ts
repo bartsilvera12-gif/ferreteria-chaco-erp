@@ -28,36 +28,45 @@ import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
  */
 
 // ── Geometría del formulario (mm, origen arriba-izquierda de la hoja) ─────────
-// Medidas tomadas de una impresión real sobre el formulario A4. Bloque IZQUIERDO (original).
-const PAGE = { w: 297, h: 210 }; // A4 apaisado (el formulario físico es A4)
-const DX_DUPLICADO = 138.5; // desplazamiento del bloque derecho (duplicado), medido en A4
+// Medidas tomadas del PDF "DISEÑO FACTURA MAVA 2026" (hoja 297 × 215.9 mm,
+// apaisada, con dos facturas lado a lado separadas por línea punteada central).
+// Bordes detectados automáticamente del PDF original.
+const PAGE = { w: 297, h: 215.9 };
+// Desplazamiento del bloque DERECHO (duplicado): distancia del borde izq de la
+// columna CANT izq (13.54) al borde izq de la columna CANT der (159.92).
+const DX_DUPLICADO = 146.38;
 
-// Columnas de la tabla de ítems: límites x (mm) del bloque izquierdo.
+// Columnas de la tabla de ítems: límites x (mm) del bloque IZQUIERDO, detectados
+// automáticamente desde las líneas verticales del PDF.
+//  bordes: CANT 13.54 | ... | 97.10 | PRECIO 108.10 | EXENTAS 119.31 | 5% 130.52 | 10% 144.27
 const COL = {
-  cantRight: 19.0, //  CANT        : 12.5  → 20
-  descLeft: 22.5, //   DESCRIPCIÓN : 20    → 98.7
-  puRight: 108.8, //   PRECIO UNIT.: 98.7  → 109.6
-  exentasRight: 119.8, // EXENTAS   : 109.6 → 120.4
-  iva5Right: 131.0, //   5%        : 120.4 → 131.5
-  iva10Right: 143.5, //  10%       : 131.5 → 144.3
+  cantRight: 19.5, //   CANT        : 13.54 → 20
+  descLeft: 21.0, //    DESCRIPCIÓN : 20    → 97.10
+  puRight: 107.5, //    PRECIO UNIT.: 97.10 → 108.10
+  exentasRight: 118.7, //EXENTAS    : 108.10 → 119.31
+  iva5Right: 129.9, //  5%          : 119.31 → 130.52
+  iva10Right: 143.5, // 10%         : 130.52 → 144.27
 };
 
-// Filas de la tabla de ítems.
-const ITEMS = { top: 70.5, rowH: 4.8, maxRows: 19 };
+// Filas de la tabla de ítems. Área útil: y 70 → 175 mm (≈ 105 mm).
+const ITEMS = { top: 73.0, rowH: 5.5, maxRows: 18 };
 
 // Posiciones de campos escalares (mm). y = borde superior del texto.
+// Horizontales detectadas: 36.41 (top FECHA), 44.66 (sep FECHA/RUC),
+// 52.71 (sep RUC/NOMBRE), 60.75 (otra), 68.79 (fin encabezado tabla),
+// 175.47 (top SUB TOTAL), 196.64 (top LIQUIDACIÓN), 207.86 (fondo).
 const F = {
-  numero: { x: 98.0, y: 30.5 }, //      campo Nº (header, solo si numero=1)
-  fecha: { x: 27.0, y: 40.5 }, //       fila FECHA
-  condContado: { x: 124.3, y: 42.0 }, //casillero CONTADO
-  condCredito: { x: 140.5, y: 42.5 }, //casillero CRÉDITO
-  ruc: { x: 27.0, y: 48.0 }, //         fila R.U.C.
-  razon: { x: 40.0, y: 56.0 }, //       fila NOMBRE/RAZÓN SOCIAL
-  subtotal: { xRight: 143.5, y: 174.0 }, // SUB TOTAL
-  totalPagar: { xRight: 143.5, y: 179.8 }, // TOTAL A PAGAR Gs.:
-  liqIva5: { xRight: 62.0, y: 186.0 }, //   LIQUIDACIÓN DEL IVA (5%)
-  liqIva10: { xRight: 92.0, y: 186.0 }, //  (10%)
-  totalIva: { xRight: 143.5, y: 186.0 }, // TOTAL IVA:
+  numero: { x: 108.0, y: 29.5 }, //     campo Nº (header, solo si numero=1)
+  fecha: { x: 25.0, y: 40.0 }, //       fila FECHA (36.41 → 44.66)
+  condContado: { x: 118.0, y: 40.5 }, //casillero CONTADO
+  condCredito: { x: 137.0, y: 40.5 }, //casillero CRÉDITO
+  ruc: { x: 25.0, y: 48.0 }, //         fila R.U.C. (44.66 → 52.71)
+  razon: { x: 40.0, y: 57.5 }, //       fila NOMBRE / RAZON SOCIAL (52.71 → 60.75)
+  subtotal: { xRight: 143.0, y: 178.5 }, //   SUB TOTAL (175.47 → ~184)
+  totalPagar: { xRight: 143.0, y: 186.5 }, // TOTAL A PAGAR Gs.: (~184 → ~192)
+  liqIva5: { xRight: 76.0, y: 201.5 }, //     LIQUIDACIÓN DEL IVA (5%) (196.64 → 207)
+  liqIva10: { xRight: 110.0, y: 201.5 }, //   (10%)
+  totalIva: { xRight: 143.0, y: 201.5 }, //   TOTAL IVA:
 };
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
@@ -137,14 +146,10 @@ function dato(
 // corrección distinta. Formato: { campo: { dx, dy } }.
 type Adj = Record<string, { dx?: number; dy?: number }>;
 
-// Mitad IZQUIERDA (original).
+// Mitad IZQUIERDA (original). El formulario MAVA 2026 es simétrico entre las dos
+// mitades, así que no hace falta ajuste diferencial por defecto.
 const ADJ_IZQ: Adj = {};
-// Mitad DERECHA (duplicado): el encabezado queda un poco más alto que en el original.
-const ADJ_DER: Adj = {
-  fecha: { dy: 2.5 },
-  ruc: { dy: 0.6 },
-  cond: { dy: -0.9 },
-};
+const ADJ_DER: Adj = {};
 
 // ── Render de UN bloque (una factura) ────────────────────────────────────────
 function renderBloque(
@@ -207,18 +212,18 @@ function renderBloque(
 function gridGuia(offsetX: number): string {
   const lineas: string[] = [];
   const push = (css: string) => lineas.push(`<div class="g" style="${css}"></div>`);
-  // Verticales de columnas
-  [12.5, 20, 98.7, 109.6, 120.4, 131.5, 144.3].forEach((x) =>
-    push(`left:${x + offsetX}mm;top:64mm;height:107mm;width:0;border-left:0.2mm dashed #38bdf8;`)
+  // Verticales de columnas (bordes reales del formulario MAVA 2026)
+  [13.54, 20, 97.10, 108.10, 119.31, 130.52, 144.27].forEach((x) =>
+    push(`left:${x + offsetX}mm;top:36mm;height:172mm;width:0;border-left:0.2mm dashed #38bdf8;`)
   );
-  // Horizontales clave
-  [41, 49, 57, 64, 70, 171, 185, 192].forEach((y) =>
-    push(`left:${12.5 + offsetX}mm;top:${y}mm;width:131.8mm;height:0;border-top:0.2mm dashed #38bdf8;`)
+  // Horizontales clave (medidas detectadas)
+  [36.41, 44.66, 52.71, 60.75, 68.79, 175.47, 184, 192, 196.64, 207.86].forEach((y) =>
+    push(`left:${13.54 + offsetX}mm;top:${y}mm;width:130.73mm;height:0;border-top:0.2mm dashed #38bdf8;`)
   );
   // Filas de ítems
   for (let i = 0; i <= ITEMS.maxRows; i++) {
     const y = ITEMS.top + i * ITEMS.rowH;
-    push(`left:${12.5 + offsetX}mm;top:${y}mm;width:131.8mm;height:0;border-top:0.1mm dotted #fca5a5;`);
+    push(`left:${13.54 + offsetX}mm;top:${y}mm;width:130.73mm;height:0;border-top:0.1mm dotted #fca5a5;`);
   }
   return lineas.join("\n");
 }
