@@ -359,7 +359,10 @@ export default function CajaPage() {
   //   a una nueva más rápida.
   useEffect(() => {
     const trimmed = q.trim();
-    if (trimmed.length < 2) { setHits([]); return; }
+    // Query vacío → listado inicial (primeros 30 productos vendibles).
+    // 1 letra → esperamos a que tipee al menos 2.
+    // 2+ letras → búsqueda filtrada.
+    if (trimmed.length === 1) { setHits([]); return; }
     const key = trimmed.toLowerCase();
 
     // Cache hit → mostrar sin fetch.
@@ -379,8 +382,13 @@ export default function CajaPage() {
 
       setBuscando(true);
       try {
+        // Sin query: traigo lista inicial de 30; con query: 15 resultados filtrados.
+        const limit = trimmed.length === 0 ? 30 : 15;
+        const url = trimmed.length === 0
+          ? `/api/productos/search?limit=${limit}`
+          : `/api/productos/search?q=${encodeURIComponent(trimmed)}&limit=${limit}`;
         const res = await fetchWithSupabaseSession(
-          `/api/productos/search?q=${encodeURIComponent(trimmed)}&limit=15`,
+          url,
           { cache: "no-store", signal: controller.signal }
         );
         const j = await res.json();
@@ -844,7 +852,9 @@ export default function CajaPage() {
               {hits.length > 0 ? (
                 <div className="space-y-2">
                   <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                    {hits.length} resultado{hits.length === 1 ? "" : "s"} para «{q.trim()}»
+                    {q.trim() === ""
+                      ? `Productos disponibles · tocá uno para agregarlo`
+                      : `${hits.length} resultado${hits.length === 1 ? "" : "s"} para «${q.trim()}»`}
                   </p>
                   <ul className="space-y-2">
                     {hits.map((p) => (
