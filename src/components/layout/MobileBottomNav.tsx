@@ -29,7 +29,7 @@ type NavItem = {
 
 const ITEMS: NavItem[] = [
   { href: "/", label: "Inicio", icon: Home, matchPrefixes: ["/"] },
-  { href: "/ventas", label: "Ventas", icon: ShoppingCart, matchPrefixes: ["/ventas"] },
+  { href: "/ventas/nueva", label: "Ventas", icon: ShoppingCart, matchPrefixes: ["/ventas"] },
   { href: "/dashboard/proyectos", label: "Pedidos", icon: Utensils, matchPrefixes: ["/dashboard/proyectos"] },
   { href: "/clientes", label: "Clientes", icon: Users, matchPrefixes: ["/clientes", "/gestion-clientes"] },
 ];
