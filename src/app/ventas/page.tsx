@@ -114,6 +114,10 @@ export default function CajaPage() {
   const [nuevoClienteError, setNuevoClienteError] = useState<string | null>(null);
   const [nuevoClienteGuardando, setNuevoClienteGuardando] = useState(false);
 
+  // Consulta DNIT por RUC (lookup + alta inline usando el modal existente).
+  const [dnitLoading, setDnitLoading] = useState(false);
+  const [dnitMsg, setDnitMsg] = useState<string | null>(null);
+
   // Modal cobro
   const [cobroOpen, setCobroOpen] = useState(false);
   const [metodo, setMetodo] = useState<MetodoPago>("efectivo");
@@ -127,6 +131,21 @@ export default function CajaPage() {
   const [cobroError, setCobroError] = useState<string | null>(null);
   const [ventaOk, setVentaOk] = useState<string | null>(null);
   const [ventaOkId, setVentaOkId] = useState<string | null>(null);
+  // Comprobante a imprimir al confirmar la venta: ticket (default) o factura autoimpresor.
+  const [tipoComprobante, setTipoComprobante] = useState<"ticket" | "factura">("ticket");
+  // Pago mixto (efectivo + transferencia + tarjeta). Suma debe igualar el total.
+  type PagoMixtoRow = {
+    metodo_pago: "efectivo" | "transferencia" | "tarjeta";
+    monto: string;
+    entidad_bancaria_id: string;
+    referencia: string;
+    titular: string;
+  };
+  const [pagoMixtoActivo, setPagoMixtoActivo] = useState(false);
+  const [pagosMixtos, setPagosMixtos] = useState<PagoMixtoRow[]>([
+    { metodo_pago: "efectivo", monto: "", entidad_bancaria_id: "", referencia: "", titular: "" },
+    { metodo_pago: "transferencia", monto: "", entidad_bancaria_id: "", referencia: "", titular: "" },
+  ]);
 
   // Modal "asociar código de barras a un producto"
   const [asociarOpen, setAsociarOpen] = useState(false);
@@ -516,22 +535,121 @@ export default function CajaPage() {
     setCobroOpen(true);
   }
 
+  // ── Consulta DNIT por RUC (lookup inline desde el buscador de cliente) ────
+  function parseRucLocal(input: string): { ruc: string; dv: string | null; rucCompleto: string } | null {
+    const clean = input.replace(/\s+/g, "").trim();
+    if (!clean) return null;
+    const m = clean.match(/^(\d{3,11})(?:-(\d))?$/);
+    if (!m) return null;
+    return { ruc: m[1], dv: m[2] ?? null, rucCompleto: m[2] ? `${m[1]}-${m[2]}` : m[1] };
+  }
+  const rucParseado = parseRucLocal(clienteQuery);
+
+  async function handleConsultarRucDnit() {
+    if (!rucParseado) return;
+    setDnitLoading(true);
+    setDnitMsg(null);
+    try {
+      const r = await fetch(
+        `/api/dnit/consulta-ruc?ruc=${encodeURIComponent(rucParseado.rucCompleto)}`,
+        { credentials: "include", cache: "no-store" }
+      );
+      const j = (await r.json()) as Record<string, unknown>;
+      if (j.found === true) {
+        const cli = j.cliente as { id?: string; empresa?: string | null; nombre_contacto?: string | null; ruc?: string | null } | undefined;
+        const razon = typeof j.razon_social === "string" ? j.razon_social : rucParseado.rucCompleto;
+        const rucCompleto = typeof j.ruc_completo === "string" ? j.ruc_completo : rucParseado.rucCompleto;
+        if (cli?.id) {
+          // Cliente ya existe: lo agrego a la lista local (si no está) y lo selecciono.
+          const nombre = (cli.empresa || cli.nombre_contacto || razon || "Cliente").trim();
+          setClientes((prev) => {
+            if (prev.some((p) => p.id === cli.id)) return prev;
+            return [{ id: cli.id!, nombre, ruc: cli.ruc ?? rucCompleto, documento: null }, ...prev];
+          });
+          setClienteSel({ id: cli.id, nombre, ruc: cli.ruc ?? rucCompleto, documento: null });
+          setClienteQuery("");
+          setClientesAbierto(false);
+          setDnitMsg(null);
+        } else {
+          // DNIT devolvió razón social pero no hay cliente local → abro modal precargado.
+          setNuevoClienteNombre(razon);
+          setNuevoClienteRuc(rucCompleto);
+          setNuevoClienteDoc("");
+          setNuevoClienteTelefono("");
+          setNuevoClienteError(null);
+          setNuevoClienteOpen(true);
+          setClientesAbierto(false);
+          setDnitMsg(null);
+        }
+      } else {
+        // DNIT no responde / no encontró: abro modal con RUC precargado para carga manual.
+        setNuevoClienteNombre("");
+        setNuevoClienteRuc(rucParseado.rucCompleto);
+        setNuevoClienteDoc("");
+        setNuevoClienteTelefono("");
+        setNuevoClienteError(null);
+        setNuevoClienteOpen(true);
+        setClientesAbierto(false);
+        setDnitMsg(
+          (typeof j.mensaje === "string" ? j.mensaje : null) ||
+            "DNIT no respondió. Cargá la razón social manualmente."
+        );
+      }
+    } catch {
+      setDnitMsg("No se pudo contactar con DNIT. Cargá los datos manualmente.");
+    } finally {
+      setDnitLoading(false);
+    }
+  }
+
+  // ── Pago mixto: helpers + validación ─────────────────────────────────────
+  const sumaPagosMixtos = pagoMixtoActivo
+    ? pagosMixtos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0)
+    : 0;
+  function updatePagoMixto<K extends keyof PagoMixtoRow>(idx: number, key: K, val: PagoMixtoRow[K]) {
+    setPagosMixtos((prev) => prev.map((p, i) => (i === idx ? { ...p, [key]: val } : p)));
+  }
+  function addPagoMixtoRow() {
+    setPagosMixtos((prev) => [
+      ...prev,
+      { metodo_pago: "efectivo", monto: "", entidad_bancaria_id: "", referencia: "", titular: "" },
+    ]);
+  }
+  function removePagoMixtoRow(idx: number) {
+    setPagosMixtos((prev) => (prev.length <= 2 ? prev : prev.filter((_, i) => i !== idx)));
+  }
+  // En modo mixto el total se cobra sin recargo automático (el usuario reparte el
+  // total contado entre métodos; si incluye tarjeta el banco cobra el 3% aparte).
+  const pagoMixtoValido = !pagoMixtoActivo
+    ? true
+    : pagosMixtos.length >= 2 &&
+      pagosMixtos.every((p) => (parseFloat(p.monto) || 0) > 0) &&
+      Math.abs(sumaPagosMixtos - total) <= 1;
+
   // Confirmar cobro → crear venta + abrir ticket
   async function confirmarCobro() {
     if (cart.length === 0) return;
+    if (pagoMixtoActivo && !pagoMixtoValido) {
+      setCobroError("Los pagos mixtos deben sumar el total exacto.");
+      return;
+    }
     setCobrando(true);
     setCobroError(null);
     try {
+      // En modo mixto forzamos precio contado (sin recargo auto); el usuario
+      // reparte el total contado entre métodos y si incluye tarjeta el banco
+      // cobra el 3% aparte.
+      const metodoCalculo: MetodoPago = pagoMixtoActivo ? "efectivo" : metodo;
       // Sólo aplicamos recargo 4% sobre lo NO pintura; los ítems pintura ya
       // tienen su precio_tarjeta cargado por producto.
       const totalContadoNoPintura = cart.reduce(
         (s, it) => s + (it.es_pintura && it.precio_tarjeta != null && it.precio_tarjeta > 0 ? 0 : it.cantidad * precioEfectivo(it)),
         0
       );
-      const recargoTot = calcularRecargoTarjeta(totalContadoNoPintura, metodo);
+      const recargoTot = calcularRecargoTarjeta(totalContadoNoPintura, metodoCalculo);
       const factorRecargo = totalContadoNoPintura > 0 ? (totalContadoNoPintura + recargoTot) / totalContadoNoPintura : 1;
       const items: LineaVenta[] = cart.map((it) => {
-        const usaPrecioTarjetaPintura = metodo === "tarjeta" && it.es_pintura && it.precio_tarjeta != null && it.precio_tarjeta > 0;
+        const usaPrecioTarjetaPintura = metodoCalculo === "tarjeta" && it.es_pintura && it.precio_tarjeta != null && it.precio_tarjeta > 0;
         const precioBase = usaPrecioTarjetaPintura ? it.precio_tarjeta! : precioEfectivo(it);
         const precio = (recargoTot > 0 && !usaPrecioTarjetaPintura) ? precioBase * factorRecargo : precioBase;
         const esMay = esMayoristaAplicado(it);
@@ -562,6 +680,23 @@ export default function CajaPage() {
             fecha_acreditacion: fechaAcreditacion || null,
           };
 
+      // Pagos mixtos: si está activo, armamos el array; la cabecera queda con
+      // el método de la fila de mayor monto (compat con el tipo MetodoPago).
+      let pagosMixtosPayload: Array<{ metodo_pago: "efectivo" | "transferencia" | "tarjeta"; monto: number; entidad_bancaria_id: string | null; entidad_nombre_snapshot: string | null; referencia: string | null; titular: string | null }> | null = null;
+      let metodoCabecera: MetodoPago = metodo;
+      if (pagoMixtoActivo) {
+        pagosMixtosPayload = pagosMixtos.map((p) => ({
+          metodo_pago: p.metodo_pago,
+          monto: parseFloat(p.monto) || 0,
+          entidad_bancaria_id: p.entidad_bancaria_id || null,
+          entidad_nombre_snapshot: entidades.find((e) => e.id === p.entidad_bancaria_id)?.nombre ?? null,
+          referencia: p.referencia.trim() || null,
+          titular: p.metodo_pago === "transferencia" ? (p.titular.trim() || null) : null,
+        }));
+        const mayor = [...pagosMixtosPayload].sort((a, b) => b.monto - a.monto)[0];
+        if (mayor) metodoCabecera = mayor.metodo_pago;
+      }
+
       const res = await saveVenta({
         items,
         moneda: "GS",
@@ -570,16 +705,22 @@ export default function CajaPage() {
         monto_iva: 0,
         total: subtotalTotal,
         tipo_venta: "CONTADO",
-        metodo_pago: metodo,
+        metodo_pago: metodoCabecera,
         cliente_id: clienteSel?.id ?? null,
-      }, undefined, pagoDetalle);
+      }, undefined, pagoDetalle, { pagosMixtos: pagosMixtosPayload });
       if (!res.success) {
         setCobroError(res.error);
         return;
       }
       const v = res.venta;
-      // Abrir ticket auto-print en pestaña nueva
-      try { window.open(`/api/ventas/${v.id}/ticket?auto=1`, "_blank", "noopener"); } catch {}
+      // Abrir el comprobante elegido (ticket o factura autoimpresor) en pestaña nueva.
+      try {
+        const urlComprobante =
+          tipoComprobante === "factura"
+            ? `/api/ventas/${v.id}/factura-preimpreso`
+            : `/api/ventas/${v.id}/ticket?auto=1`;
+        window.open(urlComprobante, "_blank", "noopener");
+      } catch {}
       setVentaOk(v.numero_control);
       setVentaOkId(v.id);
       setCobroOpen(false);
@@ -900,7 +1041,20 @@ export default function CajaPage() {
                       className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#4FAEB2]"
                     />
                     {clientesAbierto && (
-                      <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                      <ul className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                        {rucParseado && (
+                          <li className="border-b border-slate-100 bg-sky-50/50">
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={handleConsultarRucDnit}
+                              disabled={dnitLoading}
+                              className="block w-full px-3 py-2 text-left text-sm font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50"
+                            >
+                              {dnitLoading ? "Consultando DNIT…" : `🔎 Consultar RUC ${rucParseado.rucCompleto} en DNIT`}
+                            </button>
+                          </li>
+                        )}
                         <li className="border-b border-slate-100 bg-emerald-50/40">
                           <button
                             type="button"
@@ -932,6 +1086,19 @@ export default function CajaPage() {
                           <li className="px-3 py-2 text-xs text-slate-400">Sin resultados.</li>
                         )}
                       </ul>
+                    )}
+                    {dnitMsg && (
+                      <div className="mt-1 flex items-start justify-between gap-2 rounded-md border border-sky-200 bg-sky-50/70 px-2 py-1.5 text-[11px] text-slate-700">
+                        <span>{dnitMsg}</span>
+                        <button
+                          type="button"
+                          onClick={() => setDnitMsg(null)}
+                          className="shrink-0 text-slate-400 hover:text-slate-600"
+                          aria-label="Cerrar aviso"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
@@ -1076,6 +1243,42 @@ export default function CajaPage() {
               )}
             </div>
 
+            {/* Selector del comprobante a imprimir al confirmar la venta. */}
+            <div>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Comprobante a imprimir</p>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { v: "ticket", label: "Ticket" },
+                  { v: "factura", label: "Factura autoimpresor" },
+                ] as { v: "ticket" | "factura"; label: string }[]).map((t) => (
+                  <button
+                    key={t.v}
+                    type="button"
+                    onClick={() => setTipoComprobante(t.v)}
+                    className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                      tipoComprobante === t.v
+                        ? "border-[#4FAEB2] bg-[#4FAEB2]/10 text-[#3F8E91]"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Toggle Pago mixto. */}
+            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={pagoMixtoActivo}
+                onChange={(e) => setPagoMixtoActivo(e.target.checked)}
+                className="h-4 w-4"
+              />
+              Pago mixto (cobrar con varios métodos a la vez)
+            </label>
+
+            {!pagoMixtoActivo && (
             <div className="grid grid-cols-3 gap-2">
               {(["efectivo", "transferencia", "tarjeta"] as MetodoPago[]).map((m) => {
                 const label = m === "tarjeta" ? `Tarjeta (+${Math.round(CARD_SURCHARGE_PCT * 100)}%)` : m;
@@ -1095,8 +1298,99 @@ export default function CajaPage() {
                 );
               })}
             </div>
+            )}
 
-            {metodo === "efectivo" && (
+            {/* Pago mixto: lista editable de filas */}
+            {pagoMixtoActivo && (
+              <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50/50 p-2">
+                {pagosMixtos.some((p) => p.metodo_pago === "tarjeta") && (
+                  <p className="text-[11px] text-amber-700">
+                    El recargo 3% de tarjeta no se suma automáticamente en pago mixto: repartí el total contado entre los métodos.
+                  </p>
+                )}
+                {pagosMixtos.map((p, idx) => (
+                  <div key={idx} className="space-y-1.5 rounded-md border border-slate-200 bg-white p-2">
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        value={p.metodo_pago}
+                        onChange={(e) => updatePagoMixto(idx, "metodo_pago", e.target.value as "efectivo" | "transferencia" | "tarjeta")}
+                        className="rounded border border-slate-200 text-xs px-1.5 py-1.5"
+                      >
+                        <option value="efectivo">Efectivo</option>
+                        <option value="transferencia">Transferencia</option>
+                        <option value="tarjeta">Tarjeta</option>
+                      </select>
+                      <MontoInput
+                        value={p.monto}
+                        onChange={(n) => updatePagoMixto(idx, "monto", String(n))}
+                        placeholder="Monto"
+                        className="flex-1 rounded border border-slate-200 text-sm px-2 py-1.5 tabular-nums"
+                        decimals={false}
+                      />
+                      {pagosMixtos.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => removePagoMixtoRow(idx)}
+                          className="text-rose-500 text-sm hover:underline px-1"
+                          aria-label="Quitar fila"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                    {p.metodo_pago === "transferencia" && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        <select
+                          value={p.entidad_bancaria_id}
+                          onChange={(e) => updatePagoMixto(idx, "entidad_bancaria_id", e.target.value)}
+                          className="rounded border border-slate-200 text-xs px-1.5 py-1"
+                        >
+                          <option value="">— Entidad —</option>
+                          {entidades.filter((en) => en.tipo !== "caja").map((en) => (
+                            <option key={en.id} value={en.id}>{en.codigo ? `${en.codigo} · ${en.nombre}` : en.nombre}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={p.referencia}
+                          onChange={(e) => updatePagoMixto(idx, "referencia", e.target.value)}
+                          placeholder="Comprobante / ref"
+                          className="rounded border border-slate-200 text-xs px-2 py-1"
+                        />
+                        <input
+                          type="text"
+                          value={p.titular}
+                          onChange={(e) => updatePagoMixto(idx, "titular", e.target.value)}
+                          placeholder="Titular (opcional)"
+                          className="rounded border border-slate-200 text-xs px-2 py-1 sm:col-span-2"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    type="button"
+                    onClick={addPagoMixtoRow}
+                    className="text-sky-600 text-xs font-medium hover:underline"
+                  >
+                    + Agregar pago
+                  </button>
+                  <div className="text-right text-xs">
+                    <div className="text-slate-500">
+                      Suma: <span className="tabular-nums font-medium text-slate-800">{formatGs(sumaPagosMixtos)}</span>
+                    </div>
+                    <div className={`tabular-nums ${pagoMixtoValido ? "text-emerald-600" : "text-rose-600"}`}>
+                      {pagoMixtoValido
+                        ? "✓ coincide con el total"
+                        : `Diferencia: ${formatGs(total - sumaPagosMixtos)}`}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!pagoMixtoActivo && metodo === "efectivo" && (
               <>
                 <label className="block text-sm">
                   <span className="mb-1 block font-medium text-slate-700">Efectivo recibido</span>
@@ -1129,7 +1423,7 @@ export default function CajaPage() {
               </>
             )}
 
-            {(metodo === "transferencia" || metodo === "tarjeta") && (
+            {!pagoMixtoActivo && (metodo === "transferencia" || metodo === "tarjeta") && (
               <div className="space-y-3">
                 <p className="text-sm font-semibold text-slate-800">
                   {metodo === "tarjeta" ? "Datos de tarjeta / débito" : "Datos de transferencia"}
@@ -1223,7 +1517,7 @@ export default function CajaPage() {
               <button
                 type="button"
                 onClick={() => void confirmarCobro()}
-                disabled={cobrando}
+                disabled={cobrando || (pagoMixtoActivo && !pagoMixtoValido)}
                 className="rounded-lg bg-[#4FAEB2] px-5 py-2 text-sm font-semibold text-white hover:bg-[#3F8E91] disabled:opacity-50"
               >
                 {cobrando ? "Cobrando…" : "Confirmar e imprimir"}
