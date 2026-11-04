@@ -815,45 +815,6 @@ export default function CajaPage() {
                 {buscando && <Loader2 className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-slate-400" />}
               </div>
 
-              {hits.length > 0 && (
-                <ul className="mt-2 max-h-56 divide-y divide-slate-100 overflow-auto rounded-xl border border-slate-200 bg-white shadow-inner">
-                  {hits.map((p) => (
-                    <li
-                      key={p.id}
-                      onClick={() => addToCart(p)}
-                      className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-[#4FAEB2]/[0.08]"
-                    >
-                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                        {p.imagen_url ? (
-                          <img src={p.imagen_url} alt={p.nombre} className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-slate-300">
-                            <Package className="h-4 w-4" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium text-slate-900">{p.nombre}</p>
-                        <p className="font-mono text-[11px] text-slate-500">
-                          {p.sku}
-                          {p.cantidad_minima_mayorista != null && p.cantidad_minima_mayorista > 0 && p.precio_mayorista > 0 && p.precio_mayorista !== p.precio_venta && (
-                            <span className="ml-2 text-indigo-600">
-                              · desde {p.cantidad_minima_mayorista} u {formatGs(p.precio_mayorista)}
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className={`text-[11px] font-medium ${p.stock_actual <= 0 ? "text-rose-600" : "text-emerald-700"}`}>
-                          {p.stock_actual <= 0 ? "Sin stock" : `${p.stock_actual} u`}
-                        </p>
-                        <p className="text-sm font-semibold tabular-nums text-slate-900">{formatGs(p.precio_venta)}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
               {/* Sin resultados + oferta para asociar código */}
               {!buscando && q.trim().length >= 2 && hits.length === 0 && (
                 <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-sm">
@@ -878,9 +839,56 @@ export default function CajaPage() {
               )}
             </div>
 
-            {/* Carrito */}
+            {/* Área central: resultados de búsqueda o carrito */}
             <div className="flex-1 overflow-auto p-4">
-              {cart.length === 0 ? (
+              {hits.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    {hits.length} resultado{hits.length === 1 ? "" : "s"} para «{q.trim()}»
+                  </p>
+                  <ul className="space-y-2">
+                    {hits.map((p) => (
+                      <li
+                        key={p.id}
+                        onClick={() => addToCart(p)}
+                        className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition-colors hover:border-[#4FAEB2] hover:bg-[#4FAEB2]/[0.06]"
+                      >
+                        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                          {p.imagen_url ? (
+                            <img src={p.imagen_url} alt={p.nombre} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-slate-300">
+                              <Package className="h-5 w-5" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-slate-900">{p.nombre}</p>
+                          <p className="font-mono text-[11px] text-slate-500">
+                            {p.sku}
+                            {p.cantidad_minima_mayorista != null && p.cantidad_minima_mayorista > 0 && p.precio_mayorista > 0 && p.precio_mayorista !== p.precio_venta && (
+                              <span className="ml-2 text-indigo-600">
+                                · desde {p.cantidad_minima_mayorista} u {formatGs(p.precio_mayorista)}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-[11px] font-medium ${p.stock_actual <= 0 ? "text-rose-600" : "text-emerald-700"}`}>
+                            {p.stock_actual <= 0 ? "Sin stock" : `${p.stock_actual} u`}
+                          </p>
+                          <p className="text-base font-semibold tabular-nums text-slate-900">{formatGs(p.precio_venta)}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  {cart.length > 0 && (
+                    <p className="pt-1 px-1 text-[11px] text-slate-500">
+                      💡 Tenés {cart.length} ítem{cart.length === 1 ? "" : "s"} en el carrito. Borrá el texto del buscador para ver el carrito.
+                    </p>
+                  )}
+                </div>
+              ) : cart.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-slate-400">
                   <Package className="h-8 w-8 text-slate-300" />
                   <p>Todavía no cargaste productos.</p>
