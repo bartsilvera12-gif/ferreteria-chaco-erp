@@ -64,9 +64,9 @@ const F = {
   razon: { x: 40.0, y: 57.5 }, //       fila NOMBRE / RAZON SOCIAL (52.71 → 60.75)
   subtotal: { xRight: 143.0, y: 178.5 }, //   SUB TOTAL (175.47 → ~184)
   totalPagar: { xRight: 143.0, y: 186.5 }, // TOTAL A PAGAR Gs.: (~184 → ~192)
-  liqIva5: { xRight: 76.0, y: 201.5 }, //     LIQUIDACIÓN DEL IVA (5%) (196.64 → 207)
-  liqIva10: { xRight: 110.0, y: 201.5 }, //   (10%)
-  totalIva: { xRight: 143.0, y: 201.5 }, //   TOTAL IVA:
+  liqIva5: { xRight: 76.0, y: 199.0 }, //     LIQUIDACIÓN DEL IVA (5%) (196.64 → 207)
+  liqIva10: { xRight: 110.0, y: 199.0 }, //   (10%)
+  totalIva: { xRight: 143.0, y: 199.0 }, //   TOTAL IVA:
 };
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
