@@ -58,15 +58,20 @@ const ITEMS = { top: 73.0, rowH: 5.5, maxRows: 18 };
 const F = {
   numero: { x: 108.0, y: 29.5 }, //     campo Nº (header, solo si numero=1)
   fecha: { x: 25.0, y: 40.0 }, //       fila FECHA (36.41 → 44.66)
-  condContado: { x: 118.0, y: 40.5 }, //casillero CONTADO
-  condCredito: { x: 137.0, y: 40.5 }, //casillero CRÉDITO
+  // Casilleros CONTADO/CRÉDITO: centros reales medidos del PDF.
+  condContado: { x: 123.4, y: 40.5 }, //casillero CONTADO (121.85 → 125.02)
+  condCredito: { x: 140.9, y: 40.5 }, //casillero CRÉDITO (139.19 → 142.58)
   ruc: { x: 25.0, y: 48.0 }, //         fila R.U.C. (44.66 → 52.71)
   razon: { x: 40.0, y: 57.5 }, //       fila NOMBRE / RAZON SOCIAL (52.71 → 60.75)
-  subtotal: { xRight: 143.0, y: 178.5 }, //   SUB TOTAL (175.47 → ~184)
-  totalPagar: { xRight: 143.0, y: 186.5 }, // TOTAL A PAGAR Gs.: (~184 → ~192)
-  liqIva5: { xRight: 76.0, y: 199.0 }, //     LIQUIDACIÓN DEL IVA (5%) (196.64 → 207)
-  liqIva10: { xRight: 110.0, y: 199.0 }, //   (10%)
-  totalIva: { xRight: 143.0, y: 199.0 }, //   TOTAL IVA:
+  // Celdas de totales (medidas reales):
+  //   SUB TOTAL       175.47 → 189.23 (14 mm alto, contiene subtotal + EXENTAS/5%/10% desglosado)
+  //   TOTAL A PAGAR   189.23 → 196.64 (7.4 mm alto)
+  //   LIQUIDACIÓN     196.64 → 207.86 (11 mm alto, 3 cifras en línea)
+  subtotal: { xRight: 143.0, y: 181.5 }, //   centrado en celda SUB TOTAL
+  totalPagar: { xRight: 143.0, y: 192.0 }, // centrado en celda TOTAL A PAGAR
+  liqIva5: { xRight: 76.0, y: 201.5 }, //     LIQUIDACIÓN DEL IVA (5%)
+  liqIva10: { xRight: 110.0, y: 201.5 }, //   (10%)
+  totalIva: { xRight: 143.0, y: 201.5 }, //   TOTAL IVA:
 };
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
