@@ -501,6 +501,9 @@ export default function CajaPage() {
   };
 
   const total = useMemo(() => cart.reduce((s, it) => s + it.cantidad * precioEfectivo(it), 0), [cart]);
+  // IVA 10 % incluido en el total (modo Paraguay). Lo mostramos desglosado en el resumen.
+  const ivaResumen = useMemo(() => Math.round(total / 11), [total]);
+  const subtotalResumen = total - ivaResumen;
   const cantTotal = useMemo(() => cart.reduce((s, it) => s + it.cantidad, 0), [cart]);
   // Total con tarjeta: pintura usa precio_tarjeta; no-pintura aplica recargo 4%.
   const totalNoPinturaContado = useMemo(
@@ -1125,6 +1128,14 @@ export default function CajaPage() {
               <div className="flex items-baseline justify-between text-sm text-slate-500">
                 <span>Ítems</span>
                 <span className="font-medium tabular-nums text-slate-800">{cantTotal}</span>
+              </div>
+              <div className="flex items-baseline justify-between text-sm text-slate-500">
+                <span>Subtotal (sin IVA)</span>
+                <span className="font-medium tabular-nums text-slate-700">{formatGs(subtotalResumen)}</span>
+              </div>
+              <div className="flex items-baseline justify-between text-sm text-slate-500">
+                <span>IVA 10 % incluido</span>
+                <span className="font-medium tabular-nums text-slate-700">{formatGs(ivaResumen)}</span>
               </div>
               <div className="flex items-baseline justify-between border-t border-dashed border-slate-200 pt-3">
                 <span className="text-sm font-medium text-slate-600">Total a cobrar</span>
