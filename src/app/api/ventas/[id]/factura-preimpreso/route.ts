@@ -70,7 +70,7 @@ const F = {
   subtotal: { xRight: 143.0, y: 185.0 },
   totalPagar: { xRight: 143.0, y: 190.0 },
   liqIva5: { xRight: 76.0, y: 195.5 }, //     LIQUIDACIÓN DEL IVA (5%)
-  liqIva10: { xRight: 110.0, y: 195.5 }, //   (10%)
+  liqIva10: { xRight: 80.0, y: 195.5 }, //    (10%)
   totalIva: { xRight: 143.0, y: 195.5 }, //   TOTAL IVA:
 };
 
@@ -153,6 +153,10 @@ type Adj = Record<string, { dx?: number; dy?: number }>;
 
 // Mitad IZQUIERDA (original). El formulario MAVA 2026 es simétrico entre las dos
 // mitades, así que no hace falta ajuste diferencial por defecto.
+// Todo sube 2,5 mm salvo la línea de liquidación del IVA.
+const CAMPOS_IVA = new Set(["liq5", "liq10", "totalIva"]);
+const DY_SIN_IVA = -2.5;
+
 const ADJ_IZQ: Adj = {
   fecha: { dx: -10 },
   ruc: { dx: -10 },
@@ -189,7 +193,8 @@ function renderBloque(
 ): string {
   const partes: string[] = [];
   const gx = (campo: string, baseX: number) => baseX + offsetX + (adj[campo]?.dx ?? 0);
-  const gy = (campo: string, baseY: number) => baseY + (adj[campo]?.dy ?? 0);
+  const gy = (campo: string, baseY: number) =>
+    baseY + (adj[campo]?.dy ?? 0) + (CAMPOS_IVA.has(campo) ? 0 : DY_SIN_IVA);
 
   if (data.printNumero && data.numero) {
     partes.push(dato(gx("numero", F.numero.x), gy("numero", F.numero.y), escapeHtml(data.numero), { bold: true, size: 8 }));
