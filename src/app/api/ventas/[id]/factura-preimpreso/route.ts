@@ -170,6 +170,10 @@ const ADJ_DER: Adj = {
   cant: { dx: -5 },
   desc: { dx: -5 },
   razon: { dx: -10, dy: -2 },
+  pu: { dx: -2 },
+  exentas: { dx: 5 },
+  iva5: { dx: 5 },
+  iva10: { dx: 5 },
 };
 
 // ── Render de UN bloque (una factura) ────────────────────────────────────────
