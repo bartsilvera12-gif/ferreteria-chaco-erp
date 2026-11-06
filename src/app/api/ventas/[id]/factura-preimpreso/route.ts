@@ -67,8 +67,8 @@ const F = {
   //   SUB TOTAL       175.47 → 189.23 (14 mm alto, contiene subtotal + EXENTAS/5%/10% desglosado)
   //   TOTAL A PAGAR   189.23 → 196.64 (7.4 mm alto)
   //   LIQUIDACIÓN     196.64 → 207.86 (11 mm alto, 3 cifras en línea)
-  subtotal: { xRight: 143.0, y: 181.5 }, //   centrado en celda SUB TOTAL
-  totalPagar: { xRight: 143.0, y: 192.0 }, // centrado en celda TOTAL A PAGAR
+  subtotal: { xRight: 143.0, y: 185.0 }, //   parte baja de la celda SUB TOTAL, cerca del total
+  totalPagar: { xRight: 143.0, y: 190.0 }, // parte alta de la celda TOTAL A PAGAR
   liqIva5: { xRight: 76.0, y: 201.5 }, //     LIQUIDACIÓN DEL IVA (5%)
   liqIva10: { xRight: 110.0, y: 201.5 }, //   (10%)
   totalIva: { xRight: 143.0, y: 201.5 }, //   TOTAL IVA:
@@ -153,8 +153,14 @@ type Adj = Record<string, { dx?: number; dy?: number }>;
 
 // Mitad IZQUIERDA (original). El formulario MAVA 2026 es simétrico entre las dos
 // mitades, así que no hace falta ajuste diferencial por defecto.
-const ADJ_IZQ: Adj = {};
-const ADJ_DER: Adj = {};
+const ADJ_COMUN: Adj = {
+  fecha: { dx: -15 },
+  ruc: { dx: -15 },
+  cant: { dx: -15 },
+  desc: { dx: -15 },
+};
+const ADJ_IZQ: Adj = { ...ADJ_COMUN };
+const ADJ_DER: Adj = { ...ADJ_COMUN };
 
 // ── Render de UN bloque (una factura) ────────────────────────────────────────
 function renderBloque(
