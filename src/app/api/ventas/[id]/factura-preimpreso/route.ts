@@ -70,7 +70,7 @@ const F = {
   subtotal: { xRight: 143.0, y: 185.0 },
   totalPagar: { xRight: 143.0, y: 190.0 },
   liqIva5: { xRight: 76.0, y: 195.5 }, //     LIQUIDACIÓN DEL IVA (5%)
-  liqIva10: { xRight: 80.0, y: 195.5 }, //    (10%)
+  liqIva10: { xRight: 95.0, y: 195.5 }, //    (10%)
   totalIva: { xRight: 143.0, y: 195.5 }, //   TOTAL IVA:
 };
 
