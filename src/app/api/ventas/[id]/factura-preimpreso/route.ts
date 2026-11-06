@@ -67,11 +67,11 @@ const F = {
   //   SUB TOTAL       175.47 → 189.23 (14 mm alto, contiene subtotal + EXENTAS/5%/10% desglosado)
   //   TOTAL A PAGAR   189.23 → 196.64 (7.4 mm alto)
   //   LIQUIDACIÓN     196.64 → 207.86 (11 mm alto, 3 cifras en línea)
-  subtotal: { xRight: 143.0, y: 170.0 },
-  totalPagar: { xRight: 143.0, y: 175.0 },
-  liqIva5: { xRight: 76.0, y: 201.5 }, //     LIQUIDACIÓN DEL IVA (5%)
-  liqIva10: { xRight: 110.0, y: 201.5 }, //   (10%)
-  totalIva: { xRight: 143.0, y: 201.5 }, //   TOTAL IVA:
+  subtotal: { xRight: 143.0, y: 185.0 },
+  totalPagar: { xRight: 143.0, y: 190.0 },
+  liqIva5: { xRight: 76.0, y: 195.5 }, //     LIQUIDACIÓN DEL IVA (5%)
+  liqIva10: { xRight: 110.0, y: 195.5 }, //   (10%)
+  totalIva: { xRight: 143.0, y: 195.5 }, //   TOTAL IVA:
 };
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
