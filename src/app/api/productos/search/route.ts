@@ -33,7 +33,7 @@ interface ProductoSearchHit {
 }
 
 const DEFAULT_LIMIT = 30;
-const MAX_LIMIT = 100;
+const MAX_LIMIT = 1000;
 
 /** Escape pattern para ILIKE evitando interpretación de % y _ del usuario. */
 function escapeIlikePattern(s: string): string {

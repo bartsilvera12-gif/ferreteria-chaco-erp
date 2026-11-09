@@ -166,7 +166,7 @@ export default function CajaPage() {
       setAsociarBuscando(true);
       try {
         const res = await fetchWithSupabaseSession(
-          `/api/productos/search?q=${encodeURIComponent(trimmed)}&limit=50`,
+          `/api/productos/search?q=${encodeURIComponent(trimmed)}&limit=500`,
           { cache: "no-store" }
         );
         const j = await res.json();
@@ -380,7 +380,7 @@ export default function CajaPage() {
       setBuscando(true);
       try {
         const res = await fetchWithSupabaseSession(
-          `/api/productos/search?q=${encodeURIComponent(trimmed)}&limit=50`,
+          `/api/productos/search?q=${encodeURIComponent(trimmed)}&limit=500`,
           { cache: "no-store", signal: controller.signal }
         );
         const j = await res.json();
