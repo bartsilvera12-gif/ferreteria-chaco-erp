@@ -69,6 +69,7 @@ const F = {
   //   LIQUIDACIÓN     196.64 → 207.86 (11 mm alto, 3 cifras en línea)
   subtotal: { xRight: 143.0, y: 185.0 },
   totalPagar: { xRight: 143.0, y: 190.0 },
+  totalLetras: { x: 56.0, y: 187.6, w: 62 }, // importe en letras (entre la etiqueta y el monto)
   liqIva5: { xRight: 76.0, y: 195.5 }, //     LIQUIDACIÓN DEL IVA (5%)
   liqIva10: { xRight: 95.0, y: 195.5 }, //    (10%)
   totalIva: { xRight: 143.0, y: 195.5 }, //   TOTAL IVA:
@@ -123,6 +124,43 @@ function fechaCorta(iso: string): string {
   } catch {
     return iso;
   }
+}
+// Importe en letras (guaraníes). Ej: 115000 → "Ciento quince mil guaraníes".
+const UNI = ["", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez", "once", "doce", "trece", "catorce", "quince", "dieciséis", "diecisiete", "dieciocho", "diecinueve", "veinte", "veintiuno", "veintidós", "veintitrés", "veinticuatro", "veinticinco", "veintiséis", "veintisiete", "veintiocho", "veintinueve"];
+const DEC = ["", "", "", "treinta", "cuarenta", "cincuenta", "sesenta", "setenta", "ochenta", "noventa"];
+const CEN = ["", "ciento", "doscientos", "trescientos", "cuatrocientos", "quinientos", "seiscientos", "setecientos", "ochocientos", "novecientos"];
+function menorMil(n: number): string {
+  if (n === 100) return "cien";
+  const c = Math.floor(n / 100);
+  const r = n % 100;
+  const partes: string[] = [];
+  if (c) partes.push(CEN[c]);
+  if (r) {
+    if (r < 30) partes.push(UNI[r]);
+    else {
+      const d = Math.floor(r / 10);
+      const u = r % 10;
+      partes.push(u ? `${DEC[d]} y ${UNI[u]}` : DEC[d]);
+    }
+  }
+  return partes.join(" ");
+}
+function apocopar(t: string): string {
+  return t.replace(/veintiuno$/, "veintiún").replace(/uno$/, "un");
+}
+function enLetras(valor: number): string {
+  const n = Math.round(Math.abs(valor));
+  if (n === 0) return "Cero guaraníes";
+  const millones = Math.floor(n / 1_000_000);
+  const miles = Math.floor((n % 1_000_000) / 1000);
+  const resto = n % 1000;
+  const p: string[] = [];
+  if (millones) p.push(millones === 1 ? "un millón" : `${apocopar(menorMil(millones))} millones`);
+  if (miles) p.push(miles === 1 ? "mil" : `${apocopar(menorMil(miles))} mil`);
+  if (resto) p.push(menorMil(resto));
+  const sufijo = n % 1_000_000 === 0 ? "de guaraníes" : n === 1 ? "guaraní" : "guaraníes";
+  const full = `${p.join(" ")} ${sufijo}`;
+  return full.charAt(0).toUpperCase() + full.slice(1);
 }
 type Tasa = "EXENTA" | "5%" | "10%";
 function normTasa(t: string | null | undefined): Tasa {
@@ -224,6 +262,9 @@ function renderBloque(
   // Totales
   partes.push(dato(gx("subtotal", F.subtotal.xRight), gy("subtotal", F.subtotal.y), nf(data.subtotal), { align: "right", bold: true }));
   partes.push(dato(gx("totalPagar", F.totalPagar.xRight), gy("totalPagar", F.totalPagar.y), nf(data.totalPagar), { align: "right", bold: true }));
+  partes.push(
+    `<div class="d" style="left:${gx("totalLetras", F.totalLetras.x)}mm;top:${gy("totalLetras", F.totalLetras.y)}mm;width:${F.totalLetras.w}mm;font-size:5pt;white-space:normal;line-height:1.05;">${escapeHtml(enLetras(data.totalPagar))}</div>`
+  );
   if (data.liq5 > 0) partes.push(dato(gx("liq5", F.liqIva5.xRight), gy("liq5", F.liqIva5.y), nf(data.liq5), { align: "right" }));
   if (data.liq10 > 0) partes.push(dato(gx("liq10", F.liqIva10.xRight), gy("liq10", F.liqIva10.y), nf(data.liq10), { align: "right" }));
   partes.push(dato(gx("totalIva", F.totalIva.xRight), gy("totalIva", F.totalIva.y), nf(data.totalIva), { align: "right", bold: true }));
