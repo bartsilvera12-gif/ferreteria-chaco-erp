@@ -252,22 +252,22 @@ function renderBloque(
     const y = ITEMS.top + idx * ITEMS.rowH;
     partes.push(dato(gx("cant", COL.cantRight), gy("items", y), escapeHtml(it.cant), { align: "right" }));
     partes.push(dato(gx("desc", COL.descLeft), gy("items", y), escapeHtml(it.desc)));
-    partes.push(dato(gx("pu", COL.puRight), gy("items", y), nf(it.pu), { align: "right" }));
+    partes.push(dato(gx("pu", COL.puRight), gy("items", y), nf(it.pu), { align: "right", size: 9 }));
     const colBase =
       it.tasa === "EXENTA" ? COL.exentasRight : it.tasa === "5%" ? COL.iva5Right : COL.iva10Right;
     const colCampo = it.tasa === "EXENTA" ? "exentas" : it.tasa === "5%" ? "iva5" : "iva10";
-    partes.push(dato(gx(colCampo, colBase), gy("items", y), nf(it.valor), { align: "right" }));
+    partes.push(dato(gx(colCampo, colBase), gy("items", y), nf(it.valor), { align: "right", size: 9 }));
   });
 
   // Totales
-  partes.push(dato(gx("subtotal", F.subtotal.xRight), gy("subtotal", F.subtotal.y), nf(data.subtotal), { align: "right", bold: true }));
-  partes.push(dato(gx("totalPagar", F.totalPagar.xRight), gy("totalPagar", F.totalPagar.y), nf(data.totalPagar), { align: "right", bold: true }));
+  partes.push(dato(gx("subtotal", F.subtotal.xRight), gy("subtotal", F.subtotal.y), nf(data.subtotal), { align: "right", bold: true, size: 10 }));
+  partes.push(dato(gx("totalPagar", F.totalPagar.xRight), gy("totalPagar", F.totalPagar.y), nf(data.totalPagar), { align: "right", bold: true, size: 14 }));
   partes.push(
-    `<div class="d" style="left:${gx("totalLetras", F.totalLetras.x)}mm;top:${gy("totalLetras", F.totalLetras.y)}mm;width:${F.totalLetras.w}mm;font-size:5pt;white-space:normal;line-height:1.05;">${escapeHtml(enLetras(data.totalPagar))}</div>`
+    `<div class="d" style="left:${gx("totalLetras", F.totalLetras.x)}mm;top:${gy("totalLetras", F.totalLetras.y)}mm;width:${F.totalLetras.w}mm;font-size:6.5pt;font-weight:700;white-space:normal;line-height:1.05;">${escapeHtml(enLetras(data.totalPagar))}</div>`
   );
-  if (data.liq5 > 0) partes.push(dato(gx("liq5", F.liqIva5.xRight), gy("liq5", F.liqIva5.y), nf(data.liq5), { align: "right" }));
-  if (data.liq10 > 0) partes.push(dato(gx("liq10", F.liqIva10.xRight), gy("liq10", F.liqIva10.y), nf(data.liq10), { align: "right" }));
-  partes.push(dato(gx("totalIva", F.totalIva.xRight), gy("totalIva", F.totalIva.y), nf(data.totalIva), { align: "right", bold: true }));
+  if (data.liq5 > 0) partes.push(dato(gx("liq5", F.liqIva5.xRight), gy("liq5", F.liqIva5.y), nf(data.liq5), { align: "right", size: 9 }));
+  if (data.liq10 > 0) partes.push(dato(gx("liq10", F.liqIva10.xRight), gy("liq10", F.liqIva10.y), nf(data.liq10), { align: "right", size: 9 }));
+  partes.push(dato(gx("totalIva", F.totalIva.xRight), gy("totalIva", F.totalIva.y), nf(data.totalIva), { align: "right", bold: true, size: 10 }));
 
   return partes.join("\n");
 }
